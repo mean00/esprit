@@ -54,6 +54,11 @@ int lnUsbCDC::writeNoBlock(const uint8_t *buffer, int size) const
     return (int)tud_cdc_n_write(_instance, buffer, (uint32_t)size);
 }
 
+int lnUsbCDC::writeAvailable()
+{
+    return tud_cdc_n_write_available(_instance);
+}
+
 /**
  */
 int lnUsbCDC::write(const uint8_t *buffer, int size)
