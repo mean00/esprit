@@ -9,6 +9,9 @@ extern "C"
 */
 void rttLoggerFunction(int n, const char *data)
 {
+#if 1
+    SEGGER_RTT_Write(0, data, n); // write what we can
+#else
     while (n)
     {
         int done = SEGGER_RTT_Write(0, data, n);
@@ -17,5 +20,6 @@ void rttLoggerFunction(int n, const char *data)
         n -= done;
         data += n;
     }
+#endif
 }
 // EOF
