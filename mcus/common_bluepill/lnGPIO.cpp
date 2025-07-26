@@ -3,8 +3,8 @@
  *  See license file
  */
 #include "lnGPIO.h"
-#include "lnAFIO_priv.h"
 #include "esprit.h"
+#include "lnAFIO_priv.h"
 #include "lnGPIO_priv.h"
 #include "lnPeripheral_priv.h"
 #include "lnPinMapping.h"
@@ -110,23 +110,26 @@ void lnPinMode(const lnPin xpin, const GpioMode mode, const int speedInMhz)
     *CTL = ref;
 }
 /**
- *  \brief Hardcoded switch PB10/PB11
+ *  \brief  do a partial remap on the given timer
  * @param timer
  */
 void lnRemapTimerPin(int timer)
 {
+    uint32_t v = aAfio->PCF0;
     switch (timer)
     {
-    case 1: {
-        uint32_t v = aAfio->PCF0;
+    case 1:
         v &= LN_GPIO_TIMER1_MASK;
         v |= LN_GPIO_TIMER1_REMAP;
-        aAfio->PCF0 = v;
-    }
-    break;
+        break;
+    case 2:
+        v &= LN_GPIO_TIMER2_MASK;
+        v |= LN_GPIO_TIMER2_REMAP;
+        break;
     default:
         xAssert(0);
     }
+    aAfio->PCF0 = v;
 }
 #define LN_GPIO_OUTPUT_OD_HIZ 1
 #define LN_GPIO_OUTPUT_OD_GND 0
