@@ -74,6 +74,11 @@ uint32_t lnPeripherals::getClock(const Peripherals periph)
     case pSYSCLOCK:
         return SystemCoreClock;
         break;
+    case pTIMER1:
+    case pTIMER2:
+    case pTIMER3:
+        return _rcuClockApb1;
+        break;
     default:
         return _rcuClockApb1;
         break;
