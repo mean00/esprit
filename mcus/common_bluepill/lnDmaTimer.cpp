@@ -194,7 +194,7 @@ bool lnDmaTimer::setTickFrequency(int fqInHz)
     t->CTL0 &= ~LN_TIMER_CTL0_CEN;
 
     int divider = (clock + fqInHz / 2) / (fqInHz);
-    divider *= 2;
+    // divider *= 2;
 
 #warning FIXME we assume no prescaler needed
     t->PSC = 0;
