@@ -35,3 +35,7 @@ typedef volatile LN_GPIOx LN_GPIO;
 
 #define LN_GPIO_TIMER1_REMAP (2 << 8)
 #define LN_GPIO_TIMER1_MASK (3 << 8)
+//
+#define LN_GPIO_TIMER2_REMAP (2 << 10)
+#define LN_GPIO_TIMER2_MASK (3 << 10)
+//
