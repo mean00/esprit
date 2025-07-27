@@ -194,7 +194,11 @@ bool lnDmaTimer::setTickFrequency(int fqInHz)
     t->CTL0 &= ~LN_TIMER_CTL0_CEN;
 
     int divider = (clock + fqInHz / 2) / (fqInHz);
-    // divider *= 2;
+// dafuq ?
+#warning Dirty workaround of x2 mismatch between gd32/arm and CH32/riscv timer clocks
+#if LN_ARCH == LN_ARCH_ARM
+    divider *= 2;
+#endif
 
 #warning FIXME we assume no prescaler needed
     t->PSC = 0;
