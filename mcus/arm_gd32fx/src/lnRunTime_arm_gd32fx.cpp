@@ -10,6 +10,7 @@ extern LN_RCU *arcu;
  */
 void lnRunTimeInit()
 {
+    lnExtiSWDOnly(); // release jtag pins early, will be reset later
     __asm__("cpsid if    \n");
     aSCB->VTOR = 0;
     arcu->RSTCLK = 1 << 24; // reset all reset flags
@@ -20,8 +21,8 @@ void lnRunTimeInit()
  */
 void lnRunTimeInitPostPeripherals()
 {
-    // Init
-    lnExtiSWDOnly();
+    lnExtiSWDOnly(); // release jtag pins, after reset, it should stick
+    lnRemapTimerPin(1, PartialRemap);
 }
 
 // EOF

@@ -113,22 +113,25 @@ void lnPinMode(const lnPin xpin, const GpioMode mode, const int speedInMhz)
  *  \brief  do a partial remap on the given timer
  * @param timer
  */
-void lnRemapTimerPin(int timer)
+static const uint32_t TimerMaskArray[4] = {
+    LN_GPIO_TIMER0_REMAP_POS,
+    LN_GPIO_TIMER1_REMAP_POS,
+    LN_GPIO_TIMER2_REMAP_POS,
+};
+void lnRemapTimerPin(uint32_t timer, LnRemapTimer map)
 {
-    uint32_t v = aAfio->PCF0;
-    switch (timer)
+    if (timer > 2)
     {
-    case 1:
-        v &= LN_GPIO_TIMER1_MASK;
-        v |= LN_GPIO_TIMER1_REMAP;
-        break;
-    case 2:
-        v &= LN_GPIO_TIMER2_MASK;
-        v |= LN_GPIO_TIMER2_REMAP;
-        break;
-    default:
         xAssert(0);
     }
+    uint32_t pos = TimerMaskArray[timer];
+    uint32_t v = aAfio->PCF0;
+    v &= ~(3 << pos);
+    if (timer == 2 && map == PartialRemap) // the bit is not at the same place
+    {
+        map = (LnRemapTimer)2;
+    }
+    v |= (map << pos);
     aAfio->PCF0 = v;
 }
 #define LN_GPIO_OUTPUT_OD_HIZ 1

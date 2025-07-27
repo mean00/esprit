@@ -5,6 +5,7 @@
 #pragma once
 // #include "esprit.h"
 #include "esprit_macro.h"
+// #include "lnTimer_priv.h"
 #include "stdint.h"
 
 /**
@@ -43,7 +44,14 @@ volatile uint32_t *lnGetGpioDirectionRegister(
 volatile uint32_t *lnGetGpioValueRegister(int port); // Bit value for LOW bits of port "port"
 uint32_t lnReadPort(int port);
 
-void lnRemapTimerPin(int timer);
+enum LnRemapTimer
+{
+    NoRemap = 0,
+    PartialRemap = 1,
+    FullRemap = 3,
+};
+
+void lnRemapTimerPin(uint32_t timer, LnRemapTimer map);
 
 #include "lnFastGpio.h"
 

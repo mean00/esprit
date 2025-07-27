@@ -3,8 +3,8 @@
  *  See license file
  */
 #include "lnExti.h"
-#include "lnAFIO_priv.h"
 #include "esprit.h"
+#include "lnAFIO_priv.h"
 #include "lnExti_priv.h"
 #include "lnGPIO.h"
 #include "lnPeripheral_priv.h"
@@ -154,11 +154,6 @@ static void setPCF0(int value)
     uint32_t v = afio->PCF0;
     v &= LN_AFIO_PCF0_SWJ_MASK;
     v |= LN_AFIO_PCF0_SWJ_SET(value); // Jtag,no reset, frees up PB4
-    afio->PCF0 = v;
-    // Do partial remap on timer1 to follow bluepill layout
-    v = afio->PCF0;
-    v &= ~(3 << 8);
-    v |= 1 << 8;
     afio->PCF0 = v;
 }
 
