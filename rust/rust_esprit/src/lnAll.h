@@ -3,8 +3,8 @@
 #define _UINT32_T_DECLARED
 #define uint32_t unsigned int
 #endif
-#include "lnADC.h"
 #include "esprit.h"
+#include "lnADC.h"
 #include "lnBasicTimer.h"
 #include "lnCpuID.h"
 #include "lnDAC.h"
@@ -17,10 +17,10 @@
 // #include "lnGPIO.h"
 //  #include "lnI2C.h"
 #include "lnIRQ.h"
-#include "lnIRQ_arm.h"
-// #include "lnIRQ_riscv.h"
-// #include "lnFreeRTOS.h"
-// #include "lnFreeRTOS_pp.h"
+// #include "lnIRQ_arm.h"
+//  #include "lnIRQ_riscv.h"
+//  #include "lnFreeRTOS.h"
+//  #include "lnFreeRTOS_pp.h"
 #include "lnPeripherals.h"
 #include "lnPrintf.h"
 #include "lnRCU.h"

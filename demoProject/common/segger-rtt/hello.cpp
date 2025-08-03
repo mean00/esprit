@@ -1,5 +1,4 @@
 #include "esprit.h"
-#include "lnIRQ_arm.h"
 //
 extern "C"
 {

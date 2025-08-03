@@ -1,5 +1,4 @@
 #include "esprit.h"
-#include "lnIRQ_arm.h"
 //
 #include "LN_RTT.h"
 #define LED LN_SYSTEM_LED
