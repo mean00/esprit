@@ -1,0 +1,29 @@
+#include "esprit.h"
+#include "lnIRQ_arm.h"
+//
+#include "LN_RTT.h"
+#define LED LN_SYSTEM_LED
+void setup()
+{
+    lnPinMode(LED, lnOUTPUT_OPEN_DRAIN);
+}
+extern void rttLoggerFunction(int n, const char *data);
+/**
+ *
+ */
+int roundup = 0;
+void loop()
+{
+    bool onoff = true;
+    lnDigitalWrite(LED, true);
+    setLogger(rttLoggerFunction); // REDIRECT LOGGING TO RTT
+    LN_RTT_Init();
+    while (1)
+    {
+        roundup++;
+        xDelay(500);
+        lnDigitalWrite(LED, onoff);
+        onoff = !onoff;
+        Logger(">Hello::%d*\n", roundup);
+    }
+}
