@@ -41,6 +41,18 @@ uint32_t LN_RTT_Write(uint32_t bufferIndex, const uint8_t *buffer, uint32_t size
     lnRTTChannel *chan = &(my_rtt.channel);
     uint32_t write_offset = chan->write_offset;
     uint32_t done = 0;
+    // clamp the size to the available size
+    uint32_t total_avail = (chan->read_offset + chan->buffer_size - write_offset - 1) & (chan->buffer_size - 1);
+    if (!total_avail)
+    {
+        return 0;
+    }
+    if (size > total_avail)
+    {
+        size = total_avail;
+    }
+
+    //
     if (chan->write_offset >= chan->read_offset)
     {
         // right part
