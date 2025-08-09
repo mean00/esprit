@@ -20,17 +20,8 @@ MACRO(GENERATE_GD32_FIRMWARE target)
                    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                    COMMENT "Generating bin file"
     )
-  FIND_PROGRAM(elf2uf2 NAMES elf2uf2)
-  IF("x${elf2uf2}" STREQUAL "xelf2uf2-NOTFOUND")
-    MESSAGE(WARNING "elf2uf2-rs not found, it is part of the pico SDK")
-  ELSE()
-    ADD_CUSTOM_COMMAND(TARGET ${target}
-        POST_BUILD
-        COMMAND elf2uf2  $<TARGET_FILE:${target}> $<TARGET_FILE:${target}>.uf2
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMENT "Generating uf2 files"
-        )
-  ENDIF()
+  include(lnUf2)
+  ADD_UF2(${target})
 ENDMACRO()
 
 include(ln_use_library)

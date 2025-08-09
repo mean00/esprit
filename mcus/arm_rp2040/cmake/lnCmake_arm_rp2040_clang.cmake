@@ -48,17 +48,8 @@ MACRO(GENERATE_GD32_FIRMWARE target)
     )
   IF(USE_RP2040_PURE_RAM)
   ELSE()
-    find_program ( elf2uf2      NAMES elf2uf2)
-    if( "x${elf2uf2}" STREQUAL "xelf2uf2-NOTFOUND")
-      MESSAGE(WARNING "elf2uf2 not found, it is part of the pico SDK")
-    else()
-      add_custom_command(TARGET ${target}
-            POST_BUILD
-            COMMAND elf2uf2  $<TARGET_FILE:${target}> $<TARGET_FILE:${target}>.uf2
-            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-            COMMENT "Generating uf2 files"
-            )
-    endif()
+    include(lnUf2)
+    ADD_UF2(${target})
   ENDIF()
 ENDMACRO(GENERATE_GD32_FIRMWARE target)
 

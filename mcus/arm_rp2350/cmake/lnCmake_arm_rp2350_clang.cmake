@@ -25,7 +25,7 @@ MACRO(GENERATE_GD32_FIRMWARE target)
   ADD_EXECUTABLE(${target} ${ARGN})
   TARGET_SOURCES(${target} PRIVATE ${LN_MCU_FOLDER}/conf/bs2_default_padded_checksummed.S)
 
-  TARGET_LINK_LIBRARIES(${target} PUBLIC  esprit_single_lib esprit_dev)  
+  TARGET_LINK_LIBRARIES(${target} PUBLIC  esprit_single_lib esprit_dev)
   target_link_directories(${target} PUBLIC ${CMAKE_BINARY_DIR})
   IF(LN_CUSTOM_LD_SCRIPT)
     SET(SCRIPT ${LN_CUSTOM_LD_SCRIPT} CACHE INTERNAL "")
@@ -48,17 +48,8 @@ MACRO(GENERATE_GD32_FIRMWARE target)
     )
   IF(USE_RP2350_PURE_RAM)
   ELSE()
-    FIND_PROGRAM (picotool NAMES picotool)
-    IF("x${picotool}" STREQUAL "xpicotool-NOTFOUND")
-      MESSAGE(WARNING "picotool not found, it is part of the pico SDK")
-    ELSE()
-      ADD_CUSTOM_COMMAND(TARGET ${target}
-            POST_BUILD
-            COMMAND picotool uf2 convert  $<TARGET_FILE:${target}> $<TARGET_FILE:${target}>.uf2 --family rp2350-arm-s --abs-block
-            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-            COMMENT "Generating uf2 files"
-            )
-    ENDIF()
+    include(lnUf2)
+    ADD_UF2(${target})
   ENDIF()
 ENDMACRO()
 
