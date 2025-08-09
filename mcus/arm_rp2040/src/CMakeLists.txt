@@ -16,6 +16,7 @@ IF(EXISTS "${PICO_SDK_PATH}/src/common/pico_base_headers/include/pico/version.h.
   SET(VERSION_FILE "${PICO_SDK_PATH}/src/common/pico_base_headers/include/pico/version.h.in")
   SET(RP_PLATFORM_INCLUDE "${PICO_SDK_PATH}/src/${RP_CHIP}/pico_platform/include"
                           "${PICO_SDK_PATH}/src/rp2_common/pico_platform_compiler/include"
+                          "${PICO_SDK_PATH}/src/rp2_common/pico_platform_common/include"
                           "${PICO_SDK_PATH}/src/rp2_common/pico_platform_sections/include"
                           "${PICO_SDK_PATH}/src/rp2_common/pico_platform_panic/include"
                           "${PICO_SDK_PATH}/src/rp2_common/pico_flash/include"
