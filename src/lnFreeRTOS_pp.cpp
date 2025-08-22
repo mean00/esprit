@@ -124,6 +124,10 @@ void lnDelay(uint32_t ms)
     const TickType_t dely = 1 + (ms / portTICK_PERIOD_MS);
     vTaskDelay(dely);
 }
+extern "C" void lnDelay_C(uint32_t ms)
+{
+    lnDelay(ms);
+}
 
 lnMutex::lnMutex()
 {

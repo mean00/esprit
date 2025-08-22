@@ -3,13 +3,13 @@
 use crate::rn_timer_c as rt;
 use cty::c_void;
 //use crate::rust_esprit::{UBaseType_t,TaskHandle_t};
-use crate::rn_freertos_c::{lnCreateTask, UBaseType_t};
+use crate::rn_freertos_c::{UBaseType_t, lnCreateTask};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 //--
 pub fn delay_ms(to: u32) {
     unsafe {
-        rt::lnDelay(to);
+        rt::lnDelay_C(to);
     }
 }
 pub fn delay_us(to: u32) {
