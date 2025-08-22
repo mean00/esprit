@@ -63,9 +63,14 @@ pub mod rn_usb_cdc;
 /*
  * Re-export functions
  */
+pub use gpio::rnGpioMode as GpioMode;
 pub use rn_fast_event_group::rnFastEventGroup as FastEventGroup;
-pub use rn_gpio as Gpio;
-pub use rn_os_helper as os_helper;
+pub use rn_gpio as gpio;
+pub use rn_gpio::digital_read;
+pub use rn_gpio::digital_write;
+pub use rn_gpio::lnPin as pin;
+pub use rn_gpio::pin_mode;
+pub use rn_os_helper::delay_ms;
 
 pub struct FreeRtosAllocator;
 
