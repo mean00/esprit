@@ -23,7 +23,7 @@ WS2812B_timer::WS2812B_timer(int nbLeds, lnPin pin) : WS2812B_base(nbLeds)
  */
 void WS2812B_timer::begin()
 {
-    lnPinMode(_pin, lnPWM);
+    lnPinMode(_pin, lnPWM, 5);
     if (!_timer->pwmSetup(830000))
     {
         xAssert(0);
@@ -89,9 +89,17 @@ void WS2812B_timer::convertRgb(int hilow, uint8_t *rgb)
  */
 void WS2812B_timer::update()
 {
-    _nextLed = 2;
     convertRgb(false, _ledsColor);
-    convertRgb(true, _ledsColor + 3);
+    if (_nbLeds == 1)
+    {
+        _nextLed = 1;
+        memset(_timerPwmValue + 24, 0, 24); // zero the 2nd part
+    }
+    else
+    {
+        _nextLed = 2;
+        convertRgb(true, _ledsColor + 3);
+    }
     // start PWM
     _timer->start(48, _timerPwmValue);
     _sem.take(100);
@@ -104,6 +112,12 @@ void WS2812B_timer::update()
  */
 bool WS2812B_timer::timerCallback(bool half)
 {
+    if (_nbLeds == 1 && half == true)
+    {
+        _sem.give();
+        _nextLed++;
+        return false;
+    }
     if (_nextLed < _nbLeds)
     {
         convertRgb(!half, _ledsColor + 3 * _nextLed);
@@ -121,7 +135,7 @@ bool WS2812B_timer::timerCallback(bool half)
     {
         _sem.give();
         _nextLed++;
-        return true;
+        return false;
     }
     return true;
 }
