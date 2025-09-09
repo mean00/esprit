@@ -116,7 +116,7 @@ bool WS2812B_timer::timerCallback(bool half)
     {
         _sem.give();
         _nextLed++;
-        return false;
+        return true;
     }
     if (_nextLed < _nbLeds)
     {
@@ -135,7 +135,7 @@ bool WS2812B_timer::timerCallback(bool half)
     {
         _sem.give();
         _nextLed++;
-        return false;
+        return true;
     }
     return true;
 }
