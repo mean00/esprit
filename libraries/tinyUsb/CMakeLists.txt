@@ -48,6 +48,10 @@ IF( LN_USB_DFU_RUNTIME GREATER 0 )
 ENDIF()
 
 IF( LN_USB_DFU GREATER 0 )
+  SET(CLASS_FILES ${CLASS_FILES} ${TUSB}/class/dfu/dfu_rt_device.c ${LNSRC}/lnUsbDFU.cpp)
+ENDIF()
+
+IF( LN_USB_DFU GREATER 0 )
   SET(CLASS_FILES ${CLASS_FILES} ${TUSB}/class/dfu/dfu_device.c )
 ENDIF()
 
