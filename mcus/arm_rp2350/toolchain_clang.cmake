@@ -112,7 +112,7 @@ IF(NOT DEFINED LN_EXT)
 
   SET(MINI_SYSROOT "${PLATFORM_CLANG_PATH}/../lib/clang-runtimes/arm-none-eabi/armv8m.main_hard_fp/" CACHE INTERNAL "")
   SET(GD32_LIBC "-L${MINI_SYSROOT}/lib " CACHE INTERNAL "")
-  SET(GD32_MCU "-mcpu=cortex-m33 --target=armv8m-none-eabi -DPICO_RP2350=1  -DPICO_PLATFORM=rp2350 -DUSE_RP2350 -DPICO_RP2350_USB_FAST_IRQ=0  " CACHE INTERNAL "")
+  SET(GD32_MCU "-mcpu=cortex-m33 -Wno-arm-interrupt-vfp-clobber   -mfloat-abi=hard -mfpu=fpv4-sp-d16 --target=armv8m-none-eabi -DPICO_RP2350=1  -DPICO_PLATFORM=rp2350 -DUSE_RP2350 -DPICO_RP2350_USB_FAST_IRQ=0  " CACHE INTERNAL "")
   APX(GD32_MCU PICO_BOARD "${PICO_BOARD}")
 
 
