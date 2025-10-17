@@ -66,6 +66,7 @@ static const RCU_Peripheral _peripherals[] = {
     {pDMA1, 8, LN_RCU_AHB_DMA1EN},
     {pUSBHS_CH32v3x, 8, LN_RCU_AHB_USBHSEN_CH32V3x},
     {pUSBFS_OTG_CH32v3x, 8, LN_RCU_AHB_USBFSEN_OTG_CH32V3x},
+    {pETHERNET, 8, LN_RCU_AHB_DMA1EN},
 };
 
 // 1 : Reset
@@ -119,6 +120,11 @@ static void _rcuAction(const Peripherals periph, int action)
         switch (action)
         {
         case RCU_RESET:
+            if (periph == pETHERNET)
+            {
+                arcu->AHBRST |= LN_RCU_AHBRST_ETHMACRST;
+                arcu->AHBRST &= ~LN_RCU_AHBRST_ETHMACRST;
+            }
             // We can only reset USB
             //  if(periph==pUSB) xAssert(0);
             // else just ignore

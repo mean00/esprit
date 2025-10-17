@@ -116,13 +116,13 @@ typedef volatile CH32V3_INTERRUPTx CH32V3_INTERRUPT;
         INTERRUPT_DESC(DMA1_Channel2_IRQHandler), /*.word   DMA2_Channel3_IRQHandler    */                             \
         INTERRUPT_DESC(DMA1_Channel3_IRQHandler), /*.word   DMA2_Channel4_IRQHandler    */                             \
         INTERRUPT_DESC(DMA1_Channel4_IRQHandler), /*.word   DMA2_Channel5_IRQHandler    */                             \
-        INTERRUPT_DESC(unsupported),              /*.word   ETH_IRQHandler              */                             \
-        INTERRUPT_DESC(unsupported),              /*.word   ETH_WKUP_IRQHandler         */                             \
+        INTERRUPT_DESC(ETH_IRQHandler),           /*61 .word   ETH_IRQHandler           */                             \
+        INTERRUPT_DESC(ETH_WKUP_IRQHandler),      /*62 .word   ETH_IRQHandler           */                             \
         INTERRUPT_DESC(unsupported),              /*.word   CAN2_TX_IRQHandler          */                             \
         INTERRUPT_DESC(unsupported),              /*.word   CAN2_RX0_IRQHandler         */                             \
         INTERRUPT_DESC(unsupported),              /*.word   CAN2_RX1_IRQHandler         */                             \
         INTERRUPT_DESC(unsupported),              /*.word   CAN2_SCE_IRQHandler         */                             \
-        INTERRUPT_DESC(OTG_FS_IRQHandler),        /*.word   OTG_FS_IRQHandler           */                             \
+        INTERRUPT_DESC(OTG_FS_IRQHandler),        /* 67 .word   OTG_FS_IRQHandler       */                             \
         INTERRUPT_DESC(unsupported),              /*.word   USBHSWakeup_IRQHandler      */                             \
         INTERRUPT_DESC(USBHS_IRQHandler),         /*.word   USBHS_IRQHandler            */                             \
         INTERRUPT_DESC(unsupported),              /*.word   DVP_IRQHandler              */                             \
@@ -171,6 +171,8 @@ typedef volatile CH32V3_INTERRUPTx CH32V3_INTERRUPT;
     HANDLER_DESC(USBHSWakeup_IRQHandler)                                                                               \
     HANDLER_DESC(USBHS_IRQHandler)                                                                                     \
     HANDLER_DESC(OTG_FS_IRQHandler)                                                                                    \
+    HANDLER_DESC(ETH_IRQHandler)                                                                                       \
+    HANDLER_DESC(ETH_WKUP_IRQHandler)                                                                                  \
                                                                                                                        \
     HANDLER_DESC(USART1_IRQHandler)                                                                                    \
     HANDLER_DESC(USART2_IRQHandler)                                                                                    \

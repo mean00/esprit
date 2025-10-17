@@ -90,6 +90,14 @@ ISR_CODE extern "C" void LOCAL_LN_INTERRUPT_TYPE I2C1_ERR_IRQHandler(void)
     i2cIrqHandler(1, true);
 }
 
+ISR_CODE extern "C" void LOCAL_LN_INTERRUPT_TYPE ETH_IRQHandler(void)
+{
+    xAssert(0);
+}
+ISR_CODE extern "C" void LOCAL_LN_INTERRUPT_TYPE ETH_WKUP_IRQHandler(void)
+{
+    xAssert(0);
+}
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
 

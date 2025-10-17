@@ -88,9 +88,11 @@ typedef volatile LN_RCUx LN_RCU;
 #define LN_RCU_AHB_USBHSEN_CH32V3x (1 << 11)
 #define LN_RCU_AHB_USBFSEN_OTG_CH32V3x (1 << 12)
 #define LN_RCU_AHB_USBFSEN (1 << 12)
+#define LN_RCU_AHB_ETHMAC (7 << 14) // Rx + Tx /Enable
 
 // AHB RESET
 #define LN_RCU_AHBRST_USBFSRST (1 << 12)
+#define LN_RCU_AHBRST_ETHMACRST (1 << 14)
 
 // CFG0
 #define LN_RCU_CFG0_PLL_USED (1 << 3)
