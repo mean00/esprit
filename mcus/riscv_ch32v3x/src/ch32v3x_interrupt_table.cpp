@@ -76,14 +76,14 @@ unsupported_no_decl(1) unsupported_no_decl(2) unsupported_no_decl(3) unsupported
 /*- Create vector table -*/
 #undef INTERRUPT_DESC
 //--
-#define INTERRUPT_DESC_RAW(y) (uint32_t) y
+#define INTERRUPT_DESC_RAW(y) (uint32_t)y
 #ifdef USE_CH32v3x_HW_IRQ_STACK
-#define INTERRUPT_DESC(y) (uint32_t) y##_relay
+#define INTERRUPT_DESC(y) (uint32_t)y##_relay
 #else
-#define INTERRUPT_DESC(y) (uint32_t) y
+#define INTERRUPT_DESC(y) (uint32_t)y
 #endif
 //--
-#define UNSUPPORTED_NO(y) (uint32_t) unsupported_##y
+#define UNSUPPORTED_NO(y) (uint32_t)unsupported_##y
 
 #define VECTOR_TABLE __attribute__((section(".vector_table")))
     //--
@@ -110,6 +110,8 @@ WEAK_INTERRUPT(USBHS_IRQHandler)
 WEAK_INTERRUPT(USART1_IRQHandler)
 WEAK_INTERRUPT(USART2_IRQHandler)
 WEAK_INTERRUPT(OTG_FS_IRQHandler)
+WEAK_INTERRUPT(ETH_IRQHandler)
+WEAK_INTERRUPT(ETH_WKUP_IRQHandler)
 
 #define RELAY_FUNC(x)                                                                                                  \
     ISR_CODE extern "C" void __attribute__((naked)) __attribute((used)) x##_relay()                                    \
@@ -132,6 +134,8 @@ RELAY_FUNC(Break_Point_Handler)
 RELAY_FUNC(SysTick_Handler)
 RELAY_FUNC(OTG_FS_IRQHandler)
 RELAY_FUNC(USBHS_IRQHandler)
+RELAY_FUNC(ETH_IRQHandler)
+RELAY_FUNC(ETH_WKUP_IRQHandler)
 RELAY_FUNC(unsupported)
 RELAY_DMA(0, 0)
 RELAY_DMA(0, 1)

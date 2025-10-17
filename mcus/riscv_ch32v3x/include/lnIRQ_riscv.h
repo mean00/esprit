@@ -76,7 +76,9 @@ enum LnIRQ : int
     LN_IRQ_DMA1_Channel2,  /*!< DMA1 channel2 global interrupt                           */
     LN_IRQ_DMA1_Channel3,  /*!< DMA1 channel3 global interrupt                           */
     LN_IRQ_DMA1_Channel4,  /*!< DMA1 channel3 global interrupt                           */
-    LN_IRQ_CAN1_TX,        /*!< CAN1 TX interrupt                                        */
+    LN_IRQ_ETH,            /*!< 61 ETH global interrupt                                    */
+    LN_IRQ_ETH_WKUP,       /*!< 62 ETH WAKEUP global interrupt                              */
+    LN_IRQ_CAN1_TX,        /*!< 63 CAN1 TX interrupt                                        */
     LN_IRQ_CAN1_RX0,       /*!< CAN1 RX0 interrupt                                       */
     LN_IRQ_CAN1_RX1,       /*!< CAN1 RX1 interrupt                                       */
     LN_IRQ_CAN1_EWMC,      /*!< CAN1 EWMC interrupt                                      */

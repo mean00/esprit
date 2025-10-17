@@ -89,6 +89,10 @@ static const _irqDesc _irqs[] = {
     {LN_IRQ_OTG_FS, XXX(67)},     /*!< USBFS global interrupt                                   */
     {LN_IRQ_USBHS_WKUP, XXX(68)}, /*!< USBFS global interrupt                                   */
     {LN_IRQ_USBHS, XXX(69)},      /*!< USBFS global interrupt                                   */
+    // ETH
+    {LN_IRQ_ETH, XXX(61)},      /*!< 61 ETH global interrupt                                    */
+    {LN_IRQ_ETH_WKUP, XXX(62)}, /*!< 62 ETH WAKEUP global interrupt                              */
+
     // DVP UART 5 6 7 TIM8 TIM9
     {LN_IRQ_DMA1_Channel5, XXX(82)},  /*!< DMA1 channel0 global interrupt                           */
     {LN_IRQ_DMA1_Channel6, XXX(83)},  /*!< DMA1 channel1 global interrupt                           */

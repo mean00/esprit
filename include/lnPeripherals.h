@@ -41,6 +41,7 @@ enum Peripherals
     pAF,
     pDMA0,
     pDMA1,
+    pETHERNET,
     // CH32V3
     pUSBHS_CH32v3x,
     pUSBFS_OTG_CH32v3x,
