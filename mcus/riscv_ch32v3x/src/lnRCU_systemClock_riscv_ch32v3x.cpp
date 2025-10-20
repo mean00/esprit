@@ -18,8 +18,9 @@ extern LN_RCU *arcu;
 #define CH32_APB1_DIVIDER 0 // If set to 1 APB1 is sysclock /2, if set to 0 APB1 is sysclock
 
 //
-
-#define CLOCK_XTAL_VALUE 8                                   // 8mhz quartz
+#ifndef CLOCK_XTAL_VALUE   // 8mhz quartz
+#define CLOCK_XTAL_VALUE 8 // 8mhz quartz
+#endif
 #define CLOCK_TARGET_SYSCLOCK (LN_MCU_SPEED / (1000 * 1000)) // 108 Mhz
 //
 #define LN_CLOCK_IRC8 0
