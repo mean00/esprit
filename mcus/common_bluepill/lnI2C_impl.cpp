@@ -34,41 +34,49 @@ static const LN_I2C_DESCRIPTOR i2c_descriptors[2] = {
 
 int i2cIrqStat[2] = {0, 0};
 int i2cIrqStats[2][5] = {{0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}};
+volatile uint32_t lastI2cStat;
+volatile uint32_t stat1;
+//
+#define READ_STAT0()                                                                                                   \
+    {                                                                                                                  \
+        lastI2cStat = (_d->adr->STAT0);                                                                                \
+        if (!lastI2cStat)                                                                                              \
+            return;                                                                                                    \
+    }
+#define READ_STAT1() stat1 = (_d->adr->STAT1);
 
 #if 0
-#define TRACKER_SIZE 16
-    int stateTracker[TRACKER_SIZE];
-    int stateTrackerIndex=0;
 #define SET_STATE(x)                                                                                                   \
     {                                                                                                                  \
-        stateTracker[stateTrackerIndex] = x;                                                                           \
-        stateTrackerIndex = (stateTrackerIndex + 1) & (TRACKER_SIZE - 1);                                              \
-        _txState = x;                                                                                                  \
-    }
-#define SET_DONE(x, y)                                                                                                 \
-    {                                                                                                                  \
-        stateTracker[stateTrackerIndex] = 32 + y;                                                                      \
-        stateTrackerIndex = (stateTrackerIndex + 1) & (TRACKER_SIZE - 1);                                              \
-        _result = x;                                                                                                   \
-        _sem.give();                                                                                                   \
-    }
-
-#else
-#define SET_STATE(x)                                                                                                   \
-    {                                                                                                                  \
-        _txState = x;                                                                                                  \
+        Logger("Going to state %s\n", #x);                                                                             \
+        _state = x;                                                                                                    \
     }
 #define SET_DONE(x, y)                                                                                                 \
     {                                                                                                                  \
         (y);                                                                                                           \
+        Logger("done with result %d\n ", x);                                                                           \
         _result = x;                                                                                                   \
+        _sem.give();                                                                                                   \
+    }
+#else
+#define SET_STATE(x)                                                                                                   \
+    {                                                                                                                  \
+        _state = x;                                                                                                    \
+    }
+#define SET_DONE(x)                                                                                                    \
+    {                                                                                                                  \
+        _result = x;                                                                                                   \
+        if (!x)                                                                                                        \
+            xAssert(0);                                                                                                \
+        lnDisableInterrupt(_d->_irqErr);                                                                               \
+        lnDisableInterrupt(_d->_irqEv);                                                                                \
         _sem.give();                                                                                                   \
     }
 #endif
 
 // #define LN_I2C_STAT0_ERROR_MASK (LN_I2C_STAT0_LOSTARB | LN_I2C_STAT0_AERR | LN_I2C_STAT0_BERR | LN_I2C_STAT0_OUERR)
 #warning FIXME
-#define LN_I2C_STAT0_ERROR_MASK 0xDF00
+#define LN_I2C_STAT0_ERROR_MASK (0x1F << 8)
 
 lnTwoWire *irqHandler[2] = {NULL, NULL};
 
@@ -97,17 +105,17 @@ void lnTwoWire::setInterruptMode(bool eventEnabled, bool dmaEnabled, bool txEmpt
         stat1 &= ~LN_I2C_CTL1_DMAON;
 
         stat1 |= LN_I2C_CTL1_EVIE;
-        if (txEmptyEnabled)
-            stat1 |= LN_I2C_CTL1_BUFIE;
-        else
-            stat1 &= ~LN_I2C_CTL1_BUFIE;
+        // if (txEmptyEnabled)
+        // stat1 |= LN_I2C_CTL1_BUFIE;
+        // else
+        stat1 &= ~LN_I2C_CTL1_BUFIE;
     }
     _d->adr->CTL1 = stat1 | LN_I2C_CTL1_ERRIE;
 }
 /**
  *
  */
-void lnTwoWire::startIrq()
+void lnTwoWire::startTxIrq()
 {
 
     xAssert(irqHandler[_instance] == NULL);
@@ -189,14 +197,16 @@ bool waitStat0BitClear(LN_I2C_Registers *reg, uint32_t bit)
         }
     }
 }
-bool waitCTL0BitClear(LN_I2C_Registers *reg, uint32_t bit)
+static bool waitCTL0BitClear(LN_I2C_Registers *reg, uint32_t bit)
 {
-    while (1)
+    uint32_t wait = 10000;
+    while (--wait != 0)
     {
         uint32_t v = (reg->CTL0);
         if (!(v & bit))
             return true;
     }
+    return false;
 }
 /**
  *
@@ -289,18 +299,15 @@ bool lnTwoWire::multiWrite(int target, uint32_t nbSeqn, const uint32_t *seqLengt
     volatile uint32_t stat1, stat0;
     // Send start
     _dmaTx.beginTransfer(); // lock down i2c also, deals with re-entrency
+    clearup_state();
     LN_I2C_Registers *adr = _d->adr;
     lnI2CSession session(target, nbSeqn, seqLength, seqData);
     _session = &session;
 
-    stat0 = _d->adr->STAT0;
-    stat0 &= ~(LN_I2C_STAT0_ERROR_MASK);
-    _d->adr->STAT0 = stat0;
     SET_STATE(I2C_TX_START);
-    stat1 = _d->adr->STAT1;
-
+    adr->CTL0 |= LN_I2C_CTL0_ACKEN; // send start
     adr->CTL0 |= LN_I2C_CTL0_START; // send start
-    startIrq();
+    startTxIrq();
     bool r = _sem.take(100);
     _dmaTx.endTransfer();
     stopIrq();
@@ -308,13 +315,16 @@ bool lnTwoWire::multiWrite(int target, uint32_t nbSeqn, const uint32_t *seqLengt
     SET_STATE(I2C_IDLE);
     if (!r)
     {
-        Logger("I2C write timeout\n");
+        Logger("multiwrite: I2C write timeout\n");
         return false;
     }
     if (_result)
     {
         if (!waitCTL0BitClear(adr, LN_I2C_CTL0_STOP))
+        {
             _result = false;
+            xAssert(0);
+        }
     }
     return _result;
 }
@@ -331,6 +341,27 @@ bool lnTwoWire::write(int target, uint32_t n, const uint8_t *data)
 {
     return multiWrite(target, 1, &n, &data);
 }
+void lnTwoWire::clearup_state()
+{
+    LN_I2C_Registers *adr = _d->adr;
+    volatile uint32_t stat0, state1;
+    stat0 = adr->DATA;
+    stat0 = adr->DATA; // purge received stuff
+                       //
+    stat0 = adr->STAT0;
+    READ_STAT1();
+    // read stat 0 & stat 1
+    stat0 = adr->CTL0;
+    stat0 &= ~(LN_I2C_CTL0_ACKEN + LN_I2C_CTL0_POAP + LN_I2C_CTL0_STOP + LN_I2C_CTL0_START);
+    adr->CTL0 = stat0;
+
+    stat0 = adr->STAT0;
+    READ_STAT1();
+
+    stat0 = _d->adr->STAT0;
+    stat0 &= ~(LN_I2C_STAT0_ERROR_MASK);
+    _d->adr->STAT0 = stat0;
+}
 /**
  *
  * @param target
@@ -341,30 +372,30 @@ bool lnTwoWire::write(int target, uint32_t n, const uint8_t *data)
 bool lnTwoWire::multiRead(int target, uint32_t nbSeqn, const uint32_t *seqLength, uint8_t **seqData)
 {
     volatile uint32_t stat1, stat0;
+    LN_I2C_Registers *adr = _d->adr;
     _dmaRx.beginTransfer(); // we dont actually use dma, but we use the dma mutex to protect against re-entrency
                             // ugly, i know
-
-    // compute total bytes to receive..
-    uint32_t total = 0;
-    for (int i = 0; i < nbSeqn; i++)
-        total += seqLength[i];
-
-    // Send start
-
-    LN_I2C_Registers *adr = _d->adr;
+    clearup_state();
     lnI2CSession session(target, nbSeqn, seqLength, (const uint8_t **)seqData);
-    session.total_receive = total;
-    session.current_receive = 0;
     _session = &session;
 
-    stat0 = _d->adr->STAT0;
-    stat0 &= ~(LN_I2C_STAT0_ERROR_MASK);
-    _d->adr->STAT0 = stat0;
     SET_STATE(I2C_RX_START);
-    stat1 = _d->adr->STAT1;
 
     startRxIrq();
-    adr->CTL0 |= LN_I2C_CTL0_START + LN_I2C_CTL0_ACKEN; // send start, auto ack
+    switch (_session->total_bytes)
+    {
+    case 1:
+        break;
+    case 0:
+        break;
+    case 2:
+        adr->CTL0 |= LN_I2C_CTL0_POAP; // send start
+        break;
+    default:
+        break;
+    }
+    adr->CTL0 |= LN_I2C_CTL0_ACKEN; // send start, auto ack
+    adr->CTL0 |= LN_I2C_CTL0_START; // send start, auto ack
     bool r = _sem.take(100);
     _dmaRx.endTransfer();
     stopIrq();
@@ -372,13 +403,11 @@ bool lnTwoWire::multiRead(int target, uint32_t nbSeqn, const uint32_t *seqLength
     SET_STATE(I2C_IDLE);
     if (!r)
     {
-        Logger("I2C write timeout\n");
+        Logger("multiread: I2C write timeout\n");
         return false;
     }
     if (_result)
     {
-        if (!waitCTL0BitClear(adr, LN_I2C_CTL0_STOP))
-            _result = false;
     }
     return _result;
 }
@@ -496,11 +525,7 @@ bool lnTwoWire::receiveNext()
     xAssert(t < _session->nbTransaction);
 
     data[_session->curIndex++] = _d->adr->DATA & 0xff;
-    _session->current_receive++;
-    if (_session->current_receive + 1 == _session->total_receive)
-    {
-        _d->adr->CTL0 |= LN_I2C_CTL0_STOP;
-    }
+    _session->current_offset++;
     if (_session->curIndex < size)
     {
         return true;
@@ -520,101 +545,208 @@ bool lnTwoWire::receiveNext()
  * @param evt
  * @return
  */
-volatile uint32_t lastI2cStat;
+/**
+ *
+ */
 void lnTwoWire::irq(int evt)
 {
     i2cIrqStat[_instance]++;
     xAssert(_session);
-    switch (evt)
-    {
-    case 1: // error
+    if (evt != 0)
     {
         lnDisableInterrupt(_d->_irqErr);
         lnDisableInterrupt(_d->_irqEv);
         uint32_t stat0 = _d->adr->STAT0;
         stat0 &= ~(LN_I2C_STAT0_ERROR_MASK); // clear error
         _d->adr->STAT0 = stat0;
-        _result = false;
-        _sem.give();
+        SET_DONE(false);
         return;
     }
-    break;
-    case 0:
-        break;
+    if ((uint32_t)_state & LN_RX_I2C_STATE_OFFSET)
+        irqRx();
+    else
+        irqTx();
+}
+/**
+ *
+ *
+ */
+void lnTwoWire::irqRx()
+{
+    switch (_state)
+    {
     default:
         xAssert(0);
         break;
-    }
-    lastI2cStat = (_d->adr->STAT0);
-    if (!lastI2cStat)
-        return; // spurious
-    volatile uint32_t v1;
-    switch (_txState)
-    {
-    case I2C_IDLE:
-        xAssert(0);
-        break;
-    case I2C_RX_START:
-    case I2C_TX_START:
+    case I2C_RX_START: {
+        READ_STAT0();
         i2cIrqStats[_instance][0]++;
         xAssert(lastI2cStat & LN_I2C_STAT0_SBSEND);
-        switch (_txState)
-        {
-        case I2C_TX_START: {
-            _d->adr->DATA = ((_session->target & 0x7F) << 1);
-            SET_STATE(I2C_TX_ADDR_SENT);
-        }
-        break;
-        case I2C_RX_START: {
-            _d->adr->DATA = ((_session->target & 0x7F) << 1) + 1;
-            SET_STATE(I2C_RX_ADDR_SENT);
-        }
-        break;
-        default:
-            xAssert(0);
-            break;
-        }
+        _d->adr->DATA = ((_session->target & 0x7F) << 1) + 1;
+        SET_STATE(I2C_RX_ADDR_SENT);
+    }
         return;
         break;
-    case I2C_RX_ADDR_SENT:
-    case I2C_TX_ADDR_SENT:
+    case I2C_RX_ADDR_SENT: {
+        if (_session->total_bytes < 3)
+        {
+            _d->adr->CTL0 &= ~LN_I2C_CTL0_ACKEN;
+        }
+        READ_STAT0();
+        stat1 = _d->adr->STAT1; // Clear bit
+        if (_session->total_bytes == 1)
+        {
+            _d->adr->CTL0 |= LN_I2C_CTL0_STOP;
+        }
+        _d->adr->CTL1 |= (LN_I2C_CTL1_BUFIE);
         i2cIrqStats[_instance][1]++;
         if (!(lastI2cStat & LN_I2C_STAT0_ADDSEND))
         {
             xAssert(0);
         }
-        v1 = _d->adr->STAT1; // Clear bit
-        switch (_txState)
+        if (_session->total_bytes == 1)
         {
-        case I2C_TX_ADDR_SENT: {
-            xAssert(_d->adr->STAT0 & LN_I2C_STAT0_TBE);
-            if (!initiateTx())
-            {
-                goto sendStop;
-            }
+            SET_DONE(true);
         }
-        break;
-        case I2C_RX_ADDR_SENT:
-            SET_STATE(I2C_RX_DATA);
-            setInterruptMode(true, false, true); // event, no DMA, rx interrupt
-            break;
-        default:
-            xAssert(0);
-            break;
-        }
+        else
+            SET_STATE(I2C_RX_DATA)
+        setInterruptMode(true, false, true); // event, no DMA, rx interrupt
         return;
+    }
+    break;
+        /**
+         *
+         * To make sure we dont HAVE to process the last byte very quickly , make a
+         * small automaton for size >=3 payload bytes . See page 482 of GD3303 user manual
+         *
+         */
+    case I2C_RX_DATA2: {
+        uint32_t u = _d->adr->CTL0;
+        u &= ~LN_I2C_CTL0_ACKEN;
+        _d->adr->CTL0 = u;
+        receiveNext();
+        SET_STATE(I2C_RX_DATA3);
+        return;
+    }
+    break;
+    case I2C_RX_DATA3: {
+        uint32_t u = _d->adr->CTL0;
+        u |= LN_I2C_CTL0_STOP;
+        _d->adr->CTL0 = u;
+        receiveNext();
+        receiveNext();
+        SET_STATE(I2C_RX_END);
+        lnDisableInterrupt(_d->_irqErr);
+        lnDisableInterrupt(_d->_irqEv);
+        if (!waitCTL0BitClear(_d->adr, LN_I2C_CTL0_STOP))
+        {
+            _result = false;
+            xAssert(0);
+        }
+        SET_DONE(true);
+        return;
+    }
+    /*
+     * Special case when N=1
+     *
+     */
+    case I2C_RX_DATA_1_BYTE: {
+        xAssert(0);
+    }
+    break;
+    case I2C_RX_DATA_2_BYTES: {
+        receiveNext();
+        receiveNext();
+        SET_STATE(I2C_RX_END);
+        SET_DONE(true);
+        return;
+    }
+    break;
+    case I2C_RX_DATA: {
+        switch (_session->total_bytes)
+        {
+        case 0:
+        case 1:
+        default: {
+            READ_STAT0();
+            if (_session->current_offset == (_session->total_bytes - 3))
+            {
+                SET_STATE(I2C_RX_DATA2); // dont read the byte!
+                return;
+            }
+            break;
+        }
+        case 2: {
+            READ_STAT0();
+            READ_STAT1();
+            uint32_t u = _d->adr->CTL0;
+            u &= ~LN_I2C_CTL0_ACKEN;
+            _d->adr->CTL0 = u;
+            u |= LN_I2C_CTL0_STOP;
+            _d->adr->CTL0 = u;
+            SET_STATE(I2C_RX_DATA_2_BYTES); // dont read the byte!
+            return;
+        }
         break;
-    case I2C_RX_DATA:
+        }
         i2cIrqStats[_instance][2]++;
-        xAssert(_d->adr->STAT0 & LN_I2C_STAT0_RBNE);
+        xAssert(lastI2cStat & LN_I2C_STAT0_RBNE);
         if (!receiveNext())
         {
             SET_STATE(I2C_RX_STOP);
             _d->adr->CTL1 &= ~(LN_I2C_CTL1_BUFIE);
-            goto sendStop;
+            uint32_t u = _d->adr->CTL0;
+            u |= LN_I2C_CTL0_STOP;
+            _d->adr->CTL0 = u;
+            lnDisableInterrupt(_d->_irqErr);
+            lnDisableInterrupt(_d->_irqEv);
+            _result = true;
+            _sem.give();
         }
+        return;
+    }
+    break;
+    }
+}
+/**
+ *
+ *
+ */
+void lnTwoWire::irqTx()
+{
+    switch (_state)
+    {
+    default:
+        xAssert(0);
+        break;
+    case I2C_TX_START: {
+        READ_STAT0();
+        i2cIrqStats[_instance][0]++;
+        xAssert(lastI2cStat & LN_I2C_STAT0_SBSEND);
+        _d->adr->DATA = ((_session->target & 0x7F) << 1);
+        _d->adr->CTL1 |= (LN_I2C_CTL1_BUFIE); // enable tx
+        SET_STATE(I2C_TX_ADDR_SENT);
+    }
+        return;
+        break;
+    case I2C_TX_ADDR_SENT: {
+        READ_STAT0();
+        stat1 = _d->adr->STAT1; // Clear bit
+        i2cIrqStats[_instance][1]++;
+        if (!(lastI2cStat & LN_I2C_STAT0_ADDSEND))
+        {
+            xAssert(0);
+        }
+        xAssert(_d->adr->STAT0 & LN_I2C_STAT0_TBE);
+        if (!initiateTx())
+        {
+            SET_DONE(false);
+        }
+    }
+        return;
         break;
     case I2C_TX_DATA:
+        READ_STAT0();
         i2cIrqStats[_instance][2]++;
         xAssert(_d->adr->STAT0 & LN_I2C_STAT0_TBE);
         if (!sendNext())
@@ -622,52 +754,16 @@ void lnTwoWire::irq(int evt)
             SET_STATE(I2C_TX_STOP);
             _d->adr->CTL1 &= ~(LN_I2C_CTL1_BUFIE);
         }
-        else
-        {
-            SET_STATE(I2C_TX_DATA);
-        }
         return;
         break;
 
     case I2C_TX_STOP:
+        READ_STAT0();
         xAssert(lastI2cStat & LN_I2C_STAT0_BTC);
-    case I2C_RX_STOP:
-    sendStop:
-        i2cIrqStats[_instance][3]++;
-
         _d->adr->CTL0 |= LN_I2C_CTL0_STOP;
-        switch (_txState)
-        {
-        case I2C_TX_DATA: // We only get here with empty payload, i.e. scanner
-            xAssert(_session->transactionSize[0] == 0);
-        case I2C_TX_STOP:
-            SET_STATE(I2C_TX_END);
-            break;
-        case I2C_RX_STOP:
-            SET_STATE(I2C_RX_END);
-            break;
-        default:
-            xAssert(0);
-            break;
-        }
-        lnDisableInterrupt(_d->_irqErr);
-        lnDisableInterrupt(_d->_irqEv);
-        _result = true;
-        _sem.give();
+        SET_DONE(true);
+        SET_STATE(I2C_TX_END);
         return;
-        break;
-    case I2C_RX_END:
-    case I2C_TX_END:
-        xAssert(0);
-        return;
-        break;
-    case I2C_RX_DATA_DMA:
-    case I2C_TX_DATA_DMA:
-        xAssert(0);
-        return;
-        break;
-    default:
-        xAssert(0);
         break;
     }
 }

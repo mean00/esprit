@@ -20,12 +20,13 @@ class lnI2CSession
         transactionData = dt;
         curTransaction = 0;
         curIndex = 0;
-        total_receive = 0;
-        current_receive = 0;
+        total_bytes = 0;
+        current_offset = 0;
         // sanity check
         for (int i = 0; i < nb; i++)
         {
             xAssert(sz[i] < 65535);
+            total_bytes += sz[i];
         }
     }
     int target;
@@ -34,8 +35,8 @@ class lnI2CSession
     const uint8_t **transactionData;
     int curTransaction;
     int curIndex;
-    int total_receive;
-    int current_receive;
+    int total_bytes;
+    int current_offset;
 };
 
 /**
@@ -47,6 +48,7 @@ class lnTwoWire
 {
 
   public:
+    void clearup_state();
     lnTwoWire(int instance, int speed = 0);
     ~lnTwoWire();
     void setSpeed(int speed);
@@ -70,7 +72,7 @@ class lnTwoWire
 
   protected:
     void stopIrq();
-    void startIrq();
+    void startTxIrq();
     void startRxIrq();
     bool sendNext();
     bool receiveNext();
@@ -78,9 +80,9 @@ class lnTwoWire
     void dmaTxDone();
     void dmaRxDone();
     void setInterruptMode(bool eventEnabled, bool dmaEnabled, bool txEmptyEnabled);
-
+#define LN_RX_I2C_STATE_OFFSET 0x80
   protected:
-    enum _I2C_TX
+    enum I2C_STATE
     {
         I2C_IDLE = 0xff,
         I2C_TX_START = 0,
@@ -90,12 +92,16 @@ class lnTwoWire
         I2C_TX_END = 4,
         I2C_TX_DATA_DMA = 5,
 
-        I2C_RX_START = 8 + I2C_TX_START,
-        I2C_RX_ADDR_SENT = 8 + I2C_TX_ADDR_SENT,
-        I2C_RX_DATA = 8 + I2C_TX_DATA,
-        I2C_RX_STOP = I2C_TX_STOP + 8,
-        I2C_RX_END = I2C_TX_END + 8,
-        I2C_RX_DATA_DMA = 8 + I2C_TX_DATA_DMA,
+        I2C_RX_START = LN_RX_I2C_STATE_OFFSET + I2C_TX_START,
+        I2C_RX_ADDR_SENT = LN_RX_I2C_STATE_OFFSET + I2C_TX_ADDR_SENT,
+        I2C_RX_DATA = LN_RX_I2C_STATE_OFFSET + I2C_TX_DATA,
+        I2C_RX_DATA2 = LN_RX_I2C_STATE_OFFSET + 10,
+        I2C_RX_DATA3 = LN_RX_I2C_STATE_OFFSET + 11,
+        I2C_RX_DATA_1_BYTE = LN_RX_I2C_STATE_OFFSET + 12,
+        I2C_RX_DATA_2_BYTES = LN_RX_I2C_STATE_OFFSET + 13,
+        I2C_RX_STOP = LN_RX_I2C_STATE_OFFSET + I2C_TX_STOP,
+        I2C_RX_END = LN_RX_I2C_STATE_OFFSET + I2C_TX_END,
+        I2C_RX_DATA_DMA = LN_RX_I2C_STATE_OFFSET + I2C_TX_DATA_DMA,
     };
 
     int _instance;
@@ -104,13 +110,15 @@ class lnTwoWire
     const LN_I2C_DESCRIPTOR *_d;
     lnBinarySemaphore _sem;
     bool _result;
-    _I2C_TX _txState;
+    I2C_STATE _state;
     lnI2CSession *_session;
     lnDMA _dmaTx;
     lnDMA _dmaRx;
 
   public:
     void irq(int evt);
+    void irqRx();
+    void irqTx();
     static void dmaTxDone_(void *c, lnDMA::DmaInterruptType typ);
     static void dmaRxDone_(void *c, lnDMA::DmaInterruptType typ);
 };
