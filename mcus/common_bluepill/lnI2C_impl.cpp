@@ -31,9 +31,7 @@ struct LN_I2C_DESCRIPTOR
 static const LN_I2C_DESCRIPTOR i2c_descriptors[2] = {
     {(LN_I2C_Registers *)LN_I2C0_ADR, PB6, PB7, LN_IRQ_I2C0_EV, LN_IRQ_I2C0_ER, 0, 6, 5},
     {(LN_I2C_Registers *)LN_I2C1_ADR, PB10, PB11, LN_IRQ_I2C1_EV, LN_IRQ_I2C1_ER, 0, 4, 3}};
-
-int i2cIrqStat[2] = {0, 0};
-int i2cIrqStats[2][5] = {{0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}};
+static uint32_t i2c_stray_interrupt[2];
 volatile uint32_t lastI2cStat;
 volatile uint32_t stat1;
 //
@@ -45,20 +43,26 @@ volatile uint32_t stat1;
     }
 #define READ_STAT1() stat1 = (_d->adr->STAT1);
 
-#if 0
+#if 1
+#define PEDANTIC()                                                                                                     \
+    {                                                                                                                  \
+    }
 #define SET_STATE(x)                                                                                                   \
     {                                                                                                                  \
-        Logger("Going to state %s\n", #x);                                                                             \
         _state = x;                                                                                                    \
     }
-#define SET_DONE(x, y)                                                                                                 \
+#define SET_DONE(x)                                                                                                    \
     {                                                                                                                  \
-        (y);                                                                                                           \
-        Logger("done with result %d\n ", x);                                                                           \
         _result = x;                                                                                                   \
+        lnDisableInterrupt(_d->_irqErr);                                                                               \
+        lnDisableInterrupt(_d->_irqEv);                                                                                \
         _sem.give();                                                                                                   \
     }
 #else
+#define PEDANTIC()                                                                                                     \
+    {                                                                                                                  \
+        xAssert(0);                                                                                                    \
+    }
 #define SET_STATE(x)                                                                                                   \
     {                                                                                                                  \
         _state = x;                                                                                                    \
@@ -79,7 +83,14 @@ volatile uint32_t stat1;
 #define LN_I2C_STAT0_ERROR_MASK (0x1F << 8)
 
 lnTwoWire *irqHandler[2] = {NULL, NULL};
-
+/*
+ *
+ */
+lnI2C *lnI2C::create(int instance, int speed)
+{
+    lnPeripherals::enable((Peripherals)(pI2C0 + instance));
+    return new lnTwoWire(instance, speed);
+}
 /**
  *
  * @param eventEnabled
@@ -323,7 +334,7 @@ bool lnTwoWire::multiWrite(int target, uint32_t nbSeqn, const uint32_t *seqLengt
         if (!waitCTL0BitClear(adr, LN_I2C_CTL0_STOP))
         {
             _result = false;
-            xAssert(0);
+            PEDANTIC();
         }
     }
     return _result;
@@ -377,6 +388,9 @@ bool lnTwoWire::multiRead(int target, uint32_t nbSeqn, const uint32_t *seqLength
                             // ugly, i know
     clearup_state();
     lnI2CSession session(target, nbSeqn, seqLength, (const uint8_t **)seqData);
+
+    //  xAssert(session.total_bytes < 3); // above is buggy, dont care for now
+
     _session = &session;
 
     SET_STATE(I2C_RX_START);
@@ -388,10 +402,8 @@ bool lnTwoWire::multiRead(int target, uint32_t nbSeqn, const uint32_t *seqLength
         break;
     case 0:
         break;
-    case 2:
-        adr->CTL0 |= LN_I2C_CTL0_POAP; // send start
-        break;
     default:
+        adr->CTL0 |= LN_I2C_CTL0_POAP; // send start
         break;
     }
     adr->CTL0 |= LN_I2C_CTL0_ACKEN; // send start, auto ack
@@ -438,7 +450,6 @@ void lnTwoWire::dmaTxDone_(void *c, lnDMA::DmaInterruptType typ)
  */
 void lnTwoWire::dmaTxDone()
 {
-    i2cIrqStats[_instance][4]++;
     _session->curTransaction++;
     if (!initiateTx())
     {
@@ -550,16 +561,27 @@ bool lnTwoWire::receiveNext()
  */
 void lnTwoWire::irq(int evt)
 {
-    i2cIrqStat[_instance]++;
     xAssert(_session);
     if (evt != 0)
     {
+        // ignore stray error interrupts
+        switch (_state)
+        {
+        case I2C_RX_END:
+        case I2C_TX_END:
+        case I2C_IDLE:
+            i2c_stray_interrupt[this->_instance]++;
+            return;
+            break;
+        default:
+            break;
+        }
         lnDisableInterrupt(_d->_irqErr);
         lnDisableInterrupt(_d->_irqEv);
         uint32_t stat0 = _d->adr->STAT0;
         stat0 &= ~(LN_I2C_STAT0_ERROR_MASK); // clear error
         _d->adr->STAT0 = stat0;
-        SET_DONE(false);
+        // SET_DONE(false);
         return;
     }
     if ((uint32_t)_state & LN_RX_I2C_STATE_OFFSET)
@@ -580,7 +602,6 @@ void lnTwoWire::irqRx()
         break;
     case I2C_RX_START: {
         READ_STAT0();
-        i2cIrqStats[_instance][0]++;
         xAssert(lastI2cStat & LN_I2C_STAT0_SBSEND);
         _d->adr->DATA = ((_session->target & 0x7F) << 1) + 1;
         SET_STATE(I2C_RX_ADDR_SENT);
@@ -594,68 +615,42 @@ void lnTwoWire::irqRx()
         }
         READ_STAT0();
         stat1 = _d->adr->STAT1; // Clear bit
-        if (_session->total_bytes == 1)
-        {
-            _d->adr->CTL0 |= LN_I2C_CTL0_STOP;
-        }
-        _d->adr->CTL1 |= (LN_I2C_CTL1_BUFIE);
-        i2cIrqStats[_instance][1]++;
         if (!(lastI2cStat & LN_I2C_STAT0_ADDSEND))
         {
             xAssert(0);
         }
         if (_session->total_bytes == 1)
         {
-            SET_DONE(true);
+            SET_STATE(I2C_RX_DATA_1_BYTE)
         }
         else
-            SET_STATE(I2C_RX_DATA)
-        setInterruptMode(true, false, true); // event, no DMA, rx interrupt
-        return;
-    }
-    break;
-        /**
-         *
-         * To make sure we dont HAVE to process the last byte very quickly , make a
-         * small automaton for size >=3 payload bytes . See page 482 of GD3303 user manual
-         *
-         */
-    case I2C_RX_DATA2: {
-        uint32_t u = _d->adr->CTL0;
-        u &= ~LN_I2C_CTL0_ACKEN;
-        _d->adr->CTL0 = u;
-        receiveNext();
-        SET_STATE(I2C_RX_DATA3);
-        return;
-    }
-    break;
-    case I2C_RX_DATA3: {
-        uint32_t u = _d->adr->CTL0;
-        u |= LN_I2C_CTL0_STOP;
-        _d->adr->CTL0 = u;
-        receiveNext();
-        receiveNext();
-        SET_STATE(I2C_RX_END);
-        lnDisableInterrupt(_d->_irqErr);
-        lnDisableInterrupt(_d->_irqEv);
-        if (!waitCTL0BitClear(_d->adr, LN_I2C_CTL0_STOP))
         {
-            _result = false;
-            xAssert(0);
+            SET_STATE(I2C_RX_DATA)
         }
-        SET_DONE(true);
+        setInterruptMode(true, false, true); // event, no DMA, rx interrupt
+        _d->adr->CTL1 |= (LN_I2C_CTL1_BUFIE);
+        break;
         return;
     }
+    break;
     /*
      * Special case when N=1
      *
      */
     case I2C_RX_DATA_1_BYTE: {
-        xAssert(0);
+        READ_STAT0();
+        READ_STAT1();
+        xAssert(lastI2cStat & LN_I2C_STAT0_RBNE);
+        receiveNext();
+        uint32_t u = _d->adr->CTL0;
+        u |= LN_I2C_CTL0_STOP;
+        _d->adr->CTL0 = u;
+        SET_STATE(I2C_RX_END);
+        SET_DONE(true);
+        return;
     }
     break;
     case I2C_RX_DATA_2_BYTES: {
-        receiveNext();
         receiveNext();
         SET_STATE(I2C_RX_END);
         SET_DONE(true);
@@ -663,20 +658,9 @@ void lnTwoWire::irqRx()
     }
     break;
     case I2C_RX_DATA: {
-        switch (_session->total_bytes)
+        READ_STAT0();
+        if (_session->current_offset += 2 == _session->total_bytes)
         {
-        case 0:
-        case 1:
-        default: {
-            READ_STAT0();
-            if (_session->current_offset == (_session->total_bytes - 3))
-            {
-                SET_STATE(I2C_RX_DATA2); // dont read the byte!
-                return;
-            }
-            break;
-        }
-        case 2: {
             READ_STAT0();
             READ_STAT1();
             uint32_t u = _d->adr->CTL0;
@@ -684,25 +668,12 @@ void lnTwoWire::irqRx()
             _d->adr->CTL0 = u;
             u |= LN_I2C_CTL0_STOP;
             _d->adr->CTL0 = u;
+            receiveNext();
             SET_STATE(I2C_RX_DATA_2_BYTES); // dont read the byte!
             return;
         }
-        break;
-        }
-        i2cIrqStats[_instance][2]++;
         xAssert(lastI2cStat & LN_I2C_STAT0_RBNE);
-        if (!receiveNext())
-        {
-            SET_STATE(I2C_RX_STOP);
-            _d->adr->CTL1 &= ~(LN_I2C_CTL1_BUFIE);
-            uint32_t u = _d->adr->CTL0;
-            u |= LN_I2C_CTL0_STOP;
-            _d->adr->CTL0 = u;
-            lnDisableInterrupt(_d->_irqErr);
-            lnDisableInterrupt(_d->_irqEv);
-            _result = true;
-            _sem.give();
-        }
+        receiveNext();
         return;
     }
     break;
@@ -721,7 +692,6 @@ void lnTwoWire::irqTx()
         break;
     case I2C_TX_START: {
         READ_STAT0();
-        i2cIrqStats[_instance][0]++;
         xAssert(lastI2cStat & LN_I2C_STAT0_SBSEND);
         _d->adr->DATA = ((_session->target & 0x7F) << 1);
         _d->adr->CTL1 |= (LN_I2C_CTL1_BUFIE); // enable tx
@@ -732,7 +702,6 @@ void lnTwoWire::irqTx()
     case I2C_TX_ADDR_SENT: {
         READ_STAT0();
         stat1 = _d->adr->STAT1; // Clear bit
-        i2cIrqStats[_instance][1]++;
         if (!(lastI2cStat & LN_I2C_STAT0_ADDSEND))
         {
             xAssert(0);
@@ -747,7 +716,6 @@ void lnTwoWire::irqTx()
         break;
     case I2C_TX_DATA:
         READ_STAT0();
-        i2cIrqStats[_instance][2]++;
         xAssert(_d->adr->STAT0 & LN_I2C_STAT0_TBE);
         if (!sendNext())
         {

@@ -41,7 +41,7 @@ ln_i2c_c *lni2c_create(int instance, int speed)
         inst.count++;
         return (ln_i2c_c *)inst.i2c;
     }
-    inst.i2c = new lnI2C(instance, speed);
+    inst.i2c = lnI2C::create(instance, speed);
     inst.count = 1;
     inst.i2c->begin();
     return (ln_i2c_c *)inst.i2c;

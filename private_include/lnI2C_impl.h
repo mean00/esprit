@@ -5,6 +5,7 @@
 #pragma once
 #include "esprit.h"
 #include "lnDma.h"
+#include "lnI2C.h"
 struct LN_I2C_DESCRIPTOR;
 
 /**
@@ -44,7 +45,7 @@ class lnI2CSession
  * @param instance
  * @param speed
  */
-class lnTwoWire
+class lnTwoWire : public lnI2C
 {
 
   public:
@@ -69,6 +70,14 @@ class lnTwoWire
     bool read(int target, uint32_t n, uint8_t *data);
     bool multiRead(int target, uint32_t nbSeqn, const uint32_t *seqLength, uint8_t **seqData);
     bool begin(int target = 0);
+    bool write(uint32_t n, const uint8_t *data)
+    {
+        return write(_targetAddress, n, data);
+    }
+    bool read(uint32_t n, uint8_t *data)
+    {
+        return read(_targetAddress, n, data);
+    }
 
   protected:
     void stopIrq();
@@ -95,8 +104,6 @@ class lnTwoWire
         I2C_RX_START = LN_RX_I2C_STATE_OFFSET + I2C_TX_START,
         I2C_RX_ADDR_SENT = LN_RX_I2C_STATE_OFFSET + I2C_TX_ADDR_SENT,
         I2C_RX_DATA = LN_RX_I2C_STATE_OFFSET + I2C_TX_DATA,
-        I2C_RX_DATA2 = LN_RX_I2C_STATE_OFFSET + 10,
-        I2C_RX_DATA3 = LN_RX_I2C_STATE_OFFSET + 11,
         I2C_RX_DATA_1_BYTE = LN_RX_I2C_STATE_OFFSET + 12,
         I2C_RX_DATA_2_BYTES = LN_RX_I2C_STATE_OFFSET + 13,
         I2C_RX_STOP = LN_RX_I2C_STATE_OFFSET + I2C_TX_STOP,
