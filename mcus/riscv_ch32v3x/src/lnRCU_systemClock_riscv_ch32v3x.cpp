@@ -19,7 +19,9 @@ extern LN_RCU *arcu;
 
 //
 
-#define CLOCK_XTAL_VALUE 8                                   // 8mhz quartz
+#ifndef CLOCK_XTAL_VALUE
+#define CLOCK_XTAL_VALUE 8 // 8mhz quartz
+#endif
 #define CLOCK_TARGET_SYSCLOCK (LN_MCU_SPEED / (1000 * 1000)) // 108 Mhz
 //
 #define LN_CLOCK_IRC8 0
