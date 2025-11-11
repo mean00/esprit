@@ -47,7 +47,7 @@ extern LN_RCU *arcu;
 uint32_t _rcuClockApb1 = 108000000 / 2;
 uint32_t _rcuClockApb2 = 108000000;
 extern "C" uint32_t SystemCoreClock;
-uint32_t SystemCoreClock = 0;
+extern uint32_t SystemCoreClock;
 /**
  *
  * @param periph
@@ -218,7 +218,9 @@ void lnInitSystemClock()
     inputClock = CLOCK_XTAL_VALUE;
     useExternalClock = true;
 #endif
-
+#if defined(USE_CH32V208W)
+    inputClock >>= 2; // divided by 4 on the  208W
+#endif
     int multiplier = CLOCK_TARGET_SYSCLOCK / inputClock;
     setPll(multiplier, useExternalClock); // Program PLL to get the value we want
 
@@ -226,14 +228,20 @@ void lnInitSystemClock()
     _rcuClockApb1 = SystemCoreClock >> CH32_APB1_DIVIDER;
     _rcuClockApb2 = SystemCoreClock;
 
-    // Setup AHB...
-    // AHB is sysclk:1
-    // APB1=AHB/2
-    // APB2=AHB/1
-
     uint32_t clks = arcu->CFG0;
     clks &= CH32_CFG0_AHB_MASK;
+    // Setup AHB...
+    // for non 208W
+    // AHB is sysclk:1
+    // for 208W
+    // AHB=SYSCLK/2
+#if defined(USE_CH32V208W)
+    clks |= CH32_CFG0_AHB_DIVIDER(8); // 8-> 1:2
+#else
     clks |= CH32_CFG0_AHB_DIVIDER(0); // 0-> 1:1
+#endif
+    // APB1=AHB/2
+    // APB2=AHB/1
 
     clks &= CH32_CFG0_APB1_MASK;
     clks |= CH32_CFG0_APB1_DIVIDER(CH32_APB1_DIVIDER * 4); // 0-> 1:1, 4-> 1:2
@@ -245,6 +253,7 @@ void lnInitSystemClock()
 
     // now switch system clock to pll
     clks &= ~(LN_RCU_CFG0_SYSCLOCK_MASK);
+    // for the 208DW, input is xtal/4
     clks |= LN_RCU_CFG0_SYSCLOCK_PLL;
     arcu->CFG0 = clks;
 

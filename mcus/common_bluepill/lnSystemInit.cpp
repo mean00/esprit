@@ -107,5 +107,6 @@ int main()
     lnCreateTask(initTask, "entryTask", LN_INITIAL_STACK_SIZE, NULL, LN_INITIAL_TASK_PRIORITY);
     vTaskStartScheduler();
     deadEnd(25);
+    return 0;
 }
 // EOF

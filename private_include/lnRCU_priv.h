@@ -101,6 +101,11 @@ typedef volatile LN_RCUx LN_RCU;
 #define LN_RCU_CFG0_SYSCLOCK_IRC8 (0)
 #define LN_RCU_CFG0_PLLSEL (1 << 16)
 #define LN_RCU_CFG0_PREDIV (1 << 17)
+#define LN_RCU_CFG0_MCO_SEL(x) ((x) << 24)
+#define LN_RCU_CFG0_MCO_SEL_MASK (~((0xf) << 24))
+#define LN_RCU_CFG0_MCO_SEL_PLL3 11
+#define LN_RCU_CFG0_MCO_SEL_PLL3_2 9
+#define LN_RCU_CFG0_ETH_PRE2 (1 << 28) // eth div by 2 when set
 
 #define LN_RCU_CFG0_USBPSC_MASK (~(3 << 22))
 #define LN_RCU_CFG0_USBPSC(x) ((x & 3) << 22)
@@ -112,9 +117,15 @@ typedef volatile LN_RCUx LN_RCU;
 // CFG1
 #define LN_RCU_CFG1_PRED_CLOCKSEL (1 << 16)
 #define LN_RCU_CFG1_PLL2_MUL(x) ((x) << 12)
+#define LN_RCU_CFG1_PLL2_MUL_MASK (~((0xf) << 12))
 #define LN_RCU_CFG1_PLL1_MUL(x) ((x) << 8)
 #define LN_RCU_CFG1_PREDV1_DIV(x) ((x) << 4)
 #define LN_RCU_CFG1_PREDV0_DIV(x) ((x) << 0)
+#define LN_RCU_CFG1_ETH0_SRC_PLL1 ((0) << 20)
+#define LN_RCU_CFG1_ETH0_SRC_PLL2 ((1) << 20)
+#define LN_RCU_CFG1_ETH0_SRC_PB1 ((2) << 20)
+#define LN_RCU_CFG1_ETH0_SRC_MASK LN_RCU_CFG1_ETH0_SRC(3)
+#define LN_RCU_CFG1_ETH0_GEN (1 << 22)
 
 // This is Gigadevice specific, at least on GD32F303
 // It drives the internal 48Mhz clock that can be used
