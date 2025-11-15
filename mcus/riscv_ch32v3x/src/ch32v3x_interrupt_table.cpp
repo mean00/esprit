@@ -40,8 +40,14 @@ LIST_OF_HANDLERS
  * @brief
  *
  */
+volatile uint32_t unsupported_irq = 0;
+uint32_t get_unsupported_irq()
+{
+    return unsupported_irq;
+}
 extern "C" void __attribute__((noinline)) __attribute__((used)) unsupported()
 {
+
     deadEnd(11);
 }
 /**
@@ -110,7 +116,7 @@ WEAK_INTERRUPT(USBHS_IRQHandler)
 WEAK_INTERRUPT(USART1_IRQHandler)
 WEAK_INTERRUPT(USART2_IRQHandler)
 WEAK_INTERRUPT(OTG_FS_IRQHandler)
-WEAK_INTERRUPT(ETH_IRQHandler_bounce)
+WEAK_INTERRUPT(ETH_IRQHandler)
 WEAK_INTERRUPT(ETH_WKUP_IRQHandler)
 
 #define RELAY_FUNC(x)                                                                                                  \
@@ -134,8 +140,11 @@ RELAY_FUNC(Break_Point_Handler)
 RELAY_FUNC(SysTick_Handler)
 RELAY_FUNC(OTG_FS_IRQHandler)
 RELAY_FUNC(USBHS_IRQHandler)
-RELAY_FUNC(ETH_IRQHandler_bounce)
+RELAY_FUNC(ETH_IRQHandler)
 RELAY_FUNC(ETH_WKUP_IRQHandler)
+RELAY_FUNC(Timer2_IRQHandler)
+RELAY_FUNC(Timer3_IRQHandler)
+RELAY_FUNC(Timer4_IRQHandler)
 RELAY_FUNC(unsupported)
 RELAY_DMA(0, 0)
 RELAY_DMA(0, 1)

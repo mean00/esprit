@@ -16,7 +16,6 @@
 //
 #define LN_RISCV_FPU_MODE(x) (x << 13)
 #define LN_RISCV_MPP(x) (x << 11)
-
 // Bit description
 struct _irqDesc
 {

@@ -64,7 +64,7 @@ typedef volatile CH32V3_INTERRUPTx CH32V3_INTERRUPT;
         INTERRUPT_DESC(unsupported),              /*.word   EXTI0_IRQHandler                */                         \
         INTERRUPT_DESC(unsupported),              /*.word   EXTI1_IRQHandler                */                         \
         INTERRUPT_DESC(unsupported),              /*.word   EXTI2_IRQHandler                */                         \
-        INTERRUPT_DESC(unsupported),              /*.word   EXTI3_IRQHandler                */                         \
+        INTERRUPT_DESC(unsupported),              /*25 .word   EXTI3_IRQHandler                */                      \
         INTERRUPT_DESC(unsupported),              /*.word   EXTI4_IRQHandler                */                         \
         INTERRUPT_DESC(DMA0_Channel0_IRQHandler), /*.word   DMA1_Channel1_IRQHandler        */                         \
         INTERRUPT_DESC(DMA0_Channel1_IRQHandler), /*.word   DMA1_Channel2_IRQHandler        */                         \
@@ -72,9 +72,9 @@ typedef volatile CH32V3_INTERRUPTx CH32V3_INTERRUPT;
         INTERRUPT_DESC(DMA0_Channel3_IRQHandler), /* 30 .word   DMA1_Channel4_IRQHandler    */                         \
         INTERRUPT_DESC(DMA0_Channel4_IRQHandler), /*.word   DMA1_Channel5_IRQHandler        */                         \
         INTERRUPT_DESC(DMA0_Channel5_IRQHandler), /*.word   DMA1_Channel6_IRQHandler        */                         \
-        INTERRUPT_DESC(DMA0_Channel6_IRQHandler), /*.word   DMA1_Channel7_IRQHandler        */                         \
+        INTERRUPT_DESC(DMA0_Channel6_IRQHandler), /* 33 .word   DMA1_Channel7_IRQHandler        */                     \
         INTERRUPT_DESC(unsupported),              /*.word   ADC1_2_IRQHandler               */                         \
-        INTERRUPT_DESC(unsupported),              /*.word   USB_TX_IRQHandler USB_HP_CAN1_TX_IRQHandler  */            \
+        INTERRUPT_DESC(unsupported),              /* 35 .word   USB_TX_IRQHandler USB_HP_CAN1_TX_IRQHandler  */        \
         INTERRUPT_DESC(unsupported),              /*.word   USB_RX_IRQHandler USB_LP_CAN1_RX0_IRQHandler */            \
         INTERRUPT_DESC(unsupported),              /*.word   CAN1_RX1_IRQHandler         */                             \
         INTERRUPT_DESC(unsupported),              /*.word   CAN1_SCE_IRQHandler         */                             \
@@ -83,60 +83,60 @@ typedef volatile CH32V3_INTERRUPTx CH32V3_INTERRUPT;
         INTERRUPT_DESC(unsupported),              /*.word   TIM1_UP_IRQHandler          */                             \
         INTERRUPT_DESC(unsupported),              /*.word   TIM1_TRG_COM_IRQHandler     */                             \
         INTERRUPT_DESC(unsupported),              /*.word   TIM1_CC_IRQHandler          */                             \
-        INTERRUPT_DESC(unsupported),              /*.word   TIM2_IRQHandler             */                             \
-        INTERRUPT_DESC(unsupported),              /*.word   TIM3_IRQHandler             */                             \
-        INTERRUPT_DESC(unsupported),              /*.word   TIM4_IRQHandler             */                             \
-        INTERRUPT_DESC(I2C0_EV_IRQHandler),       /*.word   I2C1_EV_IRQHandler          */                             \
+        INTERRUPT_DESC(Timer2_IRQHandler),        /*.44 word   TIM2_IRQHandler             */                          \
+        INTERRUPT_DESC(Timer3_IRQHandler),        /*.word   TIM3_IRQHandler             */                             \
+        INTERRUPT_DESC(Timer4_IRQHandler),        /*.word   TIM4_IRQHandler             */                             \
+        INTERRUPT_DESC(I2C0_EV_IRQHandler),       /*.47 word   I2C1_EV_IRQHandler          */                          \
         INTERRUPT_DESC(I2C0_ERR_IRQHandler),      /*.word   I2C1_ER_IRQHandler          */                             \
         INTERRUPT_DESC(I2C1_EV_IRQHandler),       /*.word   I2C2_EV_IRQHandler          */                             \
-        INTERRUPT_DESC(I2C1_ERR_IRQHandler),      /*.word   I2C2_ER_IRQHandler          */                             \
+        INTERRUPT_DESC(I2C1_ERR_IRQHandler),      /*50 .word   I2C2_ER_IRQHandler          */                          \
         INTERRUPT_DESC(unsupported),              /*.word   SPI1_IRQHandler             */                             \
         INTERRUPT_DESC(unsupported),              /*.word   SPI2_IRQHandler             */                             \
         INTERRUPT_DESC(USART0_IRQHandler),        /*.word   USART1_IRQHandler           */                             \
         INTERRUPT_DESC(USART1_IRQHandler),        /*.word   USART2_IRQHandler           */                             \
         INTERRUPT_DESC(USART2_IRQHandler),        /*.word   USART3_IRQHandler           */                             \
-        INTERRUPT_DESC(unsupported),              /*.word   EXTI15_10_IRQHandler        */                             \
+        INTERRUPT_DESC(unsupported),              /*56 .word   EXTI15_10_IRQHandler        */                          \
         INTERRUPT_DESC(unsupported),              /*.word   RTCAlarm_IRQHandler         */                             \
         INTERRUPT_DESC(unsupported),              /*.word   USBWakeUp_IRQHandler        */                             \
         INTERRUPT_DESC(unsupported),              /*.word   TIM8_BRK_IRQHandler         */                             \
-        INTERRUPT_DESC(unsupported),              /*.word   TIM8_UP_IRQHandler          */                             \
+        INTERRUPT_DESC(unsupported),              /*60 .word   TIM8_UP_IRQHandler          */                          \
         INTERRUPT_DESC(unsupported),              /*.word   TIM8_TRG_COM_IRQHandler     */                             \
         INTERRUPT_DESC(unsupported),              /*.word   TIM8_CC_IRQHandler          */                             \
         INTERRUPT_DESC(unsupported),              /*.word   RNG_IRQHandler              */                             \
         INTERRUPT_DESC(unsupported),              /*.word   FSMC_IRQHandler             */                             \
-        INTERRUPT_DESC(unsupported),              /*.word   SDIO_IRQHandler             */                             \
+        INTERRUPT_DESC(unsupported),              /*65 .word   SDIO_IRQHandler             */                          \
         INTERRUPT_DESC(unsupported),              /*.word   TIM5_IRQHandler             */                             \
         INTERRUPT_DESC(unsupported),              /*.word   SPI3_IRQHandler             */                             \
         INTERRUPT_DESC(unsupported),              /*.word   UART4_IRQHandler            */                             \
         INTERRUPT_DESC(unsupported),              /*.word   UART5_IRQHandler            */                             \
         INTERRUPT_DESC(unsupported),              /*.word   TIM6_IRQHandler             */                             \
         INTERRUPT_DESC(unsupported),              /*.word   TIM7_IRQHandler             */                             \
-        INTERRUPT_DESC(DMA1_Channel0_IRQHandler), /*.word   DMA2_Channel1_IRQHandler    */                             \
+        INTERRUPT_DESC(DMA1_Channel0_IRQHandler), /*72 .word   DMA2_Channel1_IRQHandler    */                          \
         INTERRUPT_DESC(DMA1_Channel1_IRQHandler), /*.word   DMA2_Channel2_IRQHandler    */                             \
         INTERRUPT_DESC(DMA1_Channel2_IRQHandler), /*.word   DMA2_Channel3_IRQHandler    */                             \
         INTERRUPT_DESC(DMA1_Channel3_IRQHandler), /*.word   DMA2_Channel4_IRQHandler    */                             \
         INTERRUPT_DESC(DMA1_Channel4_IRQHandler), /*.word   DMA2_Channel5_IRQHandler    */                             \
-        INTERRUPT_DESC(ETH_IRQHandler_bounce),    /*61 .word   ETH_IRQHandler           */                             \
-        INTERRUPT_DESC(ETH_WKUP_IRQHandler),      /*62 .word   ETH_IRQHandler           */                             \
+        INTERRUPT_DESC(ETH_IRQHandler),           /*77 .word   ETH_IRQHandler           */                             \
+        INTERRUPT_DESC(ETH_WKUP_IRQHandler),      /*78 .word   ETH_WKUPIRQHandler           */                         \
         INTERRUPT_DESC(unsupported),              /*.word   CAN2_TX_IRQHandler          */                             \
         INTERRUPT_DESC(unsupported),              /*.word   CAN2_RX0_IRQHandler         */                             \
         INTERRUPT_DESC(unsupported),              /*.word   CAN2_RX1_IRQHandler         */                             \
         INTERRUPT_DESC(unsupported),              /*.word   CAN2_SCE_IRQHandler         */                             \
-        INTERRUPT_DESC(OTG_FS_IRQHandler),        /* 67 .word   OTG_FS_IRQHandler       */                             \
+        INTERRUPT_DESC(OTG_FS_IRQHandler),        /* 83 .word   OTG_FS_IRQHandler       */                             \
         INTERRUPT_DESC(unsupported),              /*.word   USBHSWakeup_IRQHandler      */                             \
         INTERRUPT_DESC(USBHS_IRQHandler),         /*.word   USBHS_IRQHandler            */                             \
-        INTERRUPT_DESC(unsupported),              /*.word   DVP_IRQHandler              */                             \
+        INTERRUPT_DESC(unsupported),              /*86 .word   DVP_IRQHandler              */                          \
         INTERRUPT_DESC(unsupported),              /*.word   UART6_IRQHandler            */                             \
         INTERRUPT_DESC(unsupported),              /*.word   UART7_IRQHandler            */                             \
         INTERRUPT_DESC(unsupported),              /*.word   UART8_IRQHandler            */                             \
-        INTERRUPT_DESC(unsupported),              /*.word   TIM9_BRK_IRQHandler         */                             \
+        INTERRUPT_DESC(unsupported),              /*90.word   TIM9_BRK_IRQHandler         */                           \
         INTERRUPT_DESC(unsupported),              /*.word   TIM9_UP_IRQHandler          */                             \
         INTERRUPT_DESC(unsupported),              /*.word   TIM9_TRG_COM_IRQHandler     */                             \
         INTERRUPT_DESC(unsupported),              /*.word   TIM9_CC_IRQHandler          */                             \
         INTERRUPT_DESC(unsupported),              /*.word   TIM10_BRK_IRQHandler        */                             \
         INTERRUPT_DESC(unsupported),              /*.word   TIM10_UP_IRQHandler         */                             \
         INTERRUPT_DESC(unsupported),              /*.word   TIM10_TRG_COM_IRQHandler    */                             \
-        INTERRUPT_DESC(unsupported),              /*.word   TIM10_CC_IRQHandler         */                             \
+        INTERRUPT_DESC(unsupported),              /*97 .word   TIM10_CC_IRQHandler         */                          \
         INTERRUPT_DESC(DMA1_Channel5_IRQHandler), /*.word   DMA2_Channel6_IRQHandler    */                             \
         INTERRUPT_DESC(DMA1_Channel6_IRQHandler), /*.word   DMA2_Channel7_IRQHandler    */                             \
         INTERRUPT_DESC(unsupported),              /*.word   DMA2_Channel8_IRQHandler    */                             \
@@ -171,7 +171,7 @@ typedef volatile CH32V3_INTERRUPTx CH32V3_INTERRUPT;
     HANDLER_DESC(USBHSWakeup_IRQHandler)                                                                               \
     HANDLER_DESC(USBHS_IRQHandler)                                                                                     \
     HANDLER_DESC(OTG_FS_IRQHandler)                                                                                    \
-    HANDLER_DESC(ETH_IRQHandler_bounce)                                                                                \
+    HANDLER_DESC(ETH_IRQHandler)                                                                                       \
     HANDLER_DESC(ETH_WKUP_IRQHandler)                                                                                  \
                                                                                                                        \
     HANDLER_DESC(USART1_IRQHandler)                                                                                    \
@@ -180,6 +180,10 @@ typedef volatile CH32V3_INTERRUPTx CH32V3_INTERRUPT;
     HANDLER_DESC(I2C0_EV_IRQHandler)                                                                                   \
     HANDLER_DESC(I2C0_ERR_IRQHandler)                                                                                  \
     HANDLER_DESC(I2C1_EV_IRQHandler)                                                                                   \
-    HANDLER_DESC(I2C1_ERR_IRQHandler)
+    HANDLER_DESC(I2C1_ERR_IRQHandler)                                                                                  \
+                                                                                                                       \
+    HANDLER_DESC(Timer2_IRQHandler)                                                                                    \
+    HANDLER_DESC(Timer3_IRQHandler)                                                                                    \
+    HANDLER_DESC(Timer4_IRQHandler)
 
 // EOF

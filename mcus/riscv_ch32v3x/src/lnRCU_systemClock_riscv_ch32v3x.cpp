@@ -47,7 +47,7 @@ extern LN_RCU *arcu;
 uint32_t _rcuClockApb1 = 108000000 / 2;
 uint32_t _rcuClockApb2 = 108000000;
 extern "C" uint32_t SystemCoreClock;
-extern uint32_t SystemCoreClock;
+uint32_t SystemCoreClock = 0;
 /**
  *
  * @param periph
