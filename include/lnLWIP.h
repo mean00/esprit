@@ -1,3 +1,8 @@
+/**
+ * @file
+ * @brief [TODO:description]
+ */
+
 #pragma once
 
 enum lnLwipEvent
@@ -8,6 +13,11 @@ enum lnLwipEvent
 };
 typedef void (*lnLwIpSysCallback)(lnLwipEvent evt, void *arg);
 
+/**
+ * @class lnLWIP
+ * @brief [TODO:description]
+ *
+ */
 class lnLWIP
 {
   public:
@@ -19,6 +29,11 @@ enum lnSocketEvent
     SocketDisconnect,
 };
 typedef void (*lnSocketCb)(lnSocketEvent evt, void *arg);
+/**
+ * @class lnSocket
+ * @brief [TODO:description]
+ *
+ */
 class lnSocket
 {
   public:
@@ -40,3 +55,4 @@ class lnSocket
 
   protected:
 };
+// EOF

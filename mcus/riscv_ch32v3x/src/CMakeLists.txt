@@ -20,6 +20,15 @@ target_sources( esprit_lib PRIVATE
     ${S}/lnBoot_riscv_ch32.cpp
     ${S}/../boards/${LN_BOARD_NAME}/lnPinMapping.cpp
 )
+IF(LN_XTAL_VALUE)
+  target_compile_definitions(esprit_lib PRIVATE CLOCK_XTAL_VALUE=${LN_XTAL_VALUE})
+endif()
+
+IF(LN_ENABLE_ETH)
+  target_compile_definitions(esprit_lib PRIVATE LN_ENABLE_ETH=1)
+  target_sources(esprit_lib PRIVATE ${S}/lnRCU_ch32v3x_eth.cpp)
+endif()
+
 IF(LN_ENABLE_USBD)
   target_sources( esprit_lib PRIVATE ${S}/lnUSBD_ch32v3x.cpp)
 ENDIF()
@@ -30,6 +39,10 @@ ENDIF()
 
 IF(LN_ENABLE_SPI)
   target_compile_definitions(esprit_lib PRIVATE LN_ENABLE_SPI )
+ENDIF()
+
+IF(USE_CH32V208W)
+  target_compile_definitions(esprit_lib PUBLIC USE_CH32V208W )
 ENDIF()
 
 IF(USE_CH32v3x_HW_IRQ_STACK)

@@ -60,6 +60,16 @@ void i2cIrqHandler(int instance, bool error);
 #define i2cIrqHandler(...) deadEnd(1)
 #endif
 
+#if !defined(LN_ENABLE_ETH)
+ISR_CODE extern "C" void LOCAL_LN_INTERRUPT_TYPE ETH_IRQHandler(void)
+{
+    xAssert(0);
+}
+ISR_CODE extern "C" void LOCAL_LN_INTERRUPT_TYPE ETH_WKUP_IRQHandler(void)
+{
+    xAssert(0);
+}
+#endif
 //--
 ISR_CODE extern "C" void LOCAL_LN_INTERRUPT_TYPE I2C0_EV_IRQHandler(void)
 {
@@ -90,14 +100,6 @@ ISR_CODE extern "C" void LOCAL_LN_INTERRUPT_TYPE I2C1_ERR_IRQHandler(void)
     i2cIrqHandler(1, true);
 }
 
-ISR_CODE extern "C" void LOCAL_LN_INTERRUPT_TYPE ETH_IRQHandler(void)
-{
-    xAssert(0);
-}
-ISR_CODE extern "C" void LOCAL_LN_INTERRUPT_TYPE ETH_WKUP_IRQHandler(void)
-{
-    xAssert(0);
-}
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
 
