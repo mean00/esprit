@@ -31,4 +31,6 @@ class lnPeripherals
     static void enableUsb48Mhz(); // Call this once so that the usb clock is 48 Mhz, you still have to enable/disable
                                   // the usbd clock
     static void enableUsbHS48Mhz_ch32v3x(); //  same as above for the USB HS on CH32V3x chips
+                                            //
+    static void initEthClock();
 };
