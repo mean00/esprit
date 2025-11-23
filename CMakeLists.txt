@@ -44,6 +44,12 @@ IF(True) #NOT ESPRIT_ROOT)
   SET(LN_MCU_FOLDER ${ESPRIT_ROOT}/mcus/${LN_EXT}/ CACHE INTERNAL "")
   #
   ADD_LIBRARY(esprit_dev INTERFACE)
+
+  if(LN_ENABLE_ETH)
+    add_subdirectory( libraries/lwip_esprit)
+  endif()
+
+
   target_include_directories(esprit_dev INTERFACE ${LN_MCU_FOLDER}/boards/${LN_BOARD_NAME}/) # needed to get the freertos_tuning.h
   target_include_directories(esprit_dev INTERFACE ${LN_MCU_FOLDER}/include/) # needed to get the freertos_tuning.h
   target_include_directories(esprit_dev INTERFACE ${ESPRIT_ROOT}/)
