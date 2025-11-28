@@ -128,9 +128,19 @@ static void _conn_callback_srv(struct netconn *con, enum netconn_evt evt, u16_t 
     xAssert(sock);
     switch (evt)
     {
-    case NETCONN_EVT_RCVPLUS:
+    case NETCONN_EVT_RCVPLUS: // if 0, incoming connectio server side
         if (len == 0)
-            sock->invoke(SocketConnect);
+            sock->invoke(SocketConnectServer);
+        else
+        {
+            sock->invoke(SocketDataAvailable);
+        }
+        break;
+    case NETCONN_EVT_RCVMINUS: // if 0, that's the new socket
+        if (len == 0)
+        {
+            sock->invoke(SocketConnectClient);
+        }
         else
         {
             sock->invoke(SocketDataAvailable);

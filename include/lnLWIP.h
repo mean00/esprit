@@ -26,7 +26,8 @@ class lnLWIP
 enum lnSocketEvent
 {
 
-    SocketConnect,
+    SocketConnectServer, // listening socket connection notification ,you should accept
+    SocketConnectClient, // work socket notification
     SocketDisconnect,
     SocketDataAvailable,
 };
