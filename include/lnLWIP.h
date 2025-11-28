@@ -25,11 +25,12 @@ class lnLWIP
 };
 enum lnSocketEvent
 {
-
     SocketConnectServer, // listening socket connection notification ,you should accept
     SocketConnectClient, // work socket notification
     SocketDisconnect,
     SocketDataAvailable,
+    SocketWriteAvailable,
+    SocketError,
 };
 typedef void (*lnSocketCb)(lnSocketEvent evt, void *arg);
 /**

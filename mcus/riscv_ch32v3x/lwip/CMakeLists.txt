@@ -20,7 +20,7 @@ target_include_directories(lnEthCh32V3xx PRIVATE private_include
     "${CMAKE_CURRENT_SOURCE_DIR}/"
 )
 target_link_libraries(lnEthCh32V3xx PRIVATE esprit_dev)
-target_include_directories( lnEthCh32V3xx PUBLIC ${LWIP_INCLUDE_DIRS})
+target_include_directories( lnEthCh32V3xx PUBLIC ${LWIP_INCLUDE_DIRS} ${ESPRIT_ROOT}/libraries/lwip_esprit/include)
 target_link_libraries(lnEthCh32V3xx PRIVATE lwipcore)
 target_link_libraries(esprit_lib PRIVATE lnEthCh32V3xx)
 

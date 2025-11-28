@@ -366,8 +366,12 @@ uint32_t lnFastEventGroup::readEvents(uint32_t maskInt)
     BEGIN_LOCK();
     uint32_t v = _value & maskInt;
     _value &= ~maskInt;
-    _mask = 0;
-    xTaskNotifyStateClearIndexed(xTaskGetCurrentTaskHandle(), EVENT_INDEX);
+    // we might get a stray notification here, better that losing one
+    //_mask = 0;
+    // if (_value == 0)
+    //{
+    // xTaskNotifyStateClearIndexed(xTaskGetCurrentTaskHandle(), EVENT_INDEX);
+    //}
     END_LOCK();
     return v;
 }
