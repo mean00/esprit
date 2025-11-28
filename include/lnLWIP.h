@@ -26,7 +26,9 @@ class lnLWIP
 enum lnSocketEvent
 {
 
+    SocketConnect,
     SocketDisconnect,
+    SocketDataAvailable,
 };
 typedef void (*lnSocketCb)(lnSocketEvent evt, void *arg);
 /**
@@ -46,8 +48,10 @@ class lnSocket
     static lnSocket *create(uint16_t port, lnSocketCb cb, void *arg);
     virtual status write(uint32_t n, const uint8_t *data, uint32_t &done) = 0;
     virtual status read(uint32_t n, uint8_t *data, uint32_t &done) = 0;
+    virtual status invoke(lnSocketEvent evt);
     virtual status flush() = 0;
     virtual status close() = 0;
+    virtual status asyncMode() = 0;
     virtual status accept() = 0;
 
   protected:

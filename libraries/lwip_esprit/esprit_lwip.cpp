@@ -17,11 +17,42 @@ NETIF_DECLARE_EXT_CALLBACK(netif_callback);
 
 lnLwIpSysCallback _syscb = NULL;
 void *_sysarg = NULL;
-
 static void netif_ext_callback_esprit(struct netif *netif, netif_nsc_reason_t reason,
                                       const netif_ext_callback_args_t *args);
-static void lwip_status_change_callback(struct netif *netif);
+static void server_callback(struct netconn *conn, enum netconn_evt evt, u16_t len);
+//
+void server_callback(struct netconn *conn, enum netconn_evt evt, u16_t len)
+{
+    // case NETCONN_EVT_ACCEPT:
+    Logger("Server callback 0x%x\n", evt);
+}
+/**
+ * @brief [TODO:description]
+ *
+ * @param netif [TODO:parameter]
+ * @param reason [TODO:parameter]
+ * @param args [TODO:parameter]
+ */
+void netif_ext_callback_esprit(struct netif *netif, netif_nsc_reason_t reason, const netif_ext_callback_args_t *args)
+{
+#define UP_AND_RUNNING_EVT (LWIP_NSC_IPV4_ADDRESS_CHANGED + LWIP_NSC_IPV4_ADDR_VALID)
+#define DOWN_EVT (LWIP_NSC_IPV4_ADDRESS_CHANGED + 0 * LWIP_NSC_IPV4_ADDR_VALID)
 
+    if ((reason & UP_AND_RUNNING_EVT) == UP_AND_RUNNING_EVT)
+    {
+        Logger("IP up\n");
+        _syscb(LwipReady, _sysarg);
+        return;
+    }
+    if ((reason & DOWN_EVT) == DOWN_EVT)
+    {
+        Logger("IP down\n");
+        _syscb(LwipDown, _sysarg);
+        return;
+    }
+    Logger("Unhandled ext callback event 0x%x\n", reason);
+}
+//
 #if 0
 #define DEBUGME Logger
 #else
@@ -39,41 +70,9 @@ void lnwip_common_init(lnLwIpSysCallback syscb, void *arg)
     _syscb = syscb;
     _sysarg = arg;
     netif_set_default(&lwip_netif);
-    netif_set_link_callback(&lwip_netif, lwip_status_change_callback);
     netif_add_ext_callback(&netif_callback, netif_ext_callback_esprit);
     netif_set_up(&lwip_netif);
     dhcp_start(&lwip_netif);
-}
-
-/**
- *
- *
- */
-void lwip_status_change_callback(struct netif *netif)
-{
-    Logger("Status change\n");
-}
-/**
- *
- */
-void netif_ext_callback_esprit(struct netif *netif, netif_nsc_reason_t reason, const netif_ext_callback_args_t *args)
-{
-    Logger(" Callback : 0x%x\n", reason);
-    uint32_t reduced = reason & 0xff;
-    if (reduced & LWIP_NSC_IPV4_ADDRESS_CHANGED)
-    {
-        if (reason & LWIP_NSC_IPV4_ADDR_VALID)
-        {
-            uint32_t a = netif->ip_addr.addr;
-            Logger(" IP : %d.%d.%d.%d\n", a & 0xff, (a >> 8) & 0xff, (a >> 16) & 0xff, (a >> 24));
-            _syscb(LwipReady, _sysarg);
-        }
-        else
-        {
-            _syscb(LwipDown, _sysarg);
-        }
-        return;
-    }
 }
 #define LNSOCKET_WRITE_BUFFER_SIZE 256
 /**
@@ -89,10 +88,15 @@ class lnSocket_impl : public lnSocket
     status bind(uint16_t port);
     status read(uint32_t n, uint8_t *data, uint32_t &done);
     status accept();
+    status asyncMode();
     status write(uint32_t n, const uint8_t *data, uint32_t &done);
     status flush(); // force flushing the write buffer
     status close();
-
+    status invoke(lnSocketEvent evt)
+    {
+        _sockCb(evt, _cbArg);
+        return lnSocket::Ok;
+    }
     enum conn_state
     {
         CON_IDLE = 0,
@@ -114,6 +118,28 @@ class lnSocket_impl : public lnSocket
     lnSocketCb _sockCb;
     void *_cbArg;
 };
+/**
+ *
+ */
+static void _conn_callback_srv(struct netconn *con, enum netconn_evt evt, u16_t len)
+{
+    Logger("Received evt 0x%x\n", evt);
+    lnSocket_impl *sock = (lnSocket_impl *)netconn_get_callback_arg(con);
+    xAssert(sock);
+    switch (evt)
+    {
+    case NETCONN_EVT_RCVPLUS:
+        if (len == 0)
+            sock->invoke(SocketConnect);
+        else
+        {
+            sock->invoke(SocketDataAvailable);
+        }
+        break;
+    default:
+        xAssert(0);
+    }
+}
 
 /**
  * @brief [TODO:description]
@@ -187,7 +213,7 @@ lnSocket::status lnSocket_impl::close()
  */
 lnSocket::status lnSocket_impl::bind(uint16_t port)
 {
-    _conn = netconn_new(NETCONN_TCP);
+    _conn = netconn_new_with_callback(NETCONN_TCP, _conn_callback_srv);
     if (!_conn)
         return lnSocket::Error;
     if (ERR_OK != netconn_bind(_conn, IP_ADDR_ANY, port))
@@ -199,6 +225,8 @@ lnSocket::status lnSocket_impl::bind(uint16_t port)
         return lnSocket::Error;
     }
     _state = CON_LISTEN;
+    netconn_set_callback_arg(_conn, this);
+    Logger("Socket bound and ok\n");
     return lnSocket::Ok;
 }
 /**
@@ -209,14 +237,23 @@ lnSocket::status lnSocket_impl::bind(uint16_t port)
 lnSocket::status lnSocket_impl::accept()
 {
     xAssert(_state == CON_LISTEN);
-    if (netconn_accept(_conn, &_work_conn) != ERR_OK)
+    netconn_set_nonblocking(_conn, true);
+    switch (netconn_accept(_conn, &_work_conn))
     {
+
+    case ERR_OK: {
+        Logger("Accepted...\n");
+        _state = CON_WORK;
+        _writeBufferIndex = 0;
+        _receiveIndex = 0;
+        netconn_set_callback_arg(_conn, this);
+        return lnSocket::Ok;
+    }
+    case ERR_WOULDBLOCK:
+        return lnSocket::Error;
+    default:
         return lnSocket::Error;
     }
-    _state = CON_WORK;
-    _writeBufferIndex = 0;
-    _receiveIndex = 0;
-    return lnSocket::Ok;
 }
 /**
  * @brief [TODO:description]
@@ -305,6 +342,13 @@ lnSocket::status lnSocket_impl::write(uint32_t n, const uint8_t *data, uint32_t 
 }
 /**
  * @brief [TODO:description]
+ */
+lnSocket::status lnSocket_impl::asyncMode()
+{
+    return lnSocket::Ok;
+}
+/**
+ * @brief [TODO:description]
  *
  * @return [TODO:return]
  */
@@ -341,3 +385,83 @@ void lnSocket_impl::disconnect()
     _sockCb(SocketDisconnect, _cbArg);
 }
 // EOF
+#if 0
+#include "lwip/api.h"
+#include "lwip/sys.h"
+#include <stdio.h>
+#include <string.h>
+
+// Callback function for netconn events
+static void server_callback(struct netconn *conn, enum netconn_evt evt, u16_t len) {
+    if (evt == NETCONN_EVT_ACCEPT) {
+        // 🔔 Event: new client connection pending
+        printf("New client connection event!\n");
+    } else if (evt == NETCONN_EVT_RCVPLUS) {
+        // 🔔 Event: new data available to read
+        printf("Data available event (len=%d)\n", len);
+    } else if (evt == NETCONN_EVT_RCVMINUS) {
+        // 🔔 Event: data buffer consumed
+        printf("Data consumed event\n");
+    } else if (evt == NETCONN_EVT_SENDPLUS) {
+        // 🔔 Event: ready to send more data
+        printf("Send ready event\n");
+    }
+}
+
+// Server task
+void tcp_server_task(void *arg) {
+    struct netconn *listen_conn, *new_conn;
+    struct netbuf *buf;
+    err_t err;
+
+    // 1. Create new TCP connection handle
+    listen_conn = netconn_new(NETCONN_TCP);
+    if (listen_conn == NULL) {
+        printf("Failed to create netconn\n");
+        return;
+    }
+
+    // 2. Bind to port
+    netconn_bind(listen_conn, IP_ADDR_ANY, 8080);
+
+    // 3. Start listening
+    netconn_listen(listen_conn);
+
+    // 4. Register callback for async events
+    netconn_set_callback(listen_conn, server_callback);
+
+    printf("Async TCP server listening on port 8080\n");
+
+    // 5. Accept loop
+    while (1) {
+        // Accept new connection (blocking until one arrives)
+        err = netconn_accept(listen_conn, &new_conn);
+        if (err == ERR_OK) {
+            printf("Accepted new client!\n");
+
+            // Register callback for this client
+            netconn_set_callback(new_conn, server_callback);
+
+            // Handle client in loop
+            while ((err = netconn_recv(new_conn, &buf)) == ERR_OK) {
+                void *data;
+                u16_t len;
+                netbuf_data(buf, &data, &len);
+
+                printf("Received: %.*s\n", len, (char*)data);
+
+                // Echo back
+                netconn_write(new_conn, data, len, NETCONN_COPY);
+
+                netbuf_delete(buf);
+            }
+
+            // Close client connection
+            netconn_close(new_conn);
+            netconn_delete(new_conn);
+            printf("Client disconnected\n");
+        }
+    }
+}
+
+#endif
