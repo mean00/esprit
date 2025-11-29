@@ -100,7 +100,7 @@ class lnSocket_impl : public lnSocket
     status asyncMode();
     status write(uint32_t n, const uint8_t *data, uint32_t &done);
     status flush(); // force flushing the write buffer
-    status close();
+    status disconnectClient();
     status invoke(lnSocketEvent evt)
     {
         _sockCb(evt, _cbArg);
@@ -163,9 +163,32 @@ static void _conn_callback_srv(struct netconn *con, enum netconn_evt evt, u16_t 
     xAssert(sock);
     switch (evt)
     {
-    case NETCONN_EVT_SENDMINUS: // it means the next send would block
+    case NETCONN_EVT_ERROR:
+        sock->invoke(SocketError);
         break;
-    case NETCONN_EVT_SENDPLUS: // can send, high & low threshold
+    case NETCONN_EVT_RCVPLUS: // if 0, incoming connectio server side
+        xAssert(len == 0);
+        sock->invoke(SocketConnectServer);
+        break;
+    case NETCONN_EVT_RCVMINUS: // if 0, that's the new socket
+        xAssert(len == 0);
+        sock->invoke(SocketConnectClient);
+        break;
+    default:
+        xAssert(0);
+        break;
+    }
+}
+static void _conn_callback_client(struct netconn *con, enum netconn_evt evt, u16_t len)
+{
+    DEBUGME("Received evt 0x%x, %s, len=%d\n", evt, evt2string(evt), len);
+    lnSocket_impl *sock = (lnSocket_impl *)netconn_get_callback_arg(con);
+    xAssert(sock);
+    switch (evt)
+    {
+    case NETCONN_EVT_SENDMINUS: // it means the next send would block, dont care
+        break;
+    case NETCONN_EVT_SENDPLUS: // can send
         sock->invoke(SocketWriteAvailable);
         break;
     case NETCONN_EVT_ERROR:
@@ -173,7 +196,9 @@ static void _conn_callback_srv(struct netconn *con, enum netconn_evt evt, u16_t 
         break;
     case NETCONN_EVT_RCVPLUS: // if 0, incoming connectio server side
         if (len == 0)
-            sock->invoke(SocketConnectServer);
+        {
+            sock->invoke(SocketDisconnect);
+        }
         else
         {
             sock->invoke(SocketDataAvailable);
@@ -199,7 +224,7 @@ static void _conn_callback(struct netconn *con, enum netconn_evt evt, u16_t len)
     if (sock->conn() == con)
         _conn_callback_srv(con, evt, len);
     else
-        _conn_callback_srv(con, evt, len); // TODO FIMXE TODO!
+        _conn_callback_client(con, evt, len); // TODO FIMXE TODO!
 }
 
 /**
@@ -237,7 +262,8 @@ lnSocket_impl::lnSocket_impl(lnSocketCb cb, void *arg) : lnSocket()
  */
 lnSocket_impl::~lnSocket_impl()
 {
-    close();
+    disconnectClient();
+    // close master socket also
     if (_conn)
     {
         netconn_close(_conn);
@@ -249,7 +275,7 @@ lnSocket_impl::~lnSocket_impl()
 /**
  * @brief [TODO:description]
  */
-lnSocket::status lnSocket_impl::close()
+lnSocket::status lnSocket_impl::disconnectClient()
 {
     Logger("Closing socket\n");
     if (_work_conn)
@@ -448,7 +474,6 @@ lnSocket::status lnSocket_impl::flush()
  */
 void lnSocket_impl::disconnect()
 {
-    close();
     _sockCb(SocketDisconnect, _cbArg);
 }
 // EOF

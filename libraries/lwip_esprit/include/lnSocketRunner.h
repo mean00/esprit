@@ -153,7 +153,7 @@ class socketRunner
         END_EVENT()
         BEGIN_EVENT(Disconnected)
         Logger("Got disconnect \n");
-        cleanup();
+        disconnectClient();
         END_EVENT()
         //--
         BEGIN_EVENT(DataAvailable)
@@ -164,6 +164,10 @@ class socketRunner
             Logger("Warning: not connected and got event 0x%x\n", events);
             xAssert(0);
         }
+    }
+    void disconnectClient()
+    {
+        _current_connection->disconnectClient();
     }
     virtual void process_incoming_data() = 0;
 
