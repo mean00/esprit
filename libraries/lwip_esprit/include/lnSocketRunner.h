@@ -69,13 +69,26 @@ class socketRunner
     {
         switch (evt)
         {
-            case SocketConnectServer: sendEvent(ConnectedServerSide); break;
-            case SocketConnectClient: sendEvent(ConnectedClientSide); break;
-            case SocketDisconnect: sendEvent(Disconnected); break;
-            case SocketDataAvailable: sendEvent(DataAvailable); break;
-            case SocketWriteAvailable: sendEvent(CanWrite); break;
-            case SocketError: sendEvent(Error); break;
-            default: xAssert(0);
+        case SocketConnectServer:
+            sendEvent(ConnectedServerSide);
+            break;
+        case SocketConnectClient:
+            sendEvent(ConnectedClientSide);
+            break;
+        case SocketDisconnect:
+            sendEvent(Disconnected);
+            break;
+        case SocketDataAvailable:
+            sendEvent(DataAvailable);
+            break;
+        case SocketWriteAvailable:
+            sendEvent(CanWrite);
+            break;
+        case SocketError:
+            sendEvent(Error);
+            break;
+        default:
+            xAssert(0);
         }
     }
     /**
@@ -113,7 +126,7 @@ class socketRunner
         BEGIN_EVENT(Up)
         Logger("Got link up event\n");
         lnDigitalWrite(DHCP_LED, true);
-        _connected = false;
+        cleanup();
         _current_connection = lnSocket::create(2000, socketCb_c, this);
         _current_connection->asyncMode();
         //_current_connection->accept();
@@ -122,10 +135,8 @@ class socketRunner
         // link down
         BEGIN_EVENT(Down)
         Logger("Got link down event\n");
-        _connected = false;
+        cleanup();
         lnDigitalWrite(DHCP_LED, false);
-        delete _current_connection;
-        _current_connection = NULL;
         return;
         END_EVENT()
         //--
@@ -139,6 +150,10 @@ class socketRunner
         BEGIN_EVENT(ConnectedClientSide)
         Logger("Got tcp connect client side\n");
         _connected = true;
+        END_EVENT()
+        BEGIN_EVENT(Disconnected)
+        Logger("Got disconnect \n");
+        cleanup();
         END_EVENT()
         //--
         BEGIN_EVENT(DataAvailable)
@@ -205,6 +220,17 @@ class socketRunner
         bool r = _forcedWrite(_writeBufferIndex, _writeBuffer);
         _writeBufferIndex = 0;
         return r;
+    }
+
+  protected:
+    void cleanup()
+    {
+        _connected = false;
+        if (_current_connection)
+        {
+            delete _current_connection;
+            _current_connection = NULL;
+        }
     }
 
   protected:

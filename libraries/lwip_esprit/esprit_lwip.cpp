@@ -106,6 +106,10 @@ class lnSocket_impl : public lnSocket
         _sockCb(evt, _cbArg);
         return lnSocket::Ok;
     }
+    struct netconn *conn()
+    {
+        return _conn;
+    };
     enum conn_state
     {
         CON_IDLE = 0,
@@ -189,6 +193,14 @@ static void _conn_callback_srv(struct netconn *con, enum netconn_evt evt, u16_t 
         xAssert(0);
     }
 }
+static void _conn_callback(struct netconn *con, enum netconn_evt evt, u16_t len)
+{
+    lnSocket_impl *sock = (lnSocket_impl *)netconn_get_callback_arg(con);
+    if (sock->conn() == con)
+        _conn_callback_srv(con, evt, len);
+    else
+        _conn_callback_srv(con, evt, len); // TODO FIMXE TODO!
+}
 
 /**
  * @brief [TODO:description]
@@ -262,7 +274,7 @@ lnSocket::status lnSocket_impl::close()
  */
 lnSocket::status lnSocket_impl::bind(uint16_t port)
 {
-    _conn = netconn_new_with_callback(NETCONN_TCP, _conn_callback_srv);
+    _conn = netconn_new_with_callback(NETCONN_TCP, _conn_callback);
     if (!_conn)
         return lnSocket::Error;
     if (ERR_OK != netconn_bind(_conn, IP_ADDR_ANY, port))
