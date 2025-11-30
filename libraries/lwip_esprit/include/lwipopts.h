@@ -31,21 +31,21 @@
 
 /* MEM_SIZE: the size of the heap memory. If the application will send
 a lot of data that needs to be copied, this should be set high. */
-#define MEM_SIZE (10 * 1024)
+#define MEM_SIZE (6 * 1024)
 
 /* MEMP_NUM_PBUF: the number of memp struct pbufs. If the application
    sends a lot of data out of ROM (or other static memory), this
    should be set high. */
-#define MEMP_NUM_PBUF 25
+#define MEMP_NUM_PBUF 10
 /* MEMP_NUM_UDP_PCB: the number of UDP protocol control blocks. One
    per active UDP "connection". */
-#define MEMP_NUM_UDP_PCB 2
+#define MEMP_NUM_UDP_PCB 1
 /* MEMP_NUM_TCP_PCB: the number of simulatenously active TCP
    connections. */
-#define MEMP_NUM_TCP_PCB 2
+#define MEMP_NUM_TCP_PCB 6
 /* MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP
    connections. */
-#define MEMP_NUM_TCP_PCB_LISTEN 2
+#define MEMP_NUM_TCP_PCB_LISTEN 3
 /* MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP
    segments. */
 #define MEMP_NUM_TCP_SEG TCP_SND_QUEUELEN
@@ -171,13 +171,13 @@ a lot of data that needs to be copied, this should be set high. */
    ---------------------------------
 */
 
-#define DEFAULT_UDP_RECVMBOX_SIZE 10
-#define DEFAULT_TCP_RECVMBOX_SIZE 10
-#define DEFAULT_ACCEPTMBOX_SIZE 10
-#define DEFAULT_THREAD_STACKSIZE 1024
+#define DEFAULT_UDP_RECVMBOX_SIZE 6
+#define DEFAULT_TCP_RECVMBOX_SIZE 6
+#define DEFAULT_ACCEPTMBOX_SIZE 6
+#define DEFAULT_THREAD_STACKSIZE 600
 
 #define TCPIP_THREAD_NAME "swdeth"
-#define TCPIP_THREAD_STACKSIZE 5000
+#define TCPIP_THREAD_STACKSIZE 1500
 #define TCPIP_MBOX_SIZE 8
 #define TCPIP_THREAD_PRIO 3
 
