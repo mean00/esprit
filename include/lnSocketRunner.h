@@ -199,7 +199,7 @@ class socketRunner
      * @param done [TODO:parameter]
      * @return [TODO:return]
      */
-    bool writeData(uint32_t n, uint8_t *data)
+    bool writeData(uint32_t n, const uint8_t *data)
     {
         if (_writeBufferIndex + n < RUNNER_WRITE_BUFFER_SIZE)
         {
@@ -254,7 +254,7 @@ class socketRunner
      * @param data [TODO:parameter]
      * @return [TODO:return]
      */
-    bool _forcedWrite(uint32_t n, uint8_t *data)
+    bool _forcedWrite(uint32_t n, const uint8_t *data)
     {
         uint32_t done;
         DEBUGME("  Forcing  write %d byte\n", n);
