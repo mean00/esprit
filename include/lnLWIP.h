@@ -25,8 +25,7 @@ class lnLWIP
 };
 enum lnSocketEvent
 {
-    SocketConnectServer, // listening socket connection notification ,you should accept
-    SocketConnectClient, // work socket notification
+    SocketConnected, // listening socket connection notification ,you should accept
     SocketDisconnect,
     SocketDataAvailable,
     SocketWriteAvailable,
@@ -49,12 +48,13 @@ class lnSocket
     virtual ~lnSocket() {};
     static lnSocket *create(uint16_t port, lnSocketCb cb, void *arg);
     virtual status write(uint32_t n, const uint8_t *data, uint32_t &done) = 0;
-    virtual status read(uint32_t n, uint8_t *data, uint32_t &done) = 0;
+    virtual status read(uint32_t &n, uint8_t **data)=0;
     virtual status invoke(lnSocketEvent evt);
     virtual status flush() = 0;
     virtual status disconnectClient() = 0;
     virtual status asyncMode() = 0;
     virtual status accept() = 0;
+    virtual status freeReadData() =0;
 
   protected:
     lnSocket() {};

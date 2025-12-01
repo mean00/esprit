@@ -6,6 +6,7 @@ TARGET_SOURCES( ln_utils PRIVATE
                        lnDebug.cpp
                        systemHelper.cpp
                        lnStopWatch.cpp)
+TARGET_LINK_LIBRARIES(ln_utils PRIVATE  esprit_dev)
 IF(LN_EXTERNAL_MALLOC)
 ELSE()
   TARGET_SOURCES( ln_utils PRIVATE
@@ -13,8 +14,10 @@ ELSE()
                        ln_libc.cpp
                     )
 ENDIF()
-TARGET_LINK_LIBRARIES(ln_utils PRIVATE  esprit_dev)
 
+IF(LN_ENABLE_ETH)
+  TARGET_SOURCES( ln_utils PRIVATE  lnSocketRunner.cpp)
+ENDIF()
 
 If(LN_DEBUG_UART)
   MESSAGE(STATUS "Using uart ${LN_DEBUG_UART} for debug")

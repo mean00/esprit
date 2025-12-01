@@ -29,6 +29,7 @@ IF(True) #NOT ESPRIT_ROOT)
   OPTION(LN_ENABLE_TIMING_ADC "Enable ADC driver by a timer " ON)
 
   OPTION(LN_ENABLE_RUST "Enable rust support" OFF)
+  OPTION(LN_ENABLE_ETH "Enable Ethernet support" OFF)
 
   # WCH32Vxx specific
   OPTION(USE_CH32v3x_HW_IRQ_STACK "Enable WCH HW interrupt stack push pop (CH32V3xx only)" TRUE)

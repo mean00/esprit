@@ -31,7 +31,7 @@
 
 /* MEM_SIZE: the size of the heap memory. If the application will send
 a lot of data that needs to be copied, this should be set high. */
-#define MEM_SIZE (6 * 1024)
+#define MEM_SIZE (8 * 1024)
 
 /* MEMP_NUM_PBUF: the number of memp struct pbufs. If the application
    sends a lot of data out of ROM (or other static memory), this
@@ -207,6 +207,12 @@ a lot of data that needs to be copied, this should be set high. */
    ----------------------------------------
 */
 #define LWIP_SOCKET_SELECT 0
+
+#define LWIP_TCPIP_CORE_LOCKING 1
+#define LWIP_TCPIP_CORE_LOCKING_INPUT 0 /* usually 0 unless your input path requires it */
+#define LWIP_ASSERT_CORE_LOCKED()                                                                                      \
+    {                                                                                                                  \
+    } /* helpful during development */
 
 // #define LWIP_DEBUG                      1
 
