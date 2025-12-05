@@ -60,7 +60,8 @@ void socketRunner::run()
     _eventGroup.takeOwnership();
     while (1)
     {
-        uint32_t events = _eventGroup.waitEvents(~CanWrite, 100);
+        uint32_t events = _eventGroup.waitEvents(~CanWrite, 20);
+        hook_poll();
         process_events(events);
     }
 }
@@ -93,12 +94,14 @@ void socketRunner::process_events(uint32_t events)
     //--
     BEGIN_EVENT(Disconnected)
     Logger("Got disconnect \n");
+    hook_disconnected();
     disconnectClient();
     END_EVENT()
     //--
     BEGIN_EVENT(Connected)
     Logger("Got tcp connect \n");
     _connected = true;
+    hook_connected();
     END_EVENT()
     //--
     BEGIN_EVENT(DataAvailable)

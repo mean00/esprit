@@ -27,6 +27,13 @@ class socketRunner
      * @brief [TODO:description]
      */
     socketRunner();
+    /*
+     *
+     *
+     */
+    virtual void hook_connected() = 0;
+    virtual void hook_disconnected() = 0;
+    virtual void hook_poll() = 0;
 
     /**
      *

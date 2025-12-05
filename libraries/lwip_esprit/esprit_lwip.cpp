@@ -69,7 +69,7 @@ void netif_ext_callback_esprit(struct netif *netif, netif_nsc_reason_t reason, c
     if ((reason & UP_AND_RUNNING_EVT) == UP_AND_RUNNING_EVT)
     {
         uint32_t ip = ip4_addr_get_u32(netif_ip4_addr(&lwip_netif));
-        Logger("IP up %d.%d.%d.%d\n", ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff);
+        Logger("IP up %d.%d.%d.%d\n", ip & 0xff, (ip >> 8) & 0xff, (ip >> 16) & 0xff, (ip >> 24));
         _syscb(LwipReady, _sysarg);
         return;
     }
