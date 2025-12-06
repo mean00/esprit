@@ -40,6 +40,7 @@ ADD_SUBDIRECTORY(${ESPRIT_ROOT}/rust/corrosion corrosion)
 #
 MACRO(RUST_ADD tgt MANIFEST)
   #MESSAGE(STATUS "${ARGC}:<${ARGN}>:<${LN_RUST_BUILD_FLAGS}>")
+  set(CORROSION_RUSTFLAGS "-C no-default-libs")
   corrosion_import_crate(MANIFEST_PATH ${MANIFEST} FLAGS "${LN_RUST_BUILD_FLAGS}" )
   corrosion_add_target_rustflags(${tgt} "${LN_LTO_RUST_FLAGS}")
   IF(${ARGC} GREATER 2)
