@@ -100,25 +100,25 @@
 .endm
 
 
-.macro portCheck_FPU_Dirty branch
+.macro portCheck_FPU_Dirty brnch
     csrr t0, mstatus
     srli t0,t0, 14         /* Bit 14:13 are FS bits, 1x means dirty */
     andi t0, t0, 1
-    beq  t0,x0,\branch  /* If 0, means not dirty */
+    beq  t0,x0,\brnch  /* If 0, means not dirty */
 .endm
 
 .macro portasmSAVE_ADDITIONAL_REGISTERS
-    portCheck_FPU_Dirty 00f
+    portCheck_FPU_Dirty j00\@
     addi sp, sp, -(portFPU_SIZE) /* Only save FPU registers if FS bits are in dirty state*/
     CH32_FPU_STACK fstore
-00:    
+j00\@:    
 	.endm
 
 .macro portasmRESTORE_ADDITIONAL_REGISTERS
-    portCheck_FPU_Dirty 01f
+    portCheck_FPU_Dirty j01\@
     CH32_FPU_STACK fread
     addi sp, sp, (portFPU_SIZE)
-01:    
+j01\@:    
 	.endm
 
 #endif /* __FREERTOS_RISC_V_EXTENSIONS_H__ */
