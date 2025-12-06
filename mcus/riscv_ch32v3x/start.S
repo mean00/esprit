@@ -28,7 +28,7 @@ handle_reset:
 	la gp, __global_pointer$
 .option	pop 
 1:
-	la sp, _sp 
+	la sp, _bss_end 
 2:
 	
 2:

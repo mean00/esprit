@@ -167,7 +167,7 @@ SECTIONS
    } > ram AT>ram 
    .bss2 (NOLOAD) : 
    {
-    *(.initial_heap)
+    *(.initial_heap) /* actually total heap size */
     . = ALIGN(4);
     PROVIDE(_bss_end = .);
     } >ram AT>ram 
@@ -176,12 +176,6 @@ SECTIONS
   PROVIDE( _end = . ); /*0X2000,0340*/
   PROVIDE( end = . );
 
-  .stack ORIGIN(ram) + LENGTH(ram) - __stack_size :
-  {
-    PROVIDE( _heap_end = . ); 
-    . = __stack_size;  
-    PROVIDE( _sp = . ); 
-  } >ram AT>ram 
 
   .eeprom eeprom_begin :
       {
