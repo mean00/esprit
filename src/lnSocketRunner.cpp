@@ -19,11 +19,12 @@
 /**
  * @brief [TODO:description]
  */
-socketRunner::socketRunner()
+socketRunner::socketRunner(lnFastEventGroup &eventGroup, uint32_t shift) : _eventGroup(eventGroup)
 {
+    _shift = shift;
+    _current_connection = NULL;
     _connected = false;
     _writeBufferIndex = 0;
-    lnLWIP::start(NetCb_c, this);
 }
 
 /**
@@ -55,16 +56,6 @@ void socketRunner::socketEvent(lnSocketEvent evt)
     }
 }
 
-void socketRunner::run()
-{
-    _eventGroup.takeOwnership();
-    while (1)
-    {
-        uint32_t events = _eventGroup.waitEvents(~CanWrite, 20);
-        hook_poll();
-        process_events(events);
-    }
-}
 #define BEGIN_EVENT(e)                                                                                                 \
     if (events & e)                                                                                                    \
     {                                                                                                                  \
@@ -74,6 +65,7 @@ void socketRunner::run()
     }
 void socketRunner::process_events(uint32_t events)
 {
+    hook_poll();
     // link up
     uint32_t local_event;
     //--

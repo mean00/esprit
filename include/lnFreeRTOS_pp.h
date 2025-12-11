@@ -80,6 +80,7 @@ class lnFastEventGroup
     volatile uint32_t _value;
     volatile uint32_t _mask;
     TaskHandle_t _waitingTask;
+    void *_cookie;
 };
 
 /**

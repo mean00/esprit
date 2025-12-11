@@ -6,27 +6,29 @@
 /**
 
 */
+
 class socketRunner
 {
   public:
-#define BBITS(x) (1 << x)
+#define BBITS(x) (1UL << x)
     /**
      * @brief [TODO:description]
      */
     enum RunnerEvent
     {
-        Up = BBITS(0),
-        Down = BBITS(1),
-        Connected = BBITS(3),
-        Disconnected = BBITS(8),
-        DataAvailable = BBITS(9),
-        CanWrite = BBITS(10),
-        Error = BBITS(16),
+        Up = BBITS(30),
+        Down = BBITS(31),
+        Connected = BBITS(0),
+        Disconnected = BBITS(1),
+        DataAvailable = BBITS(2),
+        CanWrite = BBITS(3),
+        Error = BBITS(4),
+        Mask = (0x1F),
     };
     /**
      * @brief [TODO:description]
      */
-    socketRunner();
+    socketRunner(lnFastEventGroup &eventGroup, uint32_t shift);
     /*
      *
      *
@@ -34,17 +36,6 @@ class socketRunner
     virtual void hook_connected() = 0;
     virtual void hook_disconnected() = 0;
     virtual void hook_poll() = 0;
-
-    /**
-     *
-     * @param evt [TODO:parameter]
-     * @param arg [TODO:parameter]
-     */
-    static void NetCb_c(lnLwipEvent evt, void *arg)
-    {
-        socketRunner *me = (socketRunner *)arg;
-        me->sendEvent(Up);
-    }
     /**
      * @brief [TODO:description]
      *
@@ -52,7 +43,12 @@ class socketRunner
      */
     void sendEvent(RunnerEvent ev)
     {
-        _eventGroup.setEvents(ev);
+        uint32_t v = ev;
+        if (ev < Up)
+        {
+            v = v << _shift;
+        }
+        _eventGroup.setEvents(v);
     }
     /**
      * @brief [TODO:description]
@@ -72,7 +68,6 @@ class socketRunner
         socketRunner *s = (socketRunner *)arg;
         s->socketEvent(evt);
     }
-    void run();
 
     void process_events(uint32_t events);
 
@@ -117,11 +112,11 @@ class socketRunner
   protected:
     void clearWrite()
     {
-        _eventGroup.readEvents(CanWrite);
+        _eventGroup.readEvents(CanWrite << _shift);
     }
     void waitForWrite()
     {
-        _eventGroup.waitEvents(CanWrite, 100);
+        _eventGroup.waitEvents(CanWrite << _shift, 100);
     }
 
     /**
@@ -134,11 +129,12 @@ class socketRunner
     bool _forcedWrite(uint32_t n, const uint8_t *data);
 
   protected:
-    lnFastEventGroup _eventGroup;
+    lnFastEventGroup &_eventGroup;
     lnSocket *_current_connection;
     bool _connected;
     uint8_t _writeBuffer[RUNNER_WRITE_BUFFER_SIZE];
     uint32_t _writeBufferIndex;
+    uint32_t _shift;
 };
 
 // EOF
