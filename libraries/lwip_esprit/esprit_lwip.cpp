@@ -186,6 +186,7 @@ class lnSocket_impl : public lnSocket
     status write(uint32_t n, const uint8_t *data, uint32_t &done);
     status flush(); // force flushing the write buffer
     status disconnectClient();
+    status writeBufferAvailable(uint32_t &n);
     void accepted(struct tcp_pcb *t)
     {
         xAssert(!_client_tcp);
@@ -439,6 +440,16 @@ lnSocket::status lnSocket_impl::read(uint32_t &n, uint8_t **data)
     }
     n = t->len;
     *data = (uint8_t *)t->payload;
+    return lnSocket::Ok;
+}
+// return # of bytes that can be written without blocking. This is not atomic
+lnSocket::status lnSocket_impl::writeBufferAvailable(uint32_t &n)
+{
+    NO_ERROR_PLEASE();
+    LOCK_TCPIP_CORE();
+    uint32_t available = tcp_sndbuf(_client_tcp);
+    UNLOCK_TCPIP_CORE();
+    n = available;
     return lnSocket::Ok;
 }
 /**

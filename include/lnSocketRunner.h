@@ -28,7 +28,16 @@ class socketRunner
     /**
      * @brief [TODO:description]
      */
-    socketRunner(lnFastEventGroup &eventGroup, uint32_t shift);
+    socketRunner(uint16_t port, lnFastEventGroup &eventGroup, uint32_t shift);
+    /**
+     * @brief [TODO:description]
+     *
+     * @return [TODO:return]
+     */
+    uint32_t shift()
+    {
+        return _shift;
+    }
     /*
      *
      *
@@ -105,6 +114,13 @@ class socketRunner
      * @return [TODO:return]
      */
     bool flushWrite();
+    /**
+     * @brief return the # of bytes one can write
+     * This is not atomic!
+     *
+     * @return [TODO:return]
+     */
+    uint32_t writeBufferAvailable();
 
   protected:
     void cleanup();
@@ -135,6 +151,7 @@ class socketRunner
     uint8_t _writeBuffer[RUNNER_WRITE_BUFFER_SIZE];
     uint32_t _writeBufferIndex;
     uint32_t _shift;
+    uint16_t _port;
 };
 
 // EOF

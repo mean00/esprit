@@ -19,12 +19,13 @@
 /**
  * @brief [TODO:description]
  */
-socketRunner::socketRunner(lnFastEventGroup &eventGroup, uint32_t shift) : _eventGroup(eventGroup)
+socketRunner::socketRunner(uint16_t port, lnFastEventGroup &eventGroup, uint32_t shift) : _eventGroup(eventGroup)
 {
     _shift = shift;
     _current_connection = NULL;
     _connected = false;
     _writeBufferIndex = 0;
+    _port = port;
 }
 
 /**
@@ -63,6 +64,11 @@ void socketRunner::socketEvent(lnSocketEvent evt)
 #define END_EVENT()                                                                                                    \
     events &= ~local_event;                                                                                            \
     }
+/**
+ * @brief [TODO:description]
+ *
+ * @param events [TODO:parameter]
+ */
 void socketRunner::process_events(uint32_t events)
 {
     hook_poll();
@@ -72,7 +78,7 @@ void socketRunner::process_events(uint32_t events)
     BEGIN_EVENT(Up)
     Logger("Got link up event\n");
     cleanup();
-    _current_connection = lnSocket::create(2000, socketCb_c, this);
+    _current_connection = lnSocket::create(_port, socketCb_c, this);
     _current_connection->asyncMode();
     _current_connection->accept();
     Logger("Server ready \n");
@@ -105,6 +111,9 @@ void socketRunner::process_events(uint32_t events)
         xAssert(0);
     }
 }
+/**
+ * @brief [TODO:description]
+ */
 void socketRunner::disconnectClient()
 {
     _current_connection->disconnectClient();
@@ -136,6 +145,11 @@ bool socketRunner::readData(uint32_t &n, uint8_t **data)
     return true;
 }
 
+/**
+ * @brief [TODO:description]
+ *
+ * @return [TODO:return]
+ */
 bool socketRunner::releaseData()
 {
     _current_connection->freeReadData();
@@ -176,6 +190,9 @@ bool socketRunner::flushWrite()
     return r;
 }
 
+/**
+ * @brief [TODO:description]
+ */
 void socketRunner::cleanup()
 {
     _connected = false;
@@ -186,6 +203,20 @@ void socketRunner::cleanup()
     }
 }
 
+/**
+ * @brief [TODO:description]
+ *
+ * @param n [TODO:parameter]
+ * @param data [TODO:parameter]
+ * @return [TODO:return]
+ */
+uint32_t socketRunner::writeBufferAvailable()
+{
+    uint32_t n = 0;
+    if (lnSocket::Ok == _current_connection->writeBufferAvailable(n))
+        return n;
+    return 0;
+}
 /**
  * @brief [TODO:description]
  *
