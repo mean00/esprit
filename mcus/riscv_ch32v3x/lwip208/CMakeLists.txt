@@ -8,10 +8,7 @@ endif()
 
 add_library(lnEthCH32V208 STATIC)
 target_sources( lnEthCH32V208 PRIVATE
-  src/ch32v3_eth_driver.cpp
-  src/ch32v3_ethernetif.cpp
-  src/ch32v30x_eth.cpp
-  src/esprit_CH32V208.cpp
+src/esprit_ch32v208.cpp  src/eth.cpp  src/eth_driver.cpp
 )
 target_include_directories(lnEthCH32V208 PUBLIC include)
 target_include_directories(lnEthCH32V208 PRIVATE private_include
