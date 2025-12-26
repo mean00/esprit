@@ -54,6 +54,6 @@ ENDIF()
 
 IF(LN_ENABLE_ETH)
   add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/../lwip lwip_sub)
-  target_link_libraries(esprit_lib PRIVATE  lnEthCh32V3xx )
+  target_link_libraries(esprit_lib PRIVATE  lnEth_wch )
 ENDIF()
 

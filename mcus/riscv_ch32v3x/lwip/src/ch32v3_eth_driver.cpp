@@ -39,6 +39,48 @@ extern void enable_eth_irq(void);
 #endif
 
 #define ETH_DMARxDesc_FrameLengthShift 16
+
+void waitForBitToClear(uint32_t bit)
+{
+    uint32_t timeout = 1000; /* 最大超时十秒   */
+    while (1)
+    {
+        uint32_t RegValue = ETH_ReadPHYRegister(PHY_ADDRESS, PHY_BSR);
+        if ((RegValue & (bit)) != 0)
+        {
+            timeout--;
+            if (timeout <= 0)
+            {
+                Logger("Error:Timeout!!\n");
+                xAssert(0);
+            }
+            lnDelayMs(10);
+        }
+        else
+            return;
+    }
+}
+void waitForBit(uint32_t bit)
+{
+    uint32_t timeout = 1000; /* 最大超时十秒   */
+    while (1)
+    {
+        uint32_t RegValue = ETH_ReadPHYRegister(PHY_ADDRESS, PHY_BSR);
+        if ((RegValue & (bit)) == 0)
+        {
+            timeout--;
+            if (timeout <= 0)
+            {
+                Logger("Error:Timeout!!\n");
+                xAssert(0);
+            }
+            lnDelayMs(10);
+        }
+        else
+            return;
+    }
+}
+
 /*
  *  It is assumed ETh clock has been set already
  *  And PPL3 is running at 60 Mhz
@@ -81,7 +123,7 @@ void ch32v3_init_phy(void)
     /* Wait for software reset */
     timeout = 10;
     // OS_SUBNT_SET_STATE();
-    if (ETH->DMABMR & ETH_DMABMR_SR)
+    if (ETHDMA->DMABMR & ETH_DMABMR_SR)
     {
         timeout--;
         if (timeout == 0)
@@ -145,62 +187,11 @@ void ch32v3_init_phy(void)
     ETH_WritePHYRegister(PHY_ADDRESS, PHY_BCR, PHY_Reset); /* 复位物理层  */
 
     vTaskDelay(100 / portTICK_PERIOD_MS);
-
-    timeout = 10000; /* 最大超时十秒   */
-    RegValue = 0;
-
-    RegValue = ETH_ReadPHYRegister(PHY_ADDRESS, PHY_BCR);
-    if ((RegValue & (PHY_Reset)))
-    {
-        timeout--;
-        if (timeout <= 0)
-        {
-            Logger("Error:Wait phy software timeout!\nPlease cheak PHY/MID.\nProgram "
-                   "has been "
-                   "blocked!\n");
-            while (1)
-                ;
-        }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-
-    /* 等待物理层与对端建立LINK */
-    timeout = 10000; /* 最大超时十秒   */
-    RegValue = 0;
-
-    RegValue = ETH_ReadPHYRegister(PHY_ADDRESS, PHY_BSR);
-    if ((RegValue & (PHY_Linked_Status)) == 0)
-    {
-        timeout--;
-        if (timeout <= 0)
-        {
-            Logger("Error:Wait phy linking timeout!\nPlease cheak MID.\nProgram has "
-                   "been blocked!\n");
-            while (1)
-                ;
-        }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-
-    /* 等待物理层完成自动协商 */
-    timeout = 10000; /* 最大超时十秒   */
-    RegValue = 0;
-
-    RegValue = ETH_ReadPHYRegister(PHY_ADDRESS, PHY_BSR);
-    if ((RegValue & PHY_AutoNego_Complete) == 0)
-    {
-        timeout--;
-        if (timeout <= 0)
-        {
-            Logger("Error:Wait phy auto-negotiation complete timeout!\nPlease cheak "
-                   "MID.\nProgram has "
-                   "been blocked!\n");
-            while (1)
-                ;
-        }
-
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
+    Logger("Waiting for link up...\n");
+    waitForBitToClear(PHY_Reset);
+    waitForBit(PHY_Linked_Status);
+    waitForBit(PHY_AutoNego_Complete);
+    Logger("Link up.\n");
 
     RegValue = ETH_ReadPHYRegister(PHY_ADDRESS, 0x10);
     Logger("PHY_SR value:%04x. \r\n", RegValue);
@@ -220,7 +211,9 @@ void ch32v3_init_phy(void)
     {
         Logger("Loopback_10M \r\n");
     }
-    else {}
+    else
+    {
+    }
 
     vTaskDelay(10 / portTICK_PERIOD_MS);
 
@@ -266,7 +259,7 @@ void ch32v3_init_phy(void)
 
     ETH->MACVLANTR = (uint32_t)(ETH_InitStructure.ETH_VLANTagComparison | ETH_InitStructure.ETH_VLANTagIdentifier);
 
-    tmpreg = ETH->DMAOMR;
+    tmpreg = ETHDMA->DMAOMR;
     /* Clear xx bits */
     tmpreg &= DMAOMR_CLEAR_MASK;
 
@@ -275,9 +268,9 @@ void ch32v3_init_phy(void)
                          ETH_InitStructure.ETH_TransmitThresholdControl | ETH_InitStructure.ETH_ForwardErrorFrames |
                          ETH_InitStructure.ETH_ForwardUndersizedGoodFrames |
                          ETH_InitStructure.ETH_ReceiveThresholdControl | ETH_InitStructure.ETH_SecondFrameOperate);
-    ETH->DMAOMR = (uint32_t)tmpreg;
+    ETHDMA->DMAOMR = (uint32_t)tmpreg;
 
-    ETH->DMABMR =
+    ETHDMA->DMABMR =
         (uint32_t)(ETH_InitStructure.ETH_AddressAlignedBeats | ETH_InitStructure.ETH_FixedBurst |
                    ETH_InitStructure.ETH_RxDMABurstLength | /* !! if 4xPBL is selected for Tx
                                                                or Rx it is applied for the
@@ -326,12 +319,12 @@ FrameTypeDef ETH_RxPkt_ChainMode(void)
     if ((DMARxDescToGet->Status & ETH_DMARxDesc_OWN) != (uint32_t)RESET)
     {
         frame.length = ETH_ERROR;
-        if ((ETH->DMASR & ETH_DMASR_RBUS) != (uint32_t)RESET)
+        if ((ETHDMA->DMASR & ETH_DMASR_RBUS) != (uint32_t)RESET)
         {
             /* Clear RBUS ETHERNET DMA flag */
-            ETH->DMASR = ETH_DMASR_RBUS;
+            ETHDMA->DMASR = ETH_DMASR_RBUS;
             /* Resume DMA reception */
-            ETH->DMARPDR = 0;
+            ETHDMA->DMARPDR = 0;
         }
         Logger("Error:ETH_DMARxDesc_OWN.\r\n");
         /* Return error: OWN bit set */
@@ -400,13 +393,13 @@ uint32_t ETH_TxPkt_ChainMode(uint16_t FrameLength)
     DMATxDescToSet->Status |= ETH_DMATxDesc_OWN;
 
     /* When Tx Buffer unavailable flag is set: clear it and resume transmission */
-    if ((ETH->DMASR & ETH_DMASR_TBUS) != (uint32_t)RESET)
+    if ((ETHDMA->DMASR & ETH_DMASR_TBUS) != (uint32_t)RESET)
     {
         /* Clear TBUS ETHERNET DMA flag */
-        ETH->DMASR = ETH_DMASR_TBUS;
+        ETHDMA->DMASR = ETH_DMASR_TBUS;
         /* Resume DMA transmission*/
 
-        ETH->DMATPDR = 0;
+        ETHDMA->DMATPDR = 0;
     }
 
     /* Update the ETHERNET DMA global Tx descriptor with next Tx decriptor */
@@ -445,12 +438,12 @@ extern void ln_ethernet_rx(void);
  */
 extern "C" void ETH_IRQHandler(void)
 {
-    if (ETH->DMASR & ETH_DMA_IT_R)
+    if (ETHDMA->DMASR & ETH_DMA_IT_R)
     {
         ETH_DMAClearITPendingBit(ETH_DMA_IT_R);
         ln_ethernet_rx();
     }
-    if (ETH->DMASR & ETH_DMA_IT_T)
+    if (ETHDMA->DMASR & ETH_DMA_IT_T)
     {
         ETH_DMAClearITPendingBit(ETH_DMA_IT_T);
     }
