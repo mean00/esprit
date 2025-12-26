@@ -217,11 +217,25 @@ void lnInitSystemClock()
     inputClock = CLOCK_XTAL_VALUE;
     useExternalClock = true;
 #endif
+#ifdef USE_CH32V208W
+    // assuming we have a 32 Mhz xtal, it will be divided automatically by 4
+    // also set USB & prescaller to follow WCH example
+    // Magic USB prescaler value of 3
+    arcu->CFG0 |= LN_RCU_CFG0_USBPSC(3); // weird CH32V208W stuff, USB divided by 5, PLL source = HSE/2 = 16 Meg
+    uint32_t c0 = arcu->CFG0;
+    c0 &= ~LN_RCU_CFG0_HPRE_WCH(0xf);
+    c0 |= LN_RCU_CFG0_HPRE_WCH(8); // HPRE=8, so  HBCLOCK=SYSCLOCK/2
+    arcu->CFG0 = c0;
+    const uint32_t predivider = 4; // on the CH32V208w the pll insput is xtal/4 (or /8)
+#else
+    const uint32_t predivider = 1;
 
-    int multiplier = CLOCK_TARGET_SYSCLOCK / inputClock;
+#endif
+
+    int multiplier = (predivider * CLOCK_TARGET_SYSCLOCK) / inputClock;
     setPll(multiplier, useExternalClock); // Program PLL to get the value we want
 
-    SystemCoreClock = (inputClock * multiplier * 1000000); // update globals reflecting SysClk...
+    SystemCoreClock = (((inputClock * multiplier) / predivider) * 1000000); // update globals reflecting SysClk...
     _rcuClockApb1 = SystemCoreClock >> CH32_APB1_DIVIDER;
     _rcuClockApb2 = SystemCoreClock;
 

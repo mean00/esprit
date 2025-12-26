@@ -3,7 +3,6 @@ extern "C"
 {
 #include "lwip/opt.h"
 
-#include "eth_driver.h"
 #include "lwip/def.h"
 #include "lwip/etharp.h"
 #include "lwip/ethip6.h"
@@ -11,6 +10,7 @@ extern "C"
 #include "lwip/pbuf.h"
 #include "lwip/stats.h"
 }
+#include "eth_driver.h"
 //
 #include "ln_lwip_debug.h"
 /* Define those to better describe your network interface. */
@@ -118,7 +118,7 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
     // signal that packet should be sent();
     if (!ETH_TxPkt_ChainMode(p->tot_len))
     {
-        DEBUGME("Failed to chain Tx pkt\n");
+        Logger("Failed to chain Tx pkt\n");
     }
 #if 0
     MIB2_STATS_NETIF_ADD(netif, ifoutoctets, p->tot_len);

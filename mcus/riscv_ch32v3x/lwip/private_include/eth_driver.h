@@ -4,9 +4,6 @@
 //
 #include "ch32v30x_eth.h"
 
-#define ETH_RXBUFNB 4
-#define ETH_TXBUFNB 4
-
 #if 0
 #define USE_LOOP_STRUCT 1
 #else
@@ -21,13 +18,7 @@ typedef struct
     ETH_DMADESCTypeDef *descriptor;
 } FrameTypeDef;
 
-extern ETH_DMADESCTypeDef *DMATxDescToSet;
-extern ETH_DMADESCTypeDef *DMARxDescToGet;
-
-extern ETH_DMADESCTypeDef DMARxDscrTab[ETH_RXBUFNB]; /* 接收描述符表 */
-extern ETH_DMADESCTypeDef DMATxDscrTab[ETH_TXBUFNB]; /* 发送描述符表 */
-
-extern "C" uint32_t ETH_TxPkt_ChainMode(uint16_t FrameLength);
+extern "C" bool ETH_TxPkt_ChainMode(uint16_t FrameLength);
 void mac_send(uint8_t *content_ptr, uint16_t content_len);
 
 extern "C" FrameTypeDef ETH_RxPkt_ChainMode(void);

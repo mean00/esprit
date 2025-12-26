@@ -2,6 +2,7 @@
  *
  *
  */
+#include "ch32vxx_priv.h"
 #include "esprit.h"
 extern "C"
 {
@@ -63,6 +64,7 @@ bool lnLWIP::start(lnLwIpSysCallback syscb, void *arg)
     //
     lnPinMode(LN_ETH_LINKSET_LED, lnOUTPUT_OPEN_DRAIN, 10);
     lnPinMode(LN_ETH_DATASET_LED, lnOUTPUT_OPEN_DRAIN, 10);
+    lnCh32_enableInternalEth();
     lnPeripherals::initEthClock();
     xDelay(5);
     lnPeripherals::enable(pETHERNET);

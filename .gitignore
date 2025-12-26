@@ -27,3 +27,4 @@ rust/rnArduino/target
 *.orig
 *attic*
 rust/rust_esprit/target/
+*.old

@@ -8,6 +8,8 @@
 #include "lnCpuID.h"
 #include "lnPeripheral_priv.h"
 #include "lnRCU_priv.h"
+//
+#include "ch32vxx_priv.h"
 LN_RCU *arcu = (LN_RCU *)LN_RCU_ADR;
 /**
  */
@@ -246,11 +248,7 @@ void lnPeripherals::enableUsb48Mhz()
             xAssert(0); // invalid sys clock
             break;
         }
-        // enable internal pullup/down
-        volatile uint32_t *exten = (volatile uint32_t *)0x40023800;
-        volatile uint32_t reg = *exten;
-        reg |= 2;
-        *exten = reg;
+        lnCh32_enableUsbPullUp();
     }
     break;
         // only GD32 has more dividers

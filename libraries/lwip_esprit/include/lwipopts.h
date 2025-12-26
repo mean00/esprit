@@ -10,7 +10,9 @@
 #define SYS_LIGHTWEIGHT_PROT 1
 
 #define LWIP_TIMEVAL_PRIVATE 0
-
+// Reduce the ARP verification
+// else it takes a looong time
+#define LWIP_DHCP_DOES_ACD_CHECK 0 // meanx trust
 /**
  * NO_SYS==1: Provides VERY minimal functionality. Otherwise,
  * use lwIP facilities.

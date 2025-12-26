@@ -25,26 +25,20 @@ extern LN_RCU *arcu;
 #ifdef USE_CH32V208W
 void lnPeripherals::initEthClock()
 {
-#if 0
-    // RCC_PLL3Cmd(DISABLE);
-    arcu->CTL &= ~LN_RCU_CTL_PLL2EN;
-    RCC_PREDIV2Config(RCC_PREDIV2_Div2);
-    //
-    // RCC_PLL3Config(RCC_PLL3Mul_15);
-    uint32_t cfgr1 = arcu->CFG1;
-    cfgr1 &= LN_RCU_CFG1_PLL2_MUL_MASK;
-    cfgr1 |= LN_RCU_CFG1_PLL2_MUL(13); // 13-> x15
-    arcu->CFG1 = cfgr1;
-    // RCC_MCOConfig(RCC_MCO_PLL3CLK);
-    uint32_t cfgr0 = arcu->CFG0;
-    cfgr0 &= LN_RCU_CFG0_MCO_SEL_MASK;
-    cfgr0 |= LN_RCU_CFG0_MCO_SEL(LN_RCU_CFG0_MCO_SEL_PLL3);
-    arcu->CFG0 = cfgr0;
-    // RCC_PLL3Cmd(ENABLE);
-    arcu->CTL |= LN_RCU_CTL_PLL2EN;
-
-    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_ETH_MAC | RCC_AHBPeriph_ETH_MAC_Tx | RCC_AHBPeriph_ETH_MAC_Rx, ENABLE);
-#endif
+    // we need eth clock to be 60 Mhz
+    uint32_t cfg0 = arcu->CFG0;
+    cfg0 &= ~LN_RCU_CFG0_ETH_PRESCALER_WCH(1);
+    switch (SystemCoreClock)
+    {
+    case 120 * 1000 * 1000:
+        cfg0 |= LN_RCU_CFG0_ETH_PRESCALER_WCH(1);
+        break;
+    case 60 * 1000 * 1000:
+        break;
+    default:
+        xAssert(0); // invalid HCLK
+    }
+    arcu->CFG0 = cfg0;
 }
 #else // CH32V307
 void lnPeripherals::initEthClock()
