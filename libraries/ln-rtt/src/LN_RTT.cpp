@@ -69,10 +69,7 @@ uint32_t LN_RTT_Write(uint32_t bufferIndex, const uint8_t *buffer, uint32_t size
             size -= chunk;
             write_offset += chunk;
             done += chunk;
-            if (write_offset >= chan->buffer_size)
-            {
-                write_offset -= chan->buffer_size;
-            }
+            write_offset &= chan->buffer_size - 1;
         }
     }
     // left part
@@ -91,6 +88,7 @@ uint32_t LN_RTT_Write(uint32_t bufferIndex, const uint8_t *buffer, uint32_t size
             size -= chunk;
             write_offset += chunk;
             done += chunk;
+            write_offset &= chan->buffer_size - 1;
         }
     }
     chan->write_offset = write_offset;
