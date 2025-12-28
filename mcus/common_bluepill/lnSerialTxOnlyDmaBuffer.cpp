@@ -120,7 +120,8 @@ int lnSerialBpTxOnlyBufferedDma::transmitNoBlock(int size, const uint8_t *buffer
         if (nb > size)
             nb = size;
         int inc = _txRingBuffer.put(nb, buffer);
-        buffer += inc, size -= inc;
+        buffer += inc;
+        size -= inc;
         processed += inc;
         if (!_txing)
             igniteTx();
