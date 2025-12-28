@@ -16,9 +16,9 @@ class lnRingBuffer
      *
      * @param size
      */
-    lnRingBuffer(int size)
+    lnRingBuffer(uint32_t size)
     {
-        int c = size;
+        uint32_t c = size;
         xAssert(size == (size & ~(size - 1))); // make sure it is a power of 2
         _size = size;
         _mask = size - 1;
@@ -31,7 +31,7 @@ class lnRingBuffer
      */
     virtual ~lnRingBuffer()
     {
-        delete _buffer;
+        delete[] _buffer;
         _buffer = NULL;
     }
     /**
@@ -39,7 +39,7 @@ class lnRingBuffer
      *
      * @return int
      */
-    int size()
+    uint32_t size() const
     {
         return _size;
     }
@@ -49,7 +49,7 @@ class lnRingBuffer
      * @return true
      * @return false
      */
-    bool empty()
+    bool empty() const
     {
         return (_head == _tail);
     }
@@ -59,27 +59,27 @@ class lnRingBuffer
      * @return true
      * @return false
      */
-    bool full()
+    bool full() const
     {
-        return (_head == (_tail + _size - 1));
+        return _head == ((_tail + _size - 1) & _mask);
     }
     /**
      * @brief
      *
      * @return int
      */
-    int count()
+    uint32_t count() const
     {
-        return _head - _tail;
+        return (_size + _head - _tail) & _mask;
     }
     /**
      * @brief
      *
      * @return int
      */
-    int free()
+    uint32_t free() const
     {
-        return _size - (_head - _tail);
+        return _size - count() - 1;
     }
     /**
      * @brief
@@ -88,7 +88,7 @@ class lnRingBuffer
      * @param b
      * @return int
      */
-    static inline int CMIN(int a, int b)
+    static inline uint32_t CMIN(uint32_t a, uint32_t b)
     {
         if (a <= b)
             return a;
@@ -107,19 +107,16 @@ class lnRingBuffer
      *
      * @return uint8_t*
      */
-    uint8_t *ringBuffer()
+    uint8_t *ringBuffer() const
     {
         return _buffer;
     }
 
     //----------------------------------
-    void consume(int n)
+    void consume(uint32_t n)
     {
         _tail += n;
-        if (_tail == _head)
-        {
-            flush();
-        }
+        _tail &= _mask;
     }
     /**
      * @brief Get the Read Pointer object
@@ -127,24 +124,24 @@ class lnRingBuffer
      * @param to
      * @return int
      */
-    int getReadPointer(uint8_t **to)
+    uint32_t getReadPointer(uint8_t **to)
     {
-        uint32_t h = _head & _mask;
-        uint32_t t = _tail & _mask;
-        *to = _buffer + t;
-        int nb;
-        if (h == t)
-        {
-            if (_head == _tail)
-                nb = 0;
-            else
-                nb = _size;
-        }
-        else if (h > t)
-            nb = h - t;
-        else
-            nb = _size - t;
-        return nb;
+        *to = _buffer + _tail;
+        if (_head < _tail)
+            return _size - _tail;
+        // if (_head >= _tail)
+        return _head - _tail;
+    }
+    uint32_t getWritePointer(uint8_t **to) const
+    {
+        *to = _buffer + _head;
+        if (_head < _tail)
+            return _tail - _head - 1;
+        // if (_head >= _tail)
+        uint32_t res = _size - _head;
+        if (_tail == 0)
+            res--;
+        return res;
     }
     /**
      * @brief
@@ -154,30 +151,38 @@ class lnRingBuffer
      * @return true
      * @return false
      */
-    int put(int insize, const uint8_t *data)
+    uint32_t put(uint32_t insize, const uint8_t *data)
     {
-        int size = CMIN(insize, free());
-        int orgsize = size;
-        // FIXME : optimize!
-        int c;
-        while (size)
-        {
-            int h = _head & _mask;
-            int t = _tail & _mask;
-            if (h >= t)
-            { // copy till the end
-                c = CMIN(_size - h, size);
-            }
-            else
-            {
-                c = CMIN(t - h, size);
-            }
-            memcpy(_buffer + h, data, c);
-            _head += c;
-            data += c;
-            size -= c;
-        }
-        return orgsize;
+        uint8_t *to;
+        uint32_t done = 0;
+        uint32_t orgsize = insize;
+        uint32_t n = getWritePointer(&to);
+        if (!n)
+            return done;
+        if (n > insize)
+            n = insize;
+        memcpy(to, data, n);
+        insize -= n;
+        data += n;
+        done += n;
+        add(n);
+
+        if (!insize)
+            return done;
+
+        // in case we wrapped...
+        n = getWritePointer(&to);
+        if (!n)
+            return done;
+        if (n > insize)
+            n = insize;
+        memcpy(to, data, n);
+        insize -= n;
+        data += n;
+        done += n;
+        add(n);
+
+        return done;
     }
     /**
      * @brief
@@ -186,36 +191,49 @@ class lnRingBuffer
      * @param data
      * @return int
      */
-    int get(int size, uint8_t *data)
+    uint32_t get(uint32_t size, uint8_t *data)
     {
         size = CMIN(size, count());
-        int orgsize = size;
-        int c;
-        while (size)
-        {
-            int h = _head & _mask;
-            int t = _tail & _mask;
-            if (h > t)
-            {
-                c = CMIN(h - t, size);
-            }
-            else
-            {
-                c = CMIN(_size - t, size);
-            }
-            memcpy(data, _buffer + t, c);
-            _tail += c;
-            data += c;
-            size -= c;
-        }
-        // for(int i=0;i<size;i++)            {                data[i]=_buffer[_tail & _mask];                _tail++;
-        if (_tail == _head)
-            flush();
-        return orgsize;
+        uint32_t orgsize = size;
+        uint8_t *from;
+        uint32_t done = 0;
+        uint32_t n = getReadPointer(&from);
+        if (!n)
+            return done;
+        if (n > size)
+            n = size;
+        memcpy(data, from, n);
+        size -= n;
+        data += n;
+        done += n;
+        consume(n);
+
+        if (!size)
+            return done;
+
+        n = getReadPointer(&from);
+        if (!n)
+            return done;
+        if (n > size)
+            n = size;
+        memcpy(data, from, n);
+        size -= n;
+        data += n;
+        done += n;
+        consume(n);
+        return done;
     }
     //----------------------------------
   protected:
-    int _head, _tail;
-    int _mask, _size;
+    void add(uint32_t n)
+    {
+        _head += n;
+        _head &= _mask;
+    }
+
+  protected:
+    volatile uint32_t _head, _tail;
+    uint32_t _mask, _size;
     uint8_t *_buffer;
+    //
 };
