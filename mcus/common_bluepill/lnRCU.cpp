@@ -9,7 +9,6 @@
 #include "lnPeripheral_priv.h"
 #include "lnRCU_priv.h"
 //
-#include "ch32vxx_priv.h"
 LN_RCU *arcu = (LN_RCU *)LN_RCU_ADR;
 /**
  */
@@ -24,6 +23,17 @@ struct RCU_Peripheral
 #define RCU_ENABLE 2
 #define RCU_DISABLE 3
 
+extern void lnCh32_enableUsbPullUp();
+__attribute__((weak)) void lnCh32_enableUsbPullUp()
+{
+#warning FIXME BADLY
+#warning FIXME BADLY
+#warning FIXME BADLY
+#warning FIXME BADLY
+#warning FIXME BADLY
+#warning FIXME BADLY
+#warning FIXME BADLY
+}
 /**
  */
 static const RCU_Peripheral _peripherals[] = {
