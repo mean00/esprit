@@ -10,6 +10,7 @@
 #include "lnRCU_priv.h"
 //
 #include "ch32vxx_priv.h"
+#include "lnCpuID.h"
 extern LN_RCU *arcu;
 //
 #define CH32V3_USBHS_PLL_SRC_HSI (0 << 27)
@@ -59,5 +60,36 @@ void lnCh32_enableInternalEth()
 {
     *ch32v_exten |= CH32_EXTEN_CTR_ETH_10M_ENABLE;
 }
+void lnPeripherals::enableUsb48Mhz()
+{
+    static bool usb48M = false;
+    if (usb48M)
+        return;
+    usb48M = true;
 
+    // careful, the usb clock must be off !
+    int scaler = (2 * lnPeripherals::getClock(pSYSCLOCK)) / 48000000;
+    int x = 0;
+    xAssert(lnCpuID::vendor() == lnCpuID::LN_MCU_CH32); // For riscv chip CH32V303/..
+    switch (scaler)
+    {
+    case 2:
+        x = 0;
+        break; // 48 Mhz
+    case 4:
+        x = 1;
+        break; // 96 Mhz
+    case 6:
+        x = 2;
+        break; // 144 Mhz
+    default:
+        xAssert(0); // invalid sys clock
+        break;
+    }
+    lnCh32_enableUsbPullUp();
+    uint32_t cfg0 = arcu->CFG0;
+    cfg0 &= LN_RCU_CFG0_USBPSC_MASK;
+    cfg0 |= LN_RCU_CFG0_USBPSC(x);
+    arcu->CFG0 = cfg0;
+}
 // EOF

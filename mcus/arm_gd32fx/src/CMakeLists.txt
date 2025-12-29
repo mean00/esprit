@@ -8,7 +8,7 @@ target_sources( esprit_lib PRIVATE
         ${S}/lnCpuID_arm_gd32fx.cpp     ${S}/lnFMC_impl.cpp
         ${S}/lnIRQ_arm_gd32fx.cpp   ${S}/lnRCU_systemClock_arm_gd32fx.cpp
         ${S}/lnRunTime_arm_gd32fx.cpp   ${S}/lnSystemTimer_arm_gd32fx.cpp
-        ${S}/start.cpp
+        ${S}/start.cpp ${S}/lnRCU_armgd32.cpp
         ${S}/../boards/${LN_BOARD_NAME}/lnPinMapping.cpp
 )
 IF(LN_ENABLE_USBD)
