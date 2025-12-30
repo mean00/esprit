@@ -5,12 +5,10 @@
 #![allow(clashing_extern_declarations)]
 #![allow(unsafe_op_in_unsafe_fn)]
 //#![feature(lang_items)]
-use core::alloc::{GlobalAlloc, Layout};
 extern crate alloc;
 
 pub type size_t = cty::c_uint;
 
-use core::panic::PanicInfo;
 // C api -> bindgen
 // done manually mod rn_exti_c;
 mod rn_fast_event_c;
@@ -72,7 +70,7 @@ pub use rn_gpio::digital_write;
 pub use rn_gpio::lnPin as pin;
 pub use rn_gpio::pin_mode;
 pub use rn_os_helper::delay_ms;
-
+/*
 pub struct FreeRtosAllocator;
 
 unsafe impl GlobalAlloc for FreeRtosAllocator {
@@ -105,3 +103,4 @@ fn panic(_info: &PanicInfo) -> ! {
     }
     loop {}
 }
+*/
