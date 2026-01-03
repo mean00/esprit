@@ -9,7 +9,7 @@ extern "C" void deadEnd(int code)
 #ifdef __xtensa__
     asm("break 1, 15");
 #else
-#ifdef __riscv__
+#ifdef __riscv
     __asm__("ebreak");
 #endif
 #endif
