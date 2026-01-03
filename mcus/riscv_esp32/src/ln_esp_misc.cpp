@@ -6,7 +6,13 @@
  */
 extern "C" void deadEnd(int code)
 {
+#ifdef __xtensa__
+    asm("break 1, 15");
+#else
+#ifdef __riscv__
     __asm__("ebreak");
+#endif
+#endif
     //    lnSoftSystemReset();
 }
 /**
