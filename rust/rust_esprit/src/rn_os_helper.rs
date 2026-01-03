@@ -60,7 +60,7 @@ pub fn rn_create_task(
     unsafe {
         lnCreateTask(
             Some(trampoline), //Some(entry) as TaskFunction_t,
-            name_as_vec.as_ptr() as *const u8,
+            name_as_vec.as_ptr() as *const cty::c_char,
             stackSize as i32,
             Box::<TrampolineStruct>::into_raw(param_box) as *mut c_void,
             priority as UBaseType_t,
