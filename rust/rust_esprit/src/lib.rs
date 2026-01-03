@@ -5,6 +5,7 @@
 #![allow(clashing_extern_declarations)]
 #![allow(unsafe_op_in_unsafe_fn)]
 //#![feature(lang_items)]
+use cfg_if::cfg_if;
 use core::alloc::{GlobalAlloc, Layout};
 extern crate alloc;
 
@@ -73,6 +74,11 @@ pub use rn_gpio::lnPin as pin;
 pub use rn_gpio::pin_mode;
 pub use rn_os_helper::delay_ms;
 
+unsafe extern "C" {
+    pub fn deadEnd(code: cty::c_int);
+}
+cfg_if! {
+if #[cfg(not(target_os = "espidf"))] {
 pub struct FreeRtosAllocator;
 
 unsafe impl GlobalAlloc for FreeRtosAllocator {
@@ -94,9 +100,6 @@ unsafe extern "C" {
     pub fn vPortFree(pv: *mut cty::c_void);
 }
 
-unsafe extern "C" {
-    pub fn deadEnd(code: cty::c_int);
-}
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -104,4 +107,6 @@ fn panic(_info: &PanicInfo) -> ! {
         deadEnd(55); //: cty::c_int);
     }
     loop {}
+}
+}
 }
