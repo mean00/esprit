@@ -12,7 +12,7 @@ impl uWrite for W {
 
     fn write_str(&mut self, s: &str) -> Result<(), Infallible> {
         unsafe {
-            Logger_chars(s.len() as i32, s.as_ptr());
+            Logger_chars(s.len() as i32, s.as_ptr() as *const cty::c_char);
         }
         Ok(())
     }
