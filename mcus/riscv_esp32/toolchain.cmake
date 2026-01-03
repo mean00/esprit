@@ -13,6 +13,8 @@ MACRO(ADD_IDF_COMPONENT root suffix )
   endforeach()
 ENDMACRO()
 
+MESSAGE(STATUS "Targeting Espressif MCU : ${LN_ESP_MCU}")
+
 ADD_IDF_COMPONENT("" "include" esp_driver_gpio esp_hw_support  soc esp_common esp_rom heap)
 ADD_IDF_COMPONENT("" "include" esp_system hal nvs_flash esp_partition)
 ADD_IDF_COMPONENT("freertos" "" "config/include/freertos" "config/include" "esp_additions/include")
@@ -22,6 +24,11 @@ set(PPATH "${PPATH} -DLN_CUSTOM_FREERTOS=1 ")
 IF(LN_ESP_MCU STREQUAL "ESP32C6") # ESP32C6
   ADD_IDF_COMPONENT("" ""   "soc/esp32c6/register" )
   ADD_IDF_COMPONENT("" "include"  "soc/esp32c6"  riscv )
+  ADD_IDF_COMPONENT("freertos" "" "FreeRTOS-Kernel/portable/riscv/include/freertos" )
+  ADD_IDF_COMPONENT("freertos" ""  "config/riscv/include" )
+ELSEIF(LN_ESP_MCU STREQUAL "ESP32C3") # ESP32C6
+  ADD_IDF_COMPONENT("" ""   "soc/esp32c3/register" )
+  ADD_IDF_COMPONENT("" "include"  "soc/esp32c3"  riscv )
   ADD_IDF_COMPONENT("freertos" "" "FreeRTOS-Kernel/portable/riscv/include/freertos" )
   ADD_IDF_COMPONENT("freertos" ""  "config/riscv/include" )
 ELSEIF(LN_ESP_MCU STREQUAL "ESP32S3") # ESP32C6
