@@ -13,13 +13,27 @@ MACRO(ADD_IDF_COMPONENT root suffix )
   endforeach()
 ENDMACRO()
 
-ADD_IDF_COMPONENT(  "" "include" esp_driver_gpio esp_hw_support "soc/esp32c6" soc riscv esp_common esp_rom heap esp_system hal nvs_flash esp_partition)
-ADD_IDF_COMPONENT(  "freertos" "" "FreeRTOS-Kernel/include" "FreeRTOS-Kernel/include/freertos" "FreeRTOS-Kernel/portable/riscv/include/freertos" )
-ADD_IDF_COMPONENT(  "freertos" "" "config/include/freertos" "config/include" "config/riscv/include" "esp_additions/include")
+ADD_IDF_COMPONENT("" "include" esp_driver_gpio esp_hw_support  soc esp_common esp_rom heap)
+ADD_IDF_COMPONENT("" "include" esp_system hal nvs_flash esp_partition)
+ADD_IDF_COMPONENT("freertos" "" "config/include/freertos" "config/include" "esp_additions/include")
 set(PPATH "${PPATH} -I${IDF_PATH}/components/newlib/platform_include")
 set(PPATH "${PPATH} -I${IDF_PATH}/components/freertos/config/include/freertos/")
-#
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PPATH}" CACHE INTERNAL "")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PPATH}" CACHE INTERNAL "")
+set(PPATH "${PPATH} -DLN_CUSTOM_FREERTOS=1 ")
+IF(LN_ESP_MCU STREQUAL "ESP32C6") # ESP32C6
+  ADD_IDF_COMPONENT("" ""   "soc/esp32c6/register" )
+  ADD_IDF_COMPONENT("" "include"  "soc/esp32c6"  riscv )
+  ADD_IDF_COMPONENT("freertos" "" "FreeRTOS-Kernel/portable/riscv/include/freertos" )
+  ADD_IDF_COMPONENT("freertos" ""  "config/riscv/include" )
+ELSEIF(LN_ESP_MCU STREQUAL "ESP32S3") # ESP32C6
+  ADD_IDF_COMPONENT("" "include" "soc/esp32s3" xtensa )
+  #ADD_IDF_COMPONENT("soc" "" "soc/esp32c6/register" )
+  ADD_IDF_COMPONENT("freertos" ""  "FreeRTOS-Kernel/portable/xtensa/include/freertos" "config/xtensa/include"   )
+  ADD_IDF_COMPONENT("xtensa" "include"  "esp32s3")
+  ADD_IDF_COMPONENT("soc" ""  "esp32s3/register")
+  SET(IDF_CPN_EXTRA "-DCRITICAL_SECTION_EXTRA_ARG=1")
+ENDIF()
+##
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PPATH} ${IDF_CPN_EXTRA}" CACHE INTERNAL "")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PPATH} ${IDF_CPN_EXTRA}" CACHE INTERNAL "")
 
 
