@@ -30,6 +30,11 @@ extern "C"
 {
 #endif
 
+#ifdef __xtensa__
+#include "spinlock.h"
+#define traceISR_EXIT_TO_SCHEDULER()
+#endif
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/queue.h"
