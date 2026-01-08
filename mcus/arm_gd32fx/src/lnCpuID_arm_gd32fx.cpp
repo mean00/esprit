@@ -87,7 +87,7 @@ void lnCpuID::identify()
     // If we have the ram size, it is a gd32 chip. Do something better...
     if (ramSize != 0xffff) // GD
     {
-        _vendor = LN_MCU_GD32;
+        _vendor = LN_VENDOR_GD;
         switch (_flashSize)
         {
         case 128:
@@ -111,12 +111,12 @@ void lnCpuID::identify()
         // can use fast unlock ?
         if (FMC_hasFastUnlock())
         {
-            _vendor = LN_MCU_CH32;
+            _vendor = LN_VENDOR_WCH;
             _chipId = MCU_CH32F1_64K;
         }
         else
         {
-            _vendor = LN_MCU_STM32;
+            _vendor = LN_VENDOR_STM;
             if (_flashSize == 128)
                 _chipId = MCU_STM32_128K;
             else if (_flashSize == 64)

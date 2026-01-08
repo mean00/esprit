@@ -10,15 +10,19 @@ class lnCpuID
   public:
     enum LN_VENDOR
     {
-        LN_MCU_STM32,
-        LN_MCU_GD32,
-        LN_MCU_CH32
+        LN_VENDOR_UNKOWN,
+        LN_VENDOR_STM,
+        LN_VENDOR_GD,
+        LN_VENDOR_WCH,
+        LN_VENDOR_ESP
     };
     enum LN_MCU
     {
+        LN_MCU_UNKNOWN,
         LN_MCU_ARM_F3,
         LN_MCU_ARM_F4,
         LN_MCU_RISCV,
+        LN_MCU_XTENSA,
     };
 
   public:

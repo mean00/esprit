@@ -25,7 +25,7 @@ void lnCpuID::identify()
     _chipId = MCU_CH32V307_128K;
     _ramSize = 32;
     _flashSize = 64;
-    _vendor = lnCpuID::LN_MCU_CH32;
+    _vendor = lnCpuID::LN_VENDOR_WCH;
 }
 /**
  *
