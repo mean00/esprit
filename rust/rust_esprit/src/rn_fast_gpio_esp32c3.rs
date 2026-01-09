@@ -6,7 +6,6 @@ use gpio::{lnGetGpioOffRegister, lnGetGpioOnRegister, lnGpioMode as rnGpioMode};
 //use crate::rn_gpio_esp32_c ;
 //
 //
-
 pub struct rnFastIO {
     on_adr: *mut u32,
     off_adr: *mut u32,

@@ -7,14 +7,14 @@ mod import_gpio {
     pub use crate::rn_gpio_rp2040_c;
     pub use crate::rn_gpio_rp2040_c as gpio;
 }
-#[cfg(feature = "esp32c3")]
+#[cfg(feature = "esp32")]
 mod import_gpio {
     pub use crate::rn_fast_gpio_esp32c3 as rn_fast_gpio;
     pub use crate::rn_gpio_esp32_c;
     pub use crate::rn_gpio_esp32_c as gpio;
 }
 
-#[cfg(not(any(feature = "rp2040", feature = "esp32c3")))]
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 mod import_gpio {
     pub use crate::rn_fast_gpio_bp as rn_fast_gpio;
     pub use crate::rn_gpio_bp_c;
