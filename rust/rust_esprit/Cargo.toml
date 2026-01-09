@@ -15,7 +15,7 @@ cfg-if = "1.0"
 [features]
 cdc = []
 rp2040 = []
-esp32c3 = []
+esp32 = []
 default = []
 
 [lib]

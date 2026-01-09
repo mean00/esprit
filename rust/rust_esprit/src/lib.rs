@@ -15,15 +15,15 @@ use core::panic::PanicInfo;
 // C api -> bindgen
 // done manually mod rn_exti_c;
 mod rn_fast_event_c;
-#[cfg(not(any(feature = "rp2040", feature = "esp32c3")))]
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 pub mod rn_fast_gpio_bp;
-#[cfg(feature = "esp32c3")]
+#[cfg(feature = "esp32")]
 pub mod rn_fast_gpio_esp32c3;
 #[cfg(feature = "rp2040")]
 pub mod rn_fast_gpio_rp2040;
-#[cfg(not(any(feature = "rp2040", feature = "esp32c3")))]
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 pub mod rn_gpio_bp_c;
-#[cfg(feature = "esp32c3")]
+#[cfg(feature = "esp32")]
 pub mod rn_gpio_esp32_c;
 #[cfg(feature = "rp2040")]
 pub mod rn_gpio_rp2040_c;
