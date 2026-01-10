@@ -4,8 +4,8 @@
 #include "lnGPIO_pins.h"
 extern "C"
 {
-#include "soc/gpio_periph.h"
 #include "hal/gpio_types.h"
+#include "soc/gpio_periph.h"
 #include "soc/gpio_reg.h"
 }
 /**
@@ -34,7 +34,8 @@ void lnPinMode(const lnPin pin, const lnGpioMode mode, const int speedInMhz)
         break;
     case lnOUTPUT_OPEN_DRAIN:
         io_conf.mode = GPIO_MODE_OUTPUT_OD;
-        io_conf.pull_up_en = GPIO_PULLUP_ENABLE; // no sure ???
+        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;     // no sure ???
+        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE; // no sure ???
         break;
     case lnALTERNATE_PP:
     case lnALTERNATE_OD:
@@ -79,19 +80,19 @@ void lnDigitalToggle(const lnPin pin)
  */
 void lnOpenDrainClose(const lnPin pin, const bool close) // if true, the open drain is passing, else it is hiz
 {
-    xAssert(0);
+    gpio_set_level((gpio_num_t)pin, !close);
 }
 /**
  * Assume we'll only use lower pins (0..31)
  */
- volatile uint32_t* const GPIO_SET_REG = (volatile uint32_t*)GPIO_OUT_W1TS_REG;
- volatile uint32_t* const GPIO_CLR_REG = (volatile uint32_t*)GPIO_OUT_W1TC_REG;
+volatile uint32_t *const GPIO_SET_REG = (volatile uint32_t *)GPIO_OUT_W1TS_REG;
+volatile uint32_t *const GPIO_CLR_REG = (volatile uint32_t *)GPIO_OUT_W1TC_REG;
 lnFastIO::lnFastIO(lnPin p)
 {
-     lnPinMode(p, lnOUTPUT);
-     _on = GPIO_SET_REG;
-     _off = GPIO_CLR_REG;
-     _bit =  1<<(uint32_t )p;
+    lnPinMode(p, lnOUTPUT);
+    _on = GPIO_SET_REG;
+    _off = GPIO_CLR_REG;
+    _bit = 1 << (uint32_t)p;
 }
 
 //  EOF
