@@ -27,7 +27,7 @@ void lnCpuID::identify()
     _chipId = MCU_GD32VF103_128K;
     _ramSize = 32;
     _flashSize = 64;
-    _vendor = lnCpuID::LN_MCU_GD32;
+    _vendor = lnCpuID::LN_VENDOR_GD32;
 }
 /**
  *
