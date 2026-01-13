@@ -15,7 +15,7 @@ ENDMACRO()
 
 MESSAGE(STATUS "Targeting Espressif MCU : ${LN_ESP_MCU}")
 
-ADD_IDF_COMPONENT("" "include" esp_driver_gpio esp_hw_support  soc esp_common esp_rom heap)
+ADD_IDF_COMPONENT("" "include" esp_driver_spi esp_driver_gpio esp_hw_support  soc esp_common esp_rom heap)
 ADD_IDF_COMPONENT("" "include" esp_system hal nvs_flash esp_partition spi_flash)
 ADD_IDF_COMPONENT("freertos" "" "config/include/freertos" "config/include" "esp_additions/include")
 set(PPATH "${PPATH} -I${IDF_PATH}/components/newlib/platform_include")
