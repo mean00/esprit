@@ -177,7 +177,7 @@ bool lnFMC::eraseCh32(const uint32_t startAddress, int sizeInKBytes)
  */
 bool lnFMC::erase(const uint32_t startAddress, int sizeInKBytes)
 {
-    if (lnCpuID::vendor() == lnCpuID::LN_MCU_CH32)
+    if (lnCpuID::vendor() == lnCpuID::LN_VENDOR_WCH)
         return eraseCh32(startAddress, sizeInKBytes);
     return eraseStm(startAddress, sizeInKBytes);
 }

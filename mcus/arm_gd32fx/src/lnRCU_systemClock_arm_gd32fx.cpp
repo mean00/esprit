@@ -225,7 +225,7 @@ void lnInitSystemClock()
 
     // it it is a STM32 chip, increase flash wait state
     // GD has ram, so  0 wait state is fine
-    if (lnCpuID::vendor() != lnCpuID::LN_MCU_GD32)
+    if (lnCpuID::vendor() != lnCpuID::LN_VENDOR_GD)
     {
         int ws = 0;
         if (CLOCK_TARGET_SYSCLOCK > 48)

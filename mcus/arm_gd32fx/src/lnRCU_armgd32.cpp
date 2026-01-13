@@ -53,7 +53,7 @@ void lnPeripherals::enableUsb48Mhz()
     int x = 0;
     switch (lnCpuID::vendor())
     {
-    case lnCpuID::LN_MCU_STM32:
+    case lnCpuID::LN_VENDOR_STM:
         // STM32F1 chip only supports div by 1 and div by 1.5, i.e. x=0 or 1
         switch (scaler)
         {
@@ -70,7 +70,7 @@ void lnPeripherals::enableUsb48Mhz()
         break;
         break;
         // only GD32 has more dividers
-    case lnCpuID::LN_MCU_GD32:
+    case lnCpuID::LN_VENDOR_GD:
         switch (scaler)
         {
         case 3:

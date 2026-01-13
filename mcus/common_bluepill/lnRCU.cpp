@@ -194,7 +194,7 @@ void lnPeripherals::setAdcDivider(lnADC_DIVIDER divider)
     int r = (int)divider;
     if (r & 4)
     {
-        if (lnCpuID::vendor() == lnCpuID::LN_MCU_GD32) // only up to 8
+        if (lnCpuID::vendor() == lnCpuID::LN_VENDOR_GD) // only up to 8
         {
             val |= LN_RCU_ADC_PRESCALER_HIGHBIT;
             val |= LN_RCU_ADC_PRESCALER_LOWBIT(r & 3);
