@@ -70,7 +70,7 @@ void lnPeripherals::enableUsb48Mhz()
     // careful, the usb clock must be off !
     int scaler = (2 * lnPeripherals::getClock(pSYSCLOCK)) / 48000000;
     int x = 0;
-    xAssert(lnCpuID::vendor() == lnCpuID::LN_MCU_CH32); // For riscv chip CH32V303/..
+    xAssert(lnCpuID::vendor() == lnCpuID::LN_VENDOR_WCH); // For riscv chip CH32V303/..
     switch (scaler)
     {
     case 2:
