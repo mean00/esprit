@@ -1,10 +1,9 @@
 [package] 
 authors = ["mean00 <mean00@gmail.com>"]
-edition = "2024"
 readme = "README.md"
 name = "rust_esprit"
 version = "0.0.0"
-
+edition = "2024"
 
 [dependencies]
 cty = "0.2.2"
@@ -23,18 +22,3 @@ name = "rust_esprit"
 path = "src/lib.rs"
 crate-type = ["rlib"] # Creates static lib
 
-[profile.dev]
-codegen-units = 1
-debug = true
-lto = true
-opt-level       = 's'
-
-[profile.release]
-codegen-units = 1
-debug = false
-lto = true
-opt-level       = 's'
-
-[profile.dev.package."*"]
-codegen-units   = 1
-opt-level       = "s"
