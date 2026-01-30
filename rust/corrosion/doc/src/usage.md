@@ -47,7 +47,9 @@ include(FetchContent)
 FetchContent_Declare(
         Corrosion
         GIT_REPOSITORY https://github.com/corrosion-rs/corrosion.git
-        GIT_TAG v0.5 # Optionally specify a commit hash, version tag or branch here
+        # v0.6 will be updated to point to the latest patch version. 
+        # Use v0.6.<patch_version> or the commit hash to prevent such auto updates.
+        GIT_TAG v0.6
 )
 # Set any global configuration variables such as `Rust_TOOLCHAIN` before this line!
 FetchContent_MakeAvailable(Corrosion)
@@ -165,8 +167,6 @@ them **before** `find_package(Corrosion REQUIRED)`.
 - `Rust_TOOLCHAIN:STRING` - Specify a named rustup toolchain to use. Changes to this variable
   resets all other options. Default: If the first-found `rustc` is a `rustup` proxy, then the default
   rustup toolchain (see `rustup show`) is used. Otherwise, the variable is unset by default.
-- `Rust_ROOT:STRING` - CMake provided. Path to a Rust toolchain to use. This is an alternative if
-  you want to select a specific Rust toolchain, but it's not managed by rustup. Default: Nothing
 - `Rust_COMPILER:STRING` - Path to `rustc`, which should be used for compiling or for toolchain
   detection (if it is a `rustup` proxy). Default: The `rustc` in the first-found toolchain, either
   from `rustup`, or from a toolchain available in the user's `PATH`.
@@ -183,6 +183,11 @@ them **before** `find_package(Corrosion REQUIRED)`.
 - `CORROSION_TOOLS_RUST_TOOLCHAIN:STRING`: Specify a different toolchain (e.g. `stable`) to use for compiling helper 
    tools such as `cbindgen` or `cxxbridge`. This can be useful when you want to compile your project with an 
    older rust version (e.g. for checking the MSRV), but you can build build-tools with a newer installed rust version.
+- `CORROSION_HOST_TARGET_LINKER`: This cache variable is currently **only used when targeting iOS** and allows the user
+    to select a linker-driver (e.g. `/usr/bin/cc`) for linking artifacts for the host target. This option is useful
+   when the build contains build-scripts or proc-macros (which run on the host target) and the default value is not
+   working.
+
 
 #### Enable Convenience Options
 

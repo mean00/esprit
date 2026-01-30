@@ -31,6 +31,19 @@ option(
     OFF
 )
 
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    if(DEFINED CORROSION_HOST_TARGET_LINKER)
+        set(_corrosion_host_linker "${CORROSION_HOST_TARGET_LINKER}")
+        message(DEBUG "Using user provided CORROSION_HOST_TARGET_LINKER: ${CORROSION_HOST_TARGET_LINKER}")
+    else()
+        set(_corrosion_host_linker "/usr/bin/cc")
+    endif()
+    set(CORROSION_HOST_TARGET_LINKER "${_corrosion_host_linker}"
+        CACHE STRING
+        "The linker-driver corrosion will use to compile host-targets. Currently only used when cross-compiling for iOS."
+        FORCE)
+endif()
+
 find_package(Rust REQUIRED)
 
 if(CMAKE_GENERATOR MATCHES "Visual Studio"
@@ -114,6 +127,26 @@ function(_corrosion_bin_target_suffix target_name out_var_suffix)
     set(${out_var_suffix} "${_suffix}" PARENT_SCOPE)
 endfunction()
 
+function(_handle_output_directory_genex input_path config_type output_path)
+    if("${config_type}" STREQUAL "")
+        # Prevent new path from being `dir//file`, since that causes issues with the
+        # file dependency.
+        string(REPLACE "/\$<CONFIG>" "${config_type}" curr_out_dir "${input_path}")
+        string(REPLACE "\$<CONFIG>" "${config_type}" curr_out_dir "${curr_out_dir}")
+    else()
+        string(REPLACE "\$<CONFIG>" "${config_type}" curr_out_dir "${input_path}")
+    endif()
+    string(GENEX_STRIP "${curr_out_dir}" stripped_out_dir)
+    if("${stripped_out_dir}" STREQUAL "${curr_out_dir}")
+        set("${output_path}" "${curr_out_dir}" PARENT_SCOPE)
+    else()
+        unset("${output_path}" PARENT_SCOPE)
+        message(WARNING "Encountered output directory path with unsupported genex. "
+                "Output dir: `${curr_out_dir}`"
+                "Note: Corrosion only supports the `\$<CONFIG>` generator expression for output directories.")
+    endif()
+endfunction()
+
 # Do not call this function directly!
 #
 # This function should be called deferred to evaluate target properties late in the configure stage.
@@ -159,12 +192,8 @@ function(_corrosion_set_imported_location_deferred target_name base_property out
         else()
             set(curr_out_dir "${CMAKE_CURRENT_BINARY_DIR}")
         endif()
-        string(REPLACE "\$<CONFIG>" "${config_type}" curr_out_dir "${curr_out_dir}")
-        message(DEBUG "Setting ${base_property}_${config_type_upper} for target ${target_name}"
-                " to `${curr_out_dir}/${filename}`.")
-
-        string(GENEX_STRIP "${curr_out_dir}" stripped_out_dir)
-        if(NOT ("${stripped_out_dir}" STREQUAL "${curr_out_dir}"))
+        _handle_output_directory_genex("${curr_out_dir}" "${config_type}" sanitized_out_dir)
+        if(NOT DEFINED sanitized_out_dir)
             message(FATAL_ERROR "${output_directory_property} for target ${output_dir_prop_target_name} "
                     "contained an unexpected Generator expression. Output dir: `${curr_out_dir}`"
                 "Note: Corrosion only supports the `\$<CONFIG>` generator expression for output directories.")
@@ -174,9 +203,9 @@ function(_corrosion_set_imported_location_deferred target_name base_property out
         set_property(
             TARGET ${target_name}
             PROPERTY "${base_property}_${config_type_upper}"
-                "${curr_out_dir}/${filename}"
+                "${sanitized_out_dir}/${filename}"
         )
-        set(base_output_directory "${curr_out_dir}")
+        set(base_output_directory "${sanitized_out_dir}")
     endforeach()
 
     if(NOT COR_IS_MULTI_CONFIG)
@@ -185,13 +214,13 @@ function(_corrosion_set_imported_location_deferred target_name base_property out
         else()
             set(base_output_directory "${CMAKE_CURRENT_BINARY_DIR}")
         endif()
-        string(REPLACE "\$<CONFIG>" "${CMAKE_BUILD_TYPE}" base_output_directory "${base_output_directory}")
-        string(GENEX_STRIP "${base_output_directory}" stripped_out_dir)
-        if(NOT ("${stripped_out_dir}" STREQUAL "${base_output_directory}"))
+        _handle_output_directory_genex("${base_output_directory}" "${CMAKE_BUILD_TYPE}" sanitized_output_directory)
+        if(NOT DEFINED sanitized_output_directory)
             message(FATAL_ERROR "${output_dir_prop_target_name} for target ${output_dir_prop_target_name} "
-                    "contained an unexpected Generator expression. Output dir: `${base_output_directory}`"
+                    "contained an unexpected Generator expression. Output dir: `${base_output_directory}`."
                     "Note: Corrosion only supports the `\$<CONFIG>` generator expression for output directories.")
         endif()
+        set(base_output_directory "${sanitized_output_directory}")
     endif()
 
     message(DEBUG "Setting ${base_property} for target ${target_name}"
@@ -259,10 +288,15 @@ function(_corrosion_copy_byproduct_deferred target_name output_dir_prop_names ca
         if(output_dir_curr_config)
             set(curr_out_dir "${output_dir_curr_config}")
         elseif(output_dir)
-            # Fallback to `output_dir` if specified
-            # Note: Multi-configuration generators append a per-configuration subdirectory to the
-            # specified directory unless a generator expression is used (from CMake documentation).
-            set(curr_out_dir "${output_dir}/${config_type}")
+            string(GENEX_STRIP "${output_dir}" output_dir_no_genex)
+            # Only add config dir if there is no genex in here. See
+            # https://cmake.org/cmake/help/latest/prop_tgt/RUNTIME_OUTPUT_DIRECTORY.html
+            # Logic duplicated from _corrosion_set_imported_location_deferred
+            if(output_dir STREQUAL output_dir_no_genex)
+                set(curr_out_dir "${output_dir}/${config_type}")
+            else()
+                set(curr_out_dir "${output_dir}")
+            endif()
         else()
             # Fallback to the default directory. We do not append the configuration directory here
             # and instead let CMake do this, since otherwise the resolving of dynamic library
@@ -387,6 +421,7 @@ function(_corrosion_add_library_target)
     set(is_windows_gnu "")
     set(is_windows_msvc "")
     set(is_macos "")
+    set(is_ios "")
     if(Rust_CARGO_TARGET_OS STREQUAL "windows")
         set(is_windows TRUE)
         if(Rust_CARGO_TARGET_ENV STREQUAL "msvc")
@@ -396,6 +431,8 @@ function(_corrosion_add_library_target)
         endif()
     elseif(Rust_CARGO_TARGET_OS STREQUAL "darwin")
         set(is_macos TRUE)
+    elseif(Rust_CARGO_TARGET_OS STREQUAL "ios")
+        set(is_ios true)
     endif()
 
     # target file names
@@ -409,7 +446,7 @@ function(_corrosion_add_library_target)
 
     if(is_windows)
         set(dynamic_lib_name "${lib_name}.dll")
-    elseif(is_macos)
+    elseif(is_macos OR is_ios)
         set(dynamic_lib_name "lib${lib_name}.dylib")
     else()
         set(dynamic_lib_name "lib${lib_name}.so")
@@ -686,7 +723,8 @@ function(_add_cargo_build out_cargo_build_out_dir)
     set(cargo_target_option "--target=$<IF:${hostbuild_override},${_CORROSION_RUST_CARGO_HOST_TARGET},${_CORROSION_RUST_CARGO_TARGET}>")
 
     # The target may be a filepath to custom target json file. For host targets we assume that they are built-in targets.
-    _corrosion_strip_target_triple(${_CORROSION_RUST_CARGO_TARGET} stripped_target_triple)
+    _corrosion_strip_target_triple("${_CORROSION_RUST_CARGO_TARGET}" stripped_target_triple)
+    _corrosion_strip_target_triple("${_CORROSION_RUST_CARGO_TARGET_UPPER}" stripped_target_triple_upper)
     set(target_artifact_dir "$<IF:${hostbuild_override},${_CORROSION_RUST_CARGO_HOST_TARGET},${stripped_target_triple}>")
 
     set(flags_genex "$<GENEX_EVAL:$<TARGET_PROPERTY:${target_name},INTERFACE_CORROSION_CARGO_FLAGS>>")
@@ -754,15 +792,30 @@ function(_add_cargo_build out_cargo_build_out_dir)
         # This variable is read by cc-rs (often used in build scripts) to determine the c-compiler.
         # It can still be overridden if the user sets the non underscore variant via the environment variables
         # on the target.
-        list(APPEND corrosion_cc_rs_flags "CC_${_CORROSION_RUST_CARGO_TARGET_UNDERSCORE}=${CMAKE_C_COMPILER}")
+        list(APPEND corrosion_cc_rs_flags "CC_${stripped_target_triple}=${CMAKE_C_COMPILER}")
     endif()
     if(CMAKE_CXX_COMPILER)
-        list(APPEND corrosion_cc_rs_flags "CXX_${_CORROSION_RUST_CARGO_TARGET_UNDERSCORE}=${CMAKE_CXX_COMPILER}")
+        list(APPEND corrosion_cc_rs_flags "CXX_${stripped_target_triple}=${CMAKE_CXX_COMPILER}")
     endif()
     # cc-rs doesn't seem to support `llvm-ar` (commandline syntax), wo we might as well just use
     # the default AR.
     if(CMAKE_AR AND NOT (Rust_CARGO_TARGET_ENV STREQUAL "msvc"))
-        list(APPEND corrosion_cc_rs_flags "AR_${_CORROSION_RUST_CARGO_TARGET_UNDERSCORE}=${CMAKE_AR}")
+        list(APPEND corrosion_cc_rs_flags "AR_${stripped_target_triple}=${CMAKE_AR}")
+    endif()
+
+    # When using XCode to target iOS / iOSSimulator, `cc` will be a compiler that targets iOS.
+    # (Presumably this is because XCode modifies PATH).
+    # This causes linker errors, because Rust compiles build-scripts and proc-macros for the host-platform, and
+    # assumes `cc` is a valid linker driver for the host platform (but in this case `cc` targets iOS).
+    # To work around this we explicitly set the linker for the host platform.
+    unset(cargo_host_target_linker)
+    if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        string(TOUPPER "${Rust_CARGO_HOST_TARGET_CACHED}" host_target_upper)
+        string(REPLACE "-" "_" host_target_upper_underscore "${host_target_upper}")
+        set(cargo_host_target_linker "CARGO_TARGET_${host_target_upper_underscore}_LINKER=$CACHE{CORROSION_HOST_TARGET_LINKER}")
+        message(DEBUG "Setting `${cargo_host_target_linker}` for target ${target_name} to workaround a hostbuild"
+            " issue when building targets for iOS."
+        )
     endif()
 
     # Since we instruct cc-rs to use the compiler found by CMake, it is likely one that requires also
@@ -801,7 +854,7 @@ function(_add_cargo_build out_cargo_build_out_dir)
         set(default_linker "$<IF:$<BOOL:${target_uses_cxx}>,${CMAKE_CXX_COMPILER},${CMAKE_C_COMPILER}>")
     endif()
     # Used to set a linker for a specific target-triple.
-    set(cargo_target_linker_var "CARGO_TARGET_${_CORROSION_RUST_CARGO_TARGET_UPPER}_LINKER")
+    set(cargo_target_linker_var "CARGO_TARGET_${stripped_target_triple_upper}_LINKER")
     set(linker "$<IF:${explicit_linker_defined},${explicit_linker_property},${default_linker}>")
     set(cargo_target_linker $<$<BOOL:${linker}>:${cargo_target_linker_var}=${linker}>)
 
@@ -816,6 +869,7 @@ function(_add_cargo_build out_cargo_build_out_dir)
     endif()
 
     message(DEBUG "TARGET ${target_name} produces byproducts ${build_byproducts}")
+    message(DEBUG "corrosion_cc_rs_flags: ${corrosion_cc_rs_flags}")
 
     add_custom_target(
         _cargo-build_${target_name}
@@ -825,6 +879,7 @@ function(_add_cargo_build out_cargo_build_out_dir)
                 "${build_env_variable_genex}"
                 "${global_rustflags_genex}"
                 "${cargo_target_linker}"
+                "${cargo_host_target_linker}"
                 "${corrosion_cc_rs_flags}"
                 "${cargo_library_path}"
                 "CORROSION_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}"
@@ -852,8 +907,10 @@ function(_add_cargo_build out_cargo_build_out_dir)
         # to determine the correct target directory, depending on if the hostbuild target property is
         # set or not.
         # BYPRODUCTS  "${cargo_build_dir}/${build_byproducts}"
-        # The build is conducted in the directory of the Manifest, so that configuration files such as
-        # `.cargo/config.toml` or `toolchain.toml` are applied as expected.
+        
+        # Set WORKING_DIRECTORY to the directory containing the manifest, so that configuration files
+        # such as `.cargo/config.toml` or `toolchain.toml` are applied as expected. Cargo searches for
+        # configuration files by walking upward from the current directory.
         WORKING_DIRECTORY "${workspace_toml_dir}"
         ${cor_uses_terminal}
         COMMAND_EXPAND_LISTS
@@ -884,7 +941,10 @@ function(_add_cargo_build out_cargo_build_out_dir)
         COMMAND
             "${cargo_bin}" clean ${cargo_target_option}
             -p ${package_name} --manifest-path "${path_to_toml}"
-        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/${build_dir}"
+        # Set WORKING_DIRECTORY to the directory containing the manifest, so that configuration files
+        # such as `.cargo/config.toml` or `toolchain.toml` are applied as expected. Cargo searches for
+        # configuration files by walking upward from the current directory.
+        WORKING_DIRECTORY "${workspace_toml_dir}"
         ${cor_uses_terminal}
     )
 
@@ -1211,8 +1271,31 @@ function(corrosion_link_libraries target_name)
         )
 
         if (TARGET "${library}")
+            # This works fine, except when compiling for ios. See https://cmake.org/pipermail/cmake/2016-March/063050.html
+            # XCODE_EMIT_EFFECTIVE_PLATFORM_NAME=OFF is supposed to prevent emitting EFFECTIVE_PLATFORM_NAME, but even
+            # with CMake 4.1 and the variable set to off EFFECTIVE_PLATFORM_NAME still leaks into generator expressions,
+            # and is not correctly replaced at build time
+            set(linker_dir "$<TARGET_LINKER_FILE_DIR:${library}>")
+            # Probably should also affect other apple OSs with a simulator
+            if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+                unset(platform_name)
+                message(CHECK_START "corrosion_link_libraries: Attempting to replace EFFECTIVE_PLATFORM_NAME")
+                if(CMAKE_OSX_SYSROOT MATCHES "iphoneos")
+                    set(platform_name "-iphoneos")
+                elseif(CMAKE_OSX_SYSROOT MATCHES "iphonesimulator")
+                    set(platform_name "-iphonesimulator")
+                else()
+                    # Todo: CMAKE_OSX_SYSROOT can be not set - how do we handle that?
+                    message(CHECK_FAIL "Failed to determine platform name for iOS target from sysroot ${CMAKE_OSX_SYSROOT}")
+                endif()
+                if(DEFINED platform_name)
+                    # This is a hack to fix $EFFECTIVE_PLATFORM_NAME not expanding in TARGET_LINKER_FILE_DIR
+                    set(linker_dir "$<PATH:REPLACE_FILENAME,${linker_dir},$<CONFIG>${platform_name}>")
+                    message(CHECK_PASS "done")
+                endif()
+            endif()
             corrosion_add_target_local_rustflags(${target_name}
-                "-L$<TARGET_LINKER_FILE_DIR:${library}>"
+                "-L${linker_dir}"
                 "-l$<TARGET_LINKER_FILE_BASE_NAME:${library}>"
             )
             add_dependencies(_cargo-build_${target_name} ${library})
@@ -1828,9 +1911,11 @@ function(corrosion_add_cxxbridge cxx_target)
 
     if (TARGET "${_arg_CRATE}-static")
         target_link_libraries(${cxx_target} PRIVATE "${_arg_CRATE}-static")
+        target_link_libraries("${_arg_CRATE}-static" INTERFACE ${cxx_target})
     endif()
     if (TARGET "${_arg_CRATE}-shared")
         target_link_libraries(${cxx_target} PRIVATE "${_arg_CRATE}-shared")
+        target_link_libraries("${_arg_CRATE}-shared" INTERFACE ${cxx_target})
     endif()
 
     file(MAKE_DIRECTORY "${generated_dir}/include/rust")
@@ -2139,6 +2224,7 @@ function(corrosion_experimental_cbindgen)
             TARGET="${cbindgen_target_triple}"
             # cbindgen invokes cargo-metadata and checks the CARGO environment variable
             CARGO="${_CORROSION_CARGO}"
+            RUSTC="${_CORROSION_RUSTC}"
             "${cbindgen}"
                     --output "${generated_header}"
                     --crate "${rust_cargo_package}"
@@ -2264,4 +2350,3 @@ macro(_corrosion_arg_passthrough_helper arg_name prefix var_name)
 endmacro()
 
 list(POP_BACK CMAKE_MESSAGE_CONTEXT)
-
