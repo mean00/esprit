@@ -72,6 +72,7 @@ pub use rn_gpio::digital_toggle;
 pub use rn_gpio::digital_write;
 pub use rn_gpio::lnPin as pin;
 pub use rn_gpio::pin_mode;
+pub use rn_i2c::rnI2C as i2c;
 pub use rn_os_helper::delay_ms;
 
 unsafe extern "C" {

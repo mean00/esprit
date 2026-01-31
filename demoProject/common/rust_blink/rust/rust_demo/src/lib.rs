@@ -1,5 +1,7 @@
 #![no_std]
 //use rnarduino::rn_os_helper;
+use rust_esprit::delay_ms;
+use rust_esprit::{GpioMode::lnOUTPUT, digital_write, pin_mode};
 use rust_esprit::{lnLogger, lnLogger_init};
 
 lnLogger_init!();
@@ -17,13 +19,13 @@ const PIN: rust_esprit::pin = rust_esprit::pin::PB6;
 extern "C" fn user_init() {
     lnLogger!("Hello there !\n");
 
-    rust_esprit::pin_mode(PIN, rust_esprit::GpioMode::lnOUTPUT);
+    pin_mode(PIN, lnOUTPUT);
 
     let mut on: bool = false;
     for _i in 0..5 {
-        rust_esprit::digital_write(PIN, on);
+        digital_write(PIN, on);
         on = !on;
-        rust_esprit::delay_ms(1000);
+        delay_ms(1000);
     }
 
     lnLogger!("--end--\n");
