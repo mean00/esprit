@@ -21,7 +21,7 @@ void loop()
 {
     Logger("ISC Scannner demo...\n");
 
-    lnI2C *i2c = new lnI2C(1, SPEED); // USING I2C2!!
+    lnI2C *i2c = lnI2C::create(1, SPEED); // USING I2C2!!
     i2c->begin();
     while (1)
     {

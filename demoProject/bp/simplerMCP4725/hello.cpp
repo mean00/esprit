@@ -23,7 +23,7 @@ int val;
 void loop()
 {
 
-    i2c = new lnI2C(1, 200 * 1000); // I2C2
+    lnI2C *i2c = lnI2C::create(1, 100000); // USING I2C2!!
 
     i2c->begin();
 

@@ -21,7 +21,7 @@ void loop()
 {
     Logger("MCP23017 I2C demo...\n");
 
-    lnI2C *i2c = new lnI2C(1, 400000);
+    lnI2C *i2c = lnI2C::create(1, 100000); // USING I2C2!!
     i2c->begin(0x20);
 
     lnMcp23017 *mcp = new lnMcp23017(i2c, PB5, 0x20);
