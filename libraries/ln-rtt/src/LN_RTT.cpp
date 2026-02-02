@@ -38,11 +38,12 @@ void LN_RTT_Init(void)
 uint32_t LN_RTT_Write(uint32_t bufferIndex, const uint8_t *buffer, uint32_t size)
 {
     xAssert(bufferIndex == 0);
-    lnRTTChannel *chan = &(my_rtt.channel);
+    volatile lnRTTChannel *chan = &(my_rtt.channel);
     uint32_t write_offset = chan->write_offset;
+    uint32_t read_offset = chan->read_offset;
     uint32_t done = 0;
     // clamp the size to the available size
-    uint32_t total_avail = (chan->read_offset + chan->buffer_size - write_offset - 1) & (chan->buffer_size - 1);
+    uint32_t total_avail = (read_offset + chan->buffer_size - write_offset - 1) & (chan->buffer_size - 1);
     if (!total_avail)
     {
         return 0;
@@ -53,7 +54,7 @@ uint32_t LN_RTT_Write(uint32_t bufferIndex, const uint8_t *buffer, uint32_t size
     }
 
     //
-    if (chan->write_offset >= chan->read_offset)
+    if (chan->write_offset >= read_offset)
     {
         // right part
         int avail = chan->buffer_size - write_offset;
@@ -75,7 +76,7 @@ uint32_t LN_RTT_Write(uint32_t bufferIndex, const uint8_t *buffer, uint32_t size
     // left part
     if (size)
     {
-        int avail = chan->read_offset - write_offset;
+        int avail = read_offset - write_offset;
         int chunk = size;
         if (chunk > avail)
         {
@@ -91,6 +92,7 @@ uint32_t LN_RTT_Write(uint32_t bufferIndex, const uint8_t *buffer, uint32_t size
             write_offset &= chan->buffer_size - 1;
         }
     }
+    asm volatile("" ::: "memory"); // barrier
     chan->write_offset = write_offset;
     return done;
 }
