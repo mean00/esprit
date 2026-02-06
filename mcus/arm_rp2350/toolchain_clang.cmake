@@ -110,7 +110,7 @@ IF(NOT DEFINED LN_EXT)
 
   # M0+
 
-  SET(MINI_SYSROOT "${PLATFORM_CLANG_PATH}/../lib/clang-runtimes/arm-none-eabi/armv8m.main_hard_fp_unaligned/" CACHE INTERNAL "")
+  SET(MINI_SYSROOT "${PLATFORM_CLANG_PATH}/../lib/clang-runtimes/arm-none-eabi/" CACHE INTERNAL "")
   SET(GD32_LIBC "-L${MINI_SYSROOT}/lib " CACHE INTERNAL "")
   SET(GD32_MCU "-mcpu=cortex-m33 -Wno-arm-interrupt-vfp-clobber   -mfloat-abi=hard -mfpu=fpv5-sp-d16 --target=armv8m-none-eabi -DPICO_RP2350=1  -DPICO_PLATFORM=rp2350 -DUSE_RP2350 -DPICO_RP2350_USB_FAST_IRQ=0  " CACHE INTERNAL "")
   APX(GD32_MCU PICO_BOARD "${PICO_BOARD}")
@@ -130,7 +130,7 @@ IF(NOT DEFINED LN_EXT)
   SET(GD32_RP_FLAGS "-include ${ESPRIT_ROOT}/mcus/arm_rp2350/include/pico_flags.h")
   SET(GD32_RP_FLAGS "${GD32_RP_FLAGS} -I${PICO_SDK_PATH} -I${PICO_SDK_PATH}/src/common/pico_base_headers/include/")
 
-  FOREACH(h pico_platform_panic pico_platform_compiler pico_platform_sections pico_platform_panic hardware_sync hardware_base hardware_base_sync hardware_sync_spin_lock)
+  FOREACH(h pico_platform_panic pico_platform_compiler pico_platform_sections pico_platform_panic hardware_sync hardware_base hardware_base_sync hardware_sync_spin_lock hardware_rcp)
     SET(GD32_RP_FLAGS "${GD32_RP_FLAGS} -I${PICO_SDK_PATH}/src/rp2_common/${h}/include")
   ENDFOREACH()
   FOREACH(h pico_platform hardware_structs hardware_regs)
@@ -149,7 +149,7 @@ IF(NOT DEFINED LN_EXT)
   SET(GD32_LD_FLAGS " -fuse-ld=lld  -nostdlib ${GD32_SPECS}  ${GD32_MCU}  ${GD32_LD_EXTRA}  ${GD32_LIBC}" CACHE INTERNAL "")
   SET(GD32_LD_LIBS " -Wl,--gc-sections -Wl,--gdb-index " CACHE INTERNAL "")
   #
-  SET(CLANG_LINKER_OPT "${MINI_SYSROOT}/lib/libclang_rt.builtins.a" CACHE INTERNAL "")
+  #SET(CLANG_LINKER_OPT "${MINI_SYSROOT}/lib/libclang_rt.builtins.a" CACHE INTERNAL "")
   #
   SET(CMAKE_CXX_LINK_EXECUTABLE    "<CMAKE_LINKER>  <CMAKE_CXX_LINK_FLAGS>  <LINK_FLAGS> ${LN_LTO}    -Wl,--start-group ${CRT} ${SB2} <OBJECTS>  <LINK_LIBRARIES>  -Wl,--end-group -lc  -Wl,-Map,<TARGET>.map   -o <TARGET> ${GD32_LD_FLAGS} ${GD32_LD_LIBS}  ${CLANG_LINKER_OPT} -e _entry_point" CACHE INTERNAL "")
   SET(CMAKE_EXECUTABLE_SUFFIX_C .elf CACHE INTERNAL "")

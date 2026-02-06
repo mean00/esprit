@@ -104,7 +104,7 @@ IF(NOT DEFINED LN_EXT)
 
   # M0+
 
-  SET(MINI_SYSROOT "${PLATFORM_CLANG_PATH}/../lib/clang-runtimes/arm-none-eabi/armv6m_soft_nofp/" CACHE INTERNAL "")
+  SET(MINI_SYSROOT "${PLATFORM_CLANG_PATH}/../lib/clang-runtimes/arm-none-eabi/" CACHE INTERNAL "")
   SET(GD32_LIBC "-L${MINI_SYSROOT}/lib " CACHE INTERNAL "")
   SET(GD32_MCU "-mcpu=cortex-m0plus --target=armv6m-none-eabi -DUSE_RP2040  -DPICO_RP2040_USB_FAST_IRQ=0  " CACHE INTERNAL "")
 
@@ -123,7 +123,7 @@ IF(NOT DEFINED LN_EXT)
   SET(GD32_LD_FLAGS " -fuse-ld=lld  -nostdlib ${GD32_SPECS}  ${GD32_MCU}  ${GD32_LD_EXTRA}  ${GD32_LIBC}" CACHE INTERNAL "")
   SET(GD32_LD_LIBS " -Wl,--gc-sections -Wl,--gdb-index " CACHE INTERNAL "")
   #
-  SET(CLANG_LINKER_OPT "${MINI_SYSROOT}/lib/libclang_rt.builtins.a" CACHE INTERNAL "")
+  #SET(CLANG_LINKER_OPT "${MINI_SYSROOT}/lib/libclang_rt.builtins.a" CACHE INTERNAL "")
   #
   set(CMAKE_CXX_LINK_EXECUTABLE    "<CMAKE_LINKER>  <CMAKE_CXX_LINK_FLAGS>  <LINK_FLAGS> ${LN_LTO}    -Wl,--start-group ${CRT} ${SB2} <OBJECTS>  <LINK_LIBRARIES>  -Wl,--end-group -lc  -Wl,-Map,<TARGET>.map   -o <TARGET> ${GD32_LD_FLAGS} ${GD32_LD_LIBS}  ${CLANG_LINKER_OPT} -e _entry_point" CACHE INTERNAL "")
   SET(CMAKE_EXECUTABLE_SUFFIX_C .elf CACHE INTERNAL "")
