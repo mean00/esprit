@@ -7,7 +7,7 @@ edition = "2024"
 
 [dependencies]
 cty = "0.2.2"
-ufmt = "0.2.0"
+ufmt = { version = "0.2.0", default-features = false }
 heapless = { version = "0.7.17", features = ["ufmt-impl"] }
 cfg-if = "1.0"
 

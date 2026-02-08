@@ -99,7 +99,8 @@ IF(NOT DEFINED LN_EXT)
   #
   SET(GD32_DEBUG_FLAGS "-g3 -gdwarf-5 ${LN_LTO} -Oz" CACHE INTERNAL "")
   #
-  SET(EXTRA_DEBUG "-fno-omit-frame-pointer")
+  #SET(EXTRA_DEBUG "-fno-omit-frame-pointer")
+  SET(EXTRA_DEBUG "-Wdouble-promotion -Werror=double-promotion -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables")
   #
   SET(GD32_MCU_C_FLAGS "--sysroot ${PLATFORM_CLANG_SYSROOT} ${EXTRA_DEBUG} ${PLATFORM_CLANG_C_FLAGS} -DLN_MCU=LN_MCU_CH32V3x -DLN_ARCH=LN_ARCH_RISCV ${LN_BOARD_NAME_FLAG} -I${ESPRIT_ROOT}/riscv_ch32v3x/" CACHE INTERNAL "" )
   SET(GD32_C_FLAGS    "-DLN_MCU_XTAL_CLOCK=${LN_MCU_XTAL_CLOCK} ${GD32_SPECS_SPECS} ${GD32_MCU_C_FLAGS} ${GD32_DEBUG_FLAGS}  -Werror=return-type  -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common " CACHE INTERNAL "")
@@ -109,8 +110,8 @@ IF(NOT DEFINED LN_EXT)
   #
   SET(CLANG_LINKER_OPT "" CACHE INTERNAL "")
   #
-  SET(GD32_LD_FLAGS "-fuse-ld=lld  -L${PLATFORM_CLANG_SYSROOT}/lib/riscv32-unknown-unknown-elf ${LN_LTO} -nostdlib ${GD32_SPECS_SPECS} --sysroot ${PLATFORM_CLANG_SYSROOT}  -Wl,--warn-common" CACHE INTERNAL "")
-  SET(GD32_LD_LIBS "-lm   ${CLANG_LINKER_OPT} -Wl,--gc-sections -Wl,--gdb-index " CACHE INTERNAL "")
+  SET(GD32_LD_FLAGS "-fuse-ld=lld  -L${PLATFORM_CLANG_SYSROOT}/lib/riscv32-unknown-unknown-elf ${LN_LTO} -nostartfiles -nostdlib ${GD32_SPECS_SPECS} --sysroot ${PLATFORM_CLANG_SYSROOT}  -Wl,--warn-common" CACHE INTERNAL "")
+  SET(GD32_LD_LIBS "-lm   ${CLANG_LINKER_OPT} -Wl,--gc-sections -ffunction-sections -fdata-sections  -Wl,--gdb-index " CACHE INTERNAL "")
 
   #
   set(CMAKE_CXX_LINK_EXECUTABLE    "<CMAKE_CXX_COMPILER>  ${PLATFORM_CLANG_EXTRA_LD_ARG} <CMAKE_CXX_LINK_FLAGS>  ${PLATFORM_CLANG_C_FLAGS} <LINK_FLAGS>   -Wl,--start-group  <OBJECTS> <LINK_LIBRARIES> -Wl,--end-group  -Wl,-Map,<TARGET>.map   -o <TARGET> ${GD32_LD_FLAGS} ${GD32_LD_LIBS} ${GD32_LD_FLAGS}   -lclang_rt.builtins "  CACHE INTERNAL "")
