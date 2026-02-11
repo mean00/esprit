@@ -100,7 +100,8 @@ IF(NOT DEFINED LN_EXT)
   SET(GD32_DEBUG_FLAGS "-g3 -gdwarf-5 ${LN_LTO} -Oz" CACHE INTERNAL "")
   #
   #SET(EXTRA_DEBUG "-fno-omit-frame-pointer")
-  SET(EXTRA_DEBUG "-Wdouble-promotion -Werror=double-promotion -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables")
+  #SET(EXTRA_DEBUG "-Wdouble-promotion -Werror=double-promotion -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables")
+  SET(EXTRA_DEBUG "-Wdouble-promotion -Werror=double-promotion -fno-omit-frame-pointer -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables")
   #
   SET(GD32_MCU_C_FLAGS "--sysroot ${PLATFORM_CLANG_SYSROOT} ${EXTRA_DEBUG} ${PLATFORM_CLANG_C_FLAGS} -DLN_MCU=LN_MCU_CH32V3x -DLN_ARCH=LN_ARCH_RISCV ${LN_BOARD_NAME_FLAG} -I${ESPRIT_ROOT}/riscv_ch32v3x/" CACHE INTERNAL "" )
   SET(GD32_C_FLAGS    "-DLN_MCU_XTAL_CLOCK=${LN_MCU_XTAL_CLOCK} ${GD32_SPECS_SPECS} ${GD32_MCU_C_FLAGS} ${GD32_DEBUG_FLAGS}  -Werror=return-type  -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common " CACHE INTERNAL "")
