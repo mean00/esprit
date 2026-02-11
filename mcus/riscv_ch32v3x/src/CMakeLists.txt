@@ -30,7 +30,11 @@ IF(LN_ENABLE_ETH)
 endif()
 
 IF(LN_ENABLE_USBD)
-  target_sources( esprit_lib PRIVATE ${S}/lnUSBD_ch32v3x.cpp)
+  IF( USE_CH32v3x_USB_HS )
+    target_sources( esprit_lib PRIVATE ${S}/lnUSBD_ch32v3x.cpp)
+  ELSE( )
+    target_sources( esprit_lib PRIVATE ${S}/../../arm_gd32fx/src/lnUSBD.cpp)
+  ENDIF()
 ENDIF()
 
 IF(LN_ENABLE_I2C)
