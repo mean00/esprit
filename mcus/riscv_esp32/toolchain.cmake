@@ -36,6 +36,7 @@ ELSEIF(LN_ESP_MCU STREQUAL "ESP32C3") # ESP32C3
 ELSEIF(LN_ESP_MCU STREQUAL "ESP32S3") # ESP32S3
   ADD_IDF_COMPONENT("esp_rom" ""   "esp32s3/include/esp32s3/rom" )
   ADD_IDF_COMPONENT("" "include" "soc/esp32s3" xtensa )
+  ADD_IDF_COMPONENT("hal" "" "esp32s3/include/hal" )
   #ADD_IDF_COMPONENT("soc" "" "soc/esp32c6/register" )
   ADD_IDF_COMPONENT("freertos" ""  "FreeRTOS-Kernel/portable/xtensa/include/freertos" "config/xtensa/include"   )
   ADD_IDF_COMPONENT("xtensa" "include"  "esp32s3")
