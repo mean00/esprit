@@ -6,11 +6,14 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 //#![feature(lang_items)]
 use cfg_if::cfg_if;
+#[allow(unused_imports)]
 use core::alloc::{GlobalAlloc, Layout};
+#[allow(unused_imports)]
 extern crate alloc;
 
 pub type size_t = cty::c_uint;
 
+#[allow(unused_imports)]
 use core::panic::PanicInfo;
 // C api -> bindgen
 // done manually mod rn_exti_c;
