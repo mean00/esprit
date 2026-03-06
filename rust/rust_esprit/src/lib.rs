@@ -5,10 +5,9 @@
 #![allow(clashing_extern_declarations)]
 #![allow(unsafe_op_in_unsafe_fn)]
 //#![feature(lang_items)]
+#![allow(unused_imports)]
 use cfg_if::cfg_if;
-#[allow(unused_imports)]
 use core::alloc::{GlobalAlloc, Layout};
-#[allow(unused_imports)]
 extern crate alloc;
 
 pub type size_t = cty::c_uint;
