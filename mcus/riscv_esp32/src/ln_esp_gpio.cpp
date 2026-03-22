@@ -33,6 +33,7 @@ void lnPinMode(const lnPin pin, const lnGpioMode mode, const int speedInMhz)
         io_conf.mode = GPIO_MODE_OUTPUT;
         break;
     case lnOUTPUT_OPEN_DRAIN:
+        gpio_set_drive_capability((gpio_num_t)pin, GPIO_DRIVE_CAP_3);
         io_conf.mode = GPIO_MODE_OUTPUT_OD;
         io_conf.pull_up_en = GPIO_PULLUP_DISABLE;     // no sure ???
         io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE; // no sure ???
