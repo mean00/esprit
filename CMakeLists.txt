@@ -21,6 +21,7 @@ IF(True) #NOT ESPRIT_ROOT)
   include(colorFormatting)
 
   # Already merged APPLY_PATCH_IF_NEEDED(patch_tinyusb tinyusb_no_static.patch        libraries/tinyUsb      "dont use freertos static constructs ")
+  OPTION(LN_ENABLE_FLOAT_PRINTF "Enable float printf" OFF)
 
   OPTION(LN_ENABLE_USBD "Enable USBD support" OFF)
   OPTION(LN_ENABLE_I2C  "Enable I2C support" ON)
