@@ -23,6 +23,7 @@ set(PPATH "${PPATH} -I${IDF_PATH}/components/freertos/config/include/freertos/")
 set(PPATH "${PPATH} -DLN_CUSTOM_FREERTOS=1 ")
 IF(LN_ESP_MCU STREQUAL "ESP32C6") # ESP32C6
   ADD_IDF_COMPONENT("esp_rom" ""   "esp32c6/include/esp32c6/rom" )
+  ADD_IDF_COMPONENT("esp_adc" ""   "esp32c6/include" ) #
   ADD_IDF_COMPONENT("" ""   "soc/esp32c6/register" )
   ADD_IDF_COMPONENT("" "include"  "soc/esp32c6"  riscv )
   ADD_IDF_COMPONENT("hal" "" "esp32c6/include/" )
@@ -31,6 +32,7 @@ IF(LN_ESP_MCU STREQUAL "ESP32C6") # ESP32C6
   SET(CUSTOM_TARGET_FLAGS "-march=rv32imac_zicsr" CACHE INTERNAL "")
 ELSEIF(LN_ESP_MCU STREQUAL "ESP32C3") # ESP32C3
   ADD_IDF_COMPONENT("esp_rom" ""   "esp32c3/include/esp32c3/rom" )
+  ADD_IDF_COMPONENT("esp_adc" ""   "esp32c3/include" ) #
   ADD_IDF_COMPONENT("" ""   "soc/esp32c3/register" )
   ADD_IDF_COMPONENT("hal" "" "esp32c3/include/" )
   ADD_IDF_COMPONENT("" "include"  "soc/esp32c3"  riscv )
