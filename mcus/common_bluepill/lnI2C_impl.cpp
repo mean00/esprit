@@ -709,7 +709,14 @@ void lnTwoWire::irqTx()
         xAssert(_d->adr->STAT0 & LN_I2C_STAT0_TBE);
         if (!initiateTx())
         {
-            SET_DONE(false);
+            if (_session->total_bytes == 0) // special case for scanner
+            {
+                SET_DONE(true);
+            }
+            else
+            {
+                SET_DONE(false);
+            }
         }
     }
         return;
