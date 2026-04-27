@@ -121,8 +121,24 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn vPortFree(pv: *mut cty::c_void);
 }
+// critical section
 
-
+struct InterruptGuard;
+pub fn critical_section<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    disable_interrupts();
+    let _guard = InterruptGuard;
+    f()
+}
+impl Drop for InterruptGuard {
+    #[inline]
+    fn drop(&mut self) {
+        enable_interrupts();
+    }
+}
+//--
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     unsafe {
