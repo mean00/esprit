@@ -100,7 +100,8 @@ pub fn enable_interrupts() {
 }
 
 cfg_if! {
-if #[cfg(not(target_os = "espidf"))] {
+if #[cfg(all(not(target_os = "espidf"), not(feature = "use_std")))]
+{
 pub struct FreeRtosAllocator;
 
 unsafe impl GlobalAlloc for FreeRtosAllocator {
