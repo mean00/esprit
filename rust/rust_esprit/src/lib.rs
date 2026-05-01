@@ -12,7 +12,7 @@ extern crate alloc;
 
 pub type size_t = cty::c_uint;
 
-#[allow(unused_imports)]
+#[cfg(not(feature = "use_std"))]
 use core::panic::PanicInfo;
 // C api -> bindgen
 // done manually mod rn_exti_c;
@@ -138,13 +138,14 @@ impl Drop for InterruptGuard {
         enable_interrupts();
     }
 }
+#[cfg(not(feature = "use_std"))]
 //--
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    unsafe {
-        deadEnd(55); //: cty::c_int);
-    }
-    loop {}
+  unsafe {
+      deadEnd(55); //: cty::c_int);
+  }
+  loop {}
 }
 }
 }

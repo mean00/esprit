@@ -16,6 +16,7 @@ cdc = []
 rp2040 = []
 esp32 = []
 default = []
+use_std = []
 
 [lib]
 name = "rust_esprit"
