@@ -77,7 +77,9 @@ pub use rn_gpio::pin_mode;
 pub use rn_i2c::rnI2C as i2c;
 pub use rn_os_helper::delay_ms;
 /* exit it */
+pub use rn_exti::PinCallback;
 pub use rn_exti::attach_interrupt as exti_attach_interrupt;
+pub use rn_exti::attach_interrupt_typed as exti_attach_interrupt_typed;
 pub use rn_exti::detach_interrupt as exti_detach_interrupt;
 pub use rn_exti::enable_interrupt as exti_enable_interrupt;
 pub use rn_exti::rnEdge as pin_edge;

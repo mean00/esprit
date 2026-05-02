@@ -13,14 +13,14 @@ pub enum rnEdge {
     LN_EDGE_BOTH = 3,
 }
 pub type lnExtiCallback =
-    ::core::option::Option<unsafe extern "C" fn(pin: rnPin, cookie: *mut cty::c_void)>;
+    ::core::option::Option<unsafe extern "C" fn(pin: rnPin, cookie: *const cty::c_void)>;
 unsafe extern "C" {
     #[link_name = "\u{1}_Z21lnExtiAttachInterrupt5lnPin6lnEdgePFvS_PvES1_"]
     pub fn lnExtiAttachInterrupt(
         pin: lnPin,
         edge: rnEdge,
         cb: lnExtiCallback,
-        cookie: *mut cty::c_void,
+        cookie: *const cty::c_void,
     );
 }
 unsafe extern "C" {
@@ -66,6 +66,27 @@ pub fn enable_interrupt(pin: rnPin) {
 pub fn disable_interrupt(pin: rnPin) {
     unsafe {
         lnExtiDisableInterrupt(rnpin2lnpin(pin));
+    }
+}
+/*
+ * this is a more idomatic way...
+ */
+pub trait PinCallback {
+    fn on_interrupt(&mut self, pin: rnPin);
+}
+//#[unsafe(no_mangle)]
+extern "C" fn generic_trampoline<T: PinCallback>(pin: rnPin, cookie: *const cty::c_void) {
+    let handler = unsafe { &mut *(cookie as *mut T) };
+    handler.on_interrupt(pin);
+}
+pub fn attach_interrupt_typed<T: PinCallback>(pin: rnPin, edge: rnEdge, handler: &T) {
+    unsafe {
+        lnExtiAttachInterrupt(
+            rnpin2lnpin(pin),
+            edge,
+            Some(generic_trampoline::<T>),
+            handler as *const T as *const cty::c_void,
+        );
     }
 }
 // EOF
