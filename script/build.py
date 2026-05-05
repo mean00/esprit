@@ -72,6 +72,7 @@ def build_single(  working_dir, build_name, extra_args):
     cmakeParam= [ 'cmake', '-G', 'Ninja']
     for i in extra_args:
         cmakeParam.append('-DUSE_'+i+'=True')
+        cmakeParam.append('-DCMAKE_CXX_COMPILER_LAUNCHER=ccache -D CMAKE_C_COMPILER_LAUNCHER=ccache')
     cmakeParam.append('..')
 
     makeParam = ['ninja','-v']
