@@ -25,8 +25,8 @@ simplerAD9833::simplerAD9833(lnSPI *spi, lnPin cs, int baseClock)
     _cs = cs;
     _baseClock = baseClock;
 
-    float m = (1024. * (float)(1 << (28))) / (float)baseClock;
-    _factor = (int)(m + 0.49);
+    float m = (1024.f * (float)(1 << (28))) / (float)baseClock;
+    _factor = (int)(m + 0.49f);
     if (_cs != -1)
     {
         lnDigitalWrite(_cs, true);

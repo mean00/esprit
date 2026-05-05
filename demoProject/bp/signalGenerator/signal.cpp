@@ -39,15 +39,16 @@ void SignalGenerator::start(int fq, SignalForm form)
         _dac->startDmaMode(fq * 100);
         int actualFq = _dac->getDmaFrequency();
         float pointFloat = (float)(actualFq + fq / 2) / (float)fq;
-        _nbPoints = floor(pointFloat + 0.49);
-        Logger("In Fq=%d outFq=%d, # points=%d pointsF=%f\n", fq, actualFq, _nbPoints, pointFloat);
+        _nbPoints = floor(pointFloat + 0.49f);
+        // Logger("In Fq=%d outFq=%d, # points=%d pointsF=%f\n", fq, actualFq, _nbPoints, pointFloat);
+        Logger("In Fq=%d outFq=%d, # points=%d pointsF=\n", fq, actualFq, _nbPoints);
 
         for (int i = 0; i < _nbPoints; i++)
         {
-            float angle = 2. * M_PI;
+            float angle = 2.f * (float)M_PI;
             angle /= (float)_nbPoints;
             angle *= (float)i;
-            _waveForm[i] = 2048. + 2047. * sin(angle);
+            _waveForm[i] = 2048.f + 2047.f * (float)sin(angle);
         }
     }
     break;

@@ -34,15 +34,16 @@ void loop()
 
     float pointFloat = (float)(actualFq + signalFrequency / 2) / (float)signalFrequency;
     int nbPoints = floor(pointFloat);
-    Logger("In Fq=%d outFq=%d, # points=%d pointsF=%f\n", signalFrequency, actualFq, nbPoints, pointFloat);
+    // Logger("In Fq=%d outFq=%d, # points=%d pointsF=%f\n", signalFrequency, actualFq, nbPoints, pointFloat);
+    Logger("In Fq=%d outFq=%d, # points=%d pointsF=\n", signalFrequency, actualFq, nbPoints);
 
     uint16_t *xsin = new uint16_t[nbPoints];
     for (int i = 0; i < nbPoints; i++)
     {
-        float angle = 2. * M_PI;
+        float angle = 2.0f * (float)M_PI;
         angle /= (float)nbPoints;
         angle *= (float)i;
-        xsin[i] = 2048. + 2047. * sin(angle);
+        xsin[i] = 2048.f + 2047.f * (float)sin(angle);
     }
 
     dac->dmaWrite(nbPoints, xsin, true);
