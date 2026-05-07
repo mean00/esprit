@@ -28,6 +28,8 @@ IF(EXISTS "${PICO_SDK_PATH}/src/common/pico_base_headers/include/pico/version.h.
                           "${PICO_SDK_PATH}/src/rp2_common/hardware_boot_lock/include/"
                           "${PICO_SDK_PATH}/src/rp2_common/pico_runtime_init/include/"
                           "${PICO_SDK_PATH}/src/rp2_common/boot_bootrom_headers/include"
+                          "${PICO_SDK_PATH}/src/rp2_common/hardware_rcp/include"
+
                           )
   SET(RP_EXTRA_SOURCES ${PICO_SDK_PATH}/src/rp2_common/pico_runtime_init/runtime_init_clocks.c
 ${PICO_SDK_PATH}/src/rp2_common/hardware_ticks/ticks.c)
