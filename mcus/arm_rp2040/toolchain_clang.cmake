@@ -124,7 +124,16 @@ IF(NOT DEFINED LN_EXT)
   SET(GD32_LD_LIBS " -Wl,--gc-sections -Wl,--gdb-index " CACHE INTERNAL "")
   #
   #SET(CLANG_LINKER_OPT "${MINI_SYSROOT}/lib/libclang_rt.builtins.a" CACHE INTERNAL "")
-  #
+  #SET(CLANG_LINKER_OPT "/arm/llvm_21.1/bin/../lib/clang-runtimes/arm-none-eabi/armv6m_soft_nofp_exn_rtti_size/lib/libclang_rt.builtins.a" CACHE INTERNAL "")
+  execute_process(
+    COMMAND ${CMAKE_C_COMPILER} --target=arm-none-eabi -march=armv6m  -print-libgcc-file-name 
+    OUTPUT_VARIABLE CLANG_BUILTINS_LIB
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  if(NOT EXISTS "${CLANG_BUILTINS_LIB}")
+    message(FATAL_ERROR "Cannot find compiler builtins library ( ${CMAKE_C_COMPILER}--target=arm-none-eabi -march=armv6m  -print-libgcc-file-name )")
+  endif()
+  SET(CLANG_LINKER_OPT "${CLANG_BUILTINS_LIB}" CACHE INTERNAL "")
   set(CMAKE_CXX_LINK_EXECUTABLE    "<CMAKE_LINKER>  <CMAKE_CXX_LINK_FLAGS>  <LINK_FLAGS> ${LN_LTO}    -Wl,--start-group ${CRT} ${SB2} <OBJECTS>  <LINK_LIBRARIES>  -Wl,--end-group -lc  -Wl,-Map,<TARGET>.map   -o <TARGET> ${GD32_LD_FLAGS} ${GD32_LD_LIBS}  ${CLANG_LINKER_OPT} -e _entry_point" CACHE INTERNAL "")
   SET(CMAKE_EXECUTABLE_SUFFIX_C .elf CACHE INTERNAL "")
   SET(CMAKE_EXECUTABLE_SUFFIX_CXX .elf CACHE INTERNAL "")
