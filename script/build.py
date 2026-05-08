@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 import subprocess
 import os
-
+import argparse
+import sys
 
 blacklist = ['cmake','everything','usb'] #,'hello']
 failures = []
@@ -65,7 +66,7 @@ def build_single(  working_dir, build_name, extra_args):
     subprocess.check_call(['rm','-Rf',build_dir])
     subprocess.check_call(['rm','-f','esprit'])
     subprocess.check_call(['ln','-s',top_esprit,'esprit'])
-    subprocess.check_call(['mkdir',build_dir])
+    os.makedirs(build_dir, exist_ok=True)
     os.chdir(build_dir)
     dbg(os.getcwd())
     #
@@ -94,7 +95,7 @@ def build_single(  working_dir, build_name, extra_args):
 #
 #
 #_____________________________________
-def build_all(category, title, use):
+def build_all(category, title, extra_args):
 
     top_working_dir=top_folder+"/"+category
     dbg("For "+category +" => working dir : "+str(top_working_dir))
@@ -102,42 +103,97 @@ def build_all(category, title, use):
 
     for i in subprojects:
         shortname = i
-        print("[",title, "/",use,"]:",shortname)
+        print("[",title, "/",extra_args,"]:",shortname)
         os.chdir(top_working_dir)
         working_dir=top_working_dir+"/"+i
         build_name=title
-        if False==build_single(working_dir, build_name, use):
-            failures.append( str(title)+'_'+str(i)+str(use)) 
+        if False==build_single(working_dir, build_name, extra_args):
+            failures.append((category, i, title, extra_args))
         #quit()
     pass
-def build_all_bp(category ):
-    build_all(category, "ARM_M4",["GD32F3"])
-    build_all(category, "ARM_M4",["CLANG","GD32F3"])
-    build_all(category, "ARM_M3",["CLANG"])
-    build_all(category, "ARM_M3",[])
-    build_all(category, "RISCV_CH32V3x",["CLANG","CH32V3x"])
+
+def get_build_configs(cpu_families, compilers):
+    """Generate the build configurations (category, build_name, extra_args) based on options."""
+    configs = []
+    gcc = (compilers == 'both' or compilers == 'gcc')
+    clang = (compilers == 'both' or compilers == 'clang')
+
+    # For common & bp categories
+    for cat in ('common', 'bp'):
+        # stm32 (generic ARM)
+        if 'stm32' in cpu_families:
+            if gcc:
+                configs.append((cat, "ARM_M3", []))
+            if clang:
+                configs.append((cat, "ARM_M3", ["CLANG"]))
+        # GD32
+        if 'gd32' in cpu_families:
+            if gcc:
+                configs.append((cat, "ARM_M4", ["GD32F3"]))
+            if clang:
+                configs.append((cat, "ARM_M4", ["CLANG", "GD32F3"]))
+        # CH32
+        if 'ch32' in cpu_families:
+            if clang:   # CH32 currently only built with Clang in the script
+                configs.append((cat, "RISCV_CH32V3x", ["CLANG", "CH32V3x"]))
+
+    # RP series (only for 'rp' category)
+    if 'rp2040' in cpu_families:
+        if clang:   # RP2040 only built with Clang here
+            configs.append(("rp", "ARM_M0", ["CLANG", "RP2040"]))
+    if 'rp2350' in cpu_families:
+        if clang:   # RP2350 only built with Clang here
+            configs.append(("rp", "ARM_M33", ["CLANG", "RP2350"]))
+
+    return configs
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Build Swindle demo projects with selected compiler and CPU")
+    parser.add_argument('--compiler', choices=['gcc', 'clang', 'both'], default='both',
+                        help="Compiler to use (default: both)")
+    parser.add_argument('--cpu', nargs='+', default=['all'],
+                        choices=['stm32', 'gd32', 'ch32', 'rp2040', 'rp2350', 'all'],
+                        help="CPU families to build (default: all)")
+    parser.add_argument('--list', action='store_true',
+                        help="Only list what would be built")
+    return parser.parse_args()
+
 #
 #
 #________________________________________
-top_folder=os.path.abspath(os.getcwd()+'/../demoProject/')
-top_esprit=os.path.abspath(os.getcwd()+'/../../esprit')
+if __name__ == "__main__":
+    args = parse_args()
 
-dbg("Esprit:"+top_esprit)
-dbg( "Top Folder : "+top_folder)
-print("-- Build all --")
-if True:
-    build_all_bp("common")
-# RP
-if True:
-    build_all("rp", "ARM_M33",["RP2350","CLANG"])
-    build_all("rp", "ARM_M0",["RP2040","CLANG"])
+    top_folder=os.path.abspath(os.getcwd()+'/../demoProject/')
+    top_esprit=os.path.abspath(os.getcwd()+'/../../esprit')
 
-if True:
-    build_all_bp("bp")
+    dbg("Esprit:"+top_esprit)
+    dbg( "Top Folder : "+top_folder)
 
+    cpu_families = args.cpu
+    if 'all' in cpu_families:
+        cpu_families = ['stm32', 'gd32', 'ch32', 'rp2040', 'rp2350']
 
-print("-- Failures --")
-for i in failures:
-    print("\t"+i)
-print("-- Done --")
+    configs = get_build_configs(cpu_families, args.compiler)
 
+    if args.list:
+        print("Build plan:")
+        for cat, name, extras in configs:
+            print(f"  Category: {cat}, Build: {name}, Flags: {extras}")
+        sys.exit(0)
+
+    print("-- Build all --")
+    for cat, name, extras in configs:
+        build_all(cat, name, extras)
+
+    # Summary
+    print("\n-- SUMMARY --")
+    if failures:
+        print("Failures (" + str(len(failures)) + "):")
+        for cat, proj, name, extras in failures:
+            extra_str = ', '.join(extras) if extras else "none"
+            print(f"  * {cat}/{proj} [{name}] with flags: {extra_str}")
+    else:
+        print("All builds succeeded.")
+    print("-- Done --")
