@@ -112,7 +112,7 @@ IF(NOT DEFINED LN_EXT)
 
   SET(MINI_SYSROOT "${PLATFORM_CLANG_PATH}/../lib/clang-runtimes/arm-none-eabi/" CACHE INTERNAL "")
   SET(GD32_LIBC "-L${MINI_SYSROOT}/lib " CACHE INTERNAL "")
-  SET(GD32_MCU "-mcpu=cortex-m33 -Wno-arm-interrupt-vfp-clobber   -mfloat-abi=hard -mfpu=fpv5-sp-d16 --target=armv8m-none-eabi -DPICO_RP2350=1  -DPICO_PLATFORM=rp2350 -DUSE_RP2350 -DPICO_RP2350_USB_FAST_IRQ=0  " CACHE INTERNAL "")
+  SET(GD32_MCU "-mcpu=cortex-m33 -Wno-arm-interrupt-vfp-clobber   -mfloat-abi=hard -mfpu=fpv5-sp-d16 -DPICO_RP2350=1  -DPICO_PLATFORM=rp2350 -DUSE_RP2350 -DPICO_RP2350_USB_FAST_IRQ=0  " CACHE INTERNAL "")
   APX(GD32_MCU PICO_BOARD "${PICO_BOARD}")
 
 
@@ -129,7 +129,9 @@ IF(NOT DEFINED LN_EXT)
   #SET(GD32_RP_FLAGS "-DLIB_BOOT_STAGE2_HEADERS=1 -DLIB_PICO_ATOMIC=1 -DLIB_PICO_BIT_OPS=1 -DLIB_PICO_BIT_OPS_PICO=1 -DLIB_PICO_CLIB_INTERFACE=1 -DLIB_PICO_CRT0=1 -DLIB_PICO_CXX_OPTIONS=1 -DLIB_PICO_DIVIDER=1 -DLIB_PICO_DIVIDER_COMPILER=1 -DLIB_PICO_DOUBLE=1 -DLIB_PICO_DOUBLE_PICO=1 -DLIB_PICO_FLASH=1 -DLIB_PICO_FLOAT=1 -DLIB_PICO_FLOAT_PICO=1 -DLIB_PICO_FLOAT_PICO_VFP=1 -DLIB_PICO_INT64_OPS=1 -DLIB_PICO_INT64_OPS_COMPILER=1 -DLIB_PICO_MALLOC=1 -DLIB_PICO_MEM_OPS=1 -DLIB_PICO_MEM_OPS_COMPILER=1 -DLIB_PICO_NEWLIB_INTERFACE=1 -DLIB_PICO_PLATFORM=1 -DLIB_PICO_PLATFORM_COMPILER=1 -DLIB_PICO_PLATFORM_PANIC=1 -DLIB_PICO_PLATFORM_SECTIONS=1 -DLIB_PICO_PRINTF=1 -DLIB_PICO_PRINTF_PICO=1 -DLIB_PICO_RUNTIME=1 -DLIB_PICO_RUNTIME_INIT=1 -DLIB_PICO_STANDARD_BINARY_INFO=1 -DLIB_PICO_STANDARD_LINK=1 -DLIB_PICO_STDIO=1 -DLIB_PICO_STDLIB=1 -DLIB_PICO_SYNC=1 -DLIB_PICO_SYNC_CRITICAL_SECTION=1 -DLIB_PICO_SYNC_MUTEX=1 -DLIB_PICO_SYNC_SEM=1 -DLIB_PICO_TIME=1 -DLIB_PICO_TIME_ADAPTER=1 -DLIB_PICO_UTIL=1 -DPICO_32BIT=1 -DPICO_BUILD=1  -DPICO_COPY_TO_RAM=0 -DPICO_CXX_ENABLE_EXCEPTIONS=0 -DPICO_NO_FLASH=0 -DPICO_NO_HARDWARE=0 -DPICO_ON_DEVICE=1 -DPICO_RP2350=1 -DPICO_USE_BLOCKED_RAM=0 ")
   SET(GD32_RP_FLAGS "-include ${ESPRIT_ROOT}/mcus/arm_rp2350/include/pico_flags.h")
   SET(GD32_RP_FLAGS "${GD32_RP_FLAGS} -I${PICO_SDK_PATH} -I${PICO_SDK_PATH}/src/common/pico_base_headers/include/")
-  SET(GD32_RP_FLAGS "${GD32_RP_FLAGS} -D__force_inline='__attribute__((always_inline))'")
+  # Let the SDK handle __force_inline – it does so correctly for Clang.
+  # Disable GCC-specific asm constraints and optimization attributes that Clang rejects.
+  SET(GD32_RP_FLAGS "${GD32_RP_FLAGS} -DPICO_NO_OPTIMIZE_ATTRIBUTE=1 -DPICO_USE_OPTIMISTIC_ASM=0")
 
   FOREACH(h pico_platform_panic pico_platform_compiler pico_platform_sections pico_platform_panic hardware_sync hardware_base hardware_base_sync hardware_sync_spin_lock hardware_rcp)
     SET(GD32_RP_FLAGS "${GD32_RP_FLAGS} -I${PICO_SDK_PATH}/src/rp2_common/${h}/include")
@@ -142,26 +144,33 @@ IF(NOT DEFINED LN_EXT)
   APX(GD32_RP_FLAGS PICO_PROGRAM_VERSION_STRING "0.1")
   #
   #SET(GD32_C_FLAGS  "-DPICO_COPY_TO_RAM=1 ${GD32_SPECS}  ${PLATFORM_C_FLAGS} ${G32_DEBUG_FLAGS} -ffunction-sections -ggnu-pubnames --sysroot=${MINI_SYSROOT} -I${MINI_SYSROOT}/include --target=arm-none-eabi -DLN_ARCH=LN_ARCH_ARM   ${LN_BOARD_NAME_FLAG}  ${GD32_MCU}" CACHE INTERNAL "")
-  SET(GD32_C_FLAGS  " ${GD32_SPECS}  ${GD32_RP_FLAGS} ${PLATFORM_C_FLAGS} ${G32_DEBUG_FLAGS} -ffunction-sections -ggnu-pubnames --sysroot=${MINI_SYSROOT} -I${MINI_SYSROOT}/include --target=arm-none-eabi -DLN_ARCH=LN_ARCH_ARM   ${LN_BOARD_NAME_FLAG}  ${GD32_MCU}" CACHE INTERNAL "")
+  SET(GD32_C_FLAGS  " ${GD32_SPECS}  ${GD32_RP_FLAGS} ${PLATFORM_C_FLAGS} ${G32_DEBUG_FLAGS} -ffunction-sections -ggnu-pubnames --sysroot=${MINI_SYSROOT} -I${MINI_SYSROOT}/include --target=arm-none-eabi -Wno-implicit-function-declaration -DLN_ARCH=LN_ARCH_ARM   ${LN_BOARD_NAME_FLAG}  ${GD32_MCU}" CACHE INTERNAL "")
   SET(CMAKE_C_FLAGS "${GD32_C_FLAGS}" CACHE INTERNAL "")
   SET(CMAKE_ASM_FLAGS "${GD32_C_FLAGS} -Wno-unused-command-line-argument" CACHE INTERNAL "")
   SET(CMAKE_CXX_FLAGS "${GD32_C_FLAGS} -std=gnu++11 -fno-rtti -fno-exceptions -fno-threadsafe-statics" CACHE INTERNAL "")
   #
-  SET(GD32_LD_FLAGS " -fuse-ld=lld  -nostdlib ${GD32_SPECS}  ${GD32_MCU}  ${GD32_LD_EXTRA}  ${GD32_LIBC}" CACHE INTERNAL "")
-  SET(GD32_LD_LIBS " -Wl,--gc-sections -Wl,--gdb-index " CACHE INTERNAL "")
+  # Determine compiler-rt builtins library automatically for Cortex-M33 + hard float
+  execute_process(
+    COMMAND ${CMAKE_C_COMPILER} --target=arm-none-eabi -mcpu=cortex-m33 -mfloat-abi=hard -mfpu=fpv5-sp-d16 -print-libgcc-file-name
+    OUTPUT_VARIABLE CLANG_BUILTINS_LIB
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  if(NOT EXISTS "${CLANG_BUILTINS_LIB}")
+    message(FATAL_ERROR "Cannot find compiler builtins library (tried ${CLANG_BUILTINS_LIB})")
+  endif()
+  SET(CLANG_LINKER_OPT "${CLANG_BUILTINS_LIB}" CACHE INTERNAL "")
+  # Extract the multilib directory (where libc.a also lives) and add to search path
+  get_filename_component(CLANG_MULTILIB_DIR "${CLANG_BUILTINS_LIB}" DIRECTORY)
+  SET(GD32_LIBC "${GD32_LIBC} -L${CLANG_MULTILIB_DIR} " CACHE INTERNAL "")
   #
-  #SET(CLANG_LINKER_OPT "${MINI_SYSROOT}/lib/libclang_rt.builtins.a" CACHE INTERNAL "")
+  SET(GD32_LD_FLAGS " --target=arm-none-eabi -fuse-ld=lld -nostdlib --sysroot=${MINI_SYSROOT} ${GD32_SPECS}  ${GD32_MCU}  ${GD32_LD_EXTRA}  ${GD32_LIBC}" CACHE INTERNAL "")
+  SET(GD32_LD_LIBS " -Wl,--gc-sections -Wl,--gdb-index -lc" CACHE INTERNAL "")
   #
-  SET(CMAKE_CXX_LINK_EXECUTABLE    "<CMAKE_LINKER>  <CMAKE_CXX_LINK_FLAGS>  <LINK_FLAGS> ${LN_LTO}    -Wl,--start-group ${CRT} ${SB2} <OBJECTS>  <LINK_LIBRARIES>  -Wl,--end-group -lc  -Wl,-Map,<TARGET>.map   -o <TARGET> ${GD32_LD_FLAGS} ${GD32_LD_LIBS}  ${CLANG_LINKER_OPT} -e _entry_point" CACHE INTERNAL "")
+  SET(CMAKE_CXX_LINK_EXECUTABLE    "<CMAKE_LINKER>  <CMAKE_CXX_LINK_FLAGS>  <LINK_FLAGS> ${LN_LTO}    -Wl,--start-group ${CRT} ${SB2} <OBJECTS>  <LINK_LIBRARIES>  -Wl,--end-group -Wl,-Map,<TARGET>.map   -o <TARGET> ${GD32_LD_FLAGS} ${GD32_LD_LIBS}  ${CLANG_LINKER_OPT} -e _entry_point" CACHE INTERNAL "")
   SET(CMAKE_EXECUTABLE_SUFFIX_C .elf CACHE INTERNAL "")
   SET(CMAKE_EXECUTABLE_SUFFIX_CXX .elf CACHE INTERNAL "")
 
 
   MESSAGE(STATUS "MCU Architecture ${LN_ARCH}")
   MESSAGE(STATUS "MCU Type         ${LN_MCU}")
-  MESSAGE(STATUS "MCU Speed        ${LN_MCU_SPEED}")
-  MESSAGE(STATUS "MCU Flash Size   ${LN_MCU_FLASH_SIZE}")
-  MESSAGE(STATUS "MCU Ram Size     ${LN_MCU_RAM_SIZE}")
-  MESSAGE(STATUS "MCU Static RAM   ${LN_MCU_STATIC_RAM}")
-  MESSAGE(STATUS "Runtime          ${PLATFORM_CLANG_C_FLAGS}")
 ENDIF()
