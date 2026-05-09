@@ -1,7 +1,7 @@
 #![no_std]
 //use rnarduino::rn_os_helper;
+use rust_esprit::I2cBus;
 use rust_esprit::delay_ms;
-use rust_esprit::i2c;
 //use rust_esprit::{GpioMode::lnOUTPUT, digital_write, pin_mode};
 use rust_esprit::{lnLogger, lnLogger_init};
 
@@ -19,7 +19,7 @@ lnLogger_init!();
 #[unsafe(no_mangle)]
 extern "C" fn user_init() {
     lnLogger!("I2C Scanner !\n");
-    let mut i2c = i2c::new(0, 200000);
+    let mut i2c = I2cBus::new(0, 200000);
     loop {
         for i in 0..127u8 {
             let dex = i as u8;

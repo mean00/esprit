@@ -27,7 +27,7 @@ extern "C" fn user_init() {
 
     pin_mode(PIN, lnINPUT_PULLUP);
     let s: MyStruct = MyStruct { context: true };
-    rust_esprit::exti_attach_interrupt_typed(PIN, rust_esprit::pin_edge::LN_EDGE_BOTH, &s);
+    rust_esprit::exti_attach_interrupt_typed(PIN, rust_esprit::Edge::Both, &s);
     let mut on: bool = false;
     for _i in 0..5 {
         digital_write(PIN, on);

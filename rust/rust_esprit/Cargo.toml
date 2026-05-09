@@ -13,6 +13,7 @@ cfg-if = "1.0"
 
 [features]
 cdc = []
+embedded-hal = []
 rp2040 = []
 esp32 = []
 default = []
