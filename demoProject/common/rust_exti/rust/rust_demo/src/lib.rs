@@ -1,10 +1,10 @@
 #![no_std]
 
 use rust_esprit::delay_ms;
-use rust_esprit::{GpioMode::lnINPUT_PULLUP, digital_write, pin_mode};
-use rust_esprit::{lnLogger, lnLogger_init, pin};
+use rust_esprit::{GpioMode::lnINPUT_PULLUP, digital_write, pin, pin_mode};
+use rust_esprit::{logger, logger_init};
 
-lnLogger_init!();
+logger_init!();
 
 #[cfg(any(feature = "rp2040"))]
 const PIN: pin = pin::GPIO10;
@@ -23,7 +23,7 @@ impl rust_esprit::PinCallback for MyStruct {
 
 #[unsafe(no_mangle)]
 extern "C" fn user_init() {
-    lnLogger!("Hello there !\n");
+    logger!("Hello there !\n");
 
     pin_mode(PIN, lnINPUT_PULLUP);
     let s: MyStruct = MyStruct { context: true };
@@ -35,5 +35,5 @@ extern "C" fn user_init() {
         delay_ms(1000);
     }
 
-    lnLogger!("--end--\n");
+    logger!("--end--\n");
 }

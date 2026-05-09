@@ -2,9 +2,9 @@
 //use rnarduino::rn_os_helper;
 use rust_esprit::delay_ms;
 use rust_esprit::{GpioMode::lnOUTPUT, digital_write, pin_mode};
-use rust_esprit::{lnLogger, lnLogger_init};
+use rust_esprit::{logger, logger_init};
 
-lnLogger_init!();
+logger_init!();
 #[cfg(feature = "rp2040")]
 const PIN: rust_esprit::pin = rust_esprit::pin::GPIO10;
 
@@ -17,7 +17,7 @@ const PIN: rust_esprit::pin = rust_esprit::pin::PB6;
  */
 #[unsafe(no_mangle)]
 extern "C" fn user_init() {
-    lnLogger!("Hello there !\n");
+    logger!("Hello there !\n");
 
     pin_mode(PIN, lnOUTPUT);
 
@@ -28,7 +28,7 @@ extern "C" fn user_init() {
         delay_ms(1000);
     }
 
-    lnLogger!("--end--\n");
+    logger!("--end--\n");
 }
 
 // EOF

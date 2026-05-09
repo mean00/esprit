@@ -3,9 +3,9 @@
 use rust_esprit::I2cBus;
 use rust_esprit::delay_ms;
 //use rust_esprit::{GpioMode::lnOUTPUT, digital_write, pin_mode};
-use rust_esprit::{lnLogger, lnLogger_init};
+use rust_esprit::{logger, logger_init};
 
-lnLogger_init!();
+logger_init!();
 ////#[cfg(feature = "rp2040")]
 //const PIN: rust_esprit::pin = rust_esprit::pin::GPIO10;
 //
@@ -18,7 +18,7 @@ lnLogger_init!();
  */
 #[unsafe(no_mangle)]
 extern "C" fn user_init() {
-    lnLogger!("I2C Scanner !\n");
+    logger!("I2C Scanner !\n");
     let mut i2c = I2cBus::new(0, 200000);
     loop {
         for i in 0..127u8 {
@@ -27,7 +27,7 @@ extern "C" fn user_init() {
             if !i2c.write(&[]) {
                 delay_ms(100);
             } else {
-                lnLogger!("Found a i2c device at address {} 0x{:x}\n", dex, dex);
+                logger!("Found a i2c device at address {} 0x{:x}\n", dex, dex);
             }
         }
     }

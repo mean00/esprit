@@ -44,14 +44,14 @@ pub mod rn_usb_c;
 // ---------------------------------------------------------------------------
 //  Legacy wrapper modules (kept for backward compat)
 // ---------------------------------------------------------------------------
-pub mod rn_exti;
-pub mod rn_fast_event_group;
+//OBSOLETE pub mod rn_exti;
+//OBSOLETE pub mod rn_fast_event_group;
+//OBSOLETE pub mod rn_i2c;
 pub mod rn_gpio;
-pub mod rn_i2c;
-pub mod rn_logger;
+// OBSOLETE pub mod rn_logger;
 pub mod rn_os_helper;
-pub mod rn_spi;
-pub mod rn_timing_adc;
+//pub mod rn_spi;
+//pub mod rn_timing_adc;
 #[cfg(feature = "cdc")]
 pub mod rn_usb;
 #[cfg(feature = "cdc")]
@@ -142,6 +142,7 @@ pub use gpio::digital_read;
 pub use gpio::digital_toggle;
 pub use gpio::digital_write;
 pub use gpio::pin_mode;
+//
 
 // Re-export the raw C-functions namespace so fn pointers work.
 // Demo projects sometimes import `lnLogger` / `lnLogger_init` as macros.
@@ -216,4 +217,3 @@ cfg_if! {
         }
     }
 }
-

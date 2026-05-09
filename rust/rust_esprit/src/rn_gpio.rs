@@ -22,7 +22,7 @@ mod import_gpio {
 }
 //-----------------
 //-----------------
-pub use crate::rn_exti;
+//pub use crate::rn_exti;
 
 //pub use crate::rn_gpio_bp_c ;
 //pub use crate::rn_gpio_bp_c as gpio;
@@ -33,7 +33,7 @@ pub use import_gpio::gpio::lnPin;
 use crate::rn_gpio::import_gpio::gpio;
 pub use import_gpio::gpio::lnGetGpioToggleRegister;
 pub use import_gpio::gpio::lnGpioMode as rnGpioMode;
-pub use rn_exti::rnEdge;
+//pub use rn_exti::rnEdge;
 
 // reexport
 pub use import_gpio::gpio::lnPin as rnPin;

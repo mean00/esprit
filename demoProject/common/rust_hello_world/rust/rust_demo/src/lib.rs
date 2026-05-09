@@ -1,8 +1,8 @@
 #![no_std]
 //use rnarduino::rn_os_helper;
-use rust_esprit::{lnLogger, lnLogger_init};
+use rust_esprit::{logger, logger_init};
 
-lnLogger_init!();
+logger_init!();
 
 /**
  *
@@ -10,11 +10,11 @@ lnLogger_init!();
  */
 #[unsafe(no_mangle)]
 extern "C" fn user_init() {
-    lnLogger!("Hello there !\n");
+    logger!("Hello there !\n");
     let number = 0x1234;
-    lnLogger!("in decimal {}\n", number);
-    lnLogger!("in hex {:x}\n", number);
-    lnLogger!("--end--\n");
+    logger!("in decimal {}\n", number);
+    logger!("in hex {:x}\n", number);
+    logger!("--end--\n");
 }
 
 // EOF

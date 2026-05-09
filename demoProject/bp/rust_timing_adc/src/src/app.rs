@@ -1,13 +1,13 @@
-use rn::rn_gpio::{pinMode, rnPin};
-use rn::rn_timing_adc::rnTimingAdc;
-use rust_esprit as rn;
-use rust_esprit::{lnLogger, lnLogger_init};
-const PIN_IN: rnPin = rnPin::PA3;
+use rust_esprit::AdcTiming;
+use rust_esprit::delay_ms;
+use rust_esprit::{logger, logger_init};
+use rust_esprit::{pin, pin_mode};
+const PIN_IN: pin = pin::PA3;
 
-lnLogger_init!();
+logger_init!();
 #[unsafe(no_mangle)]
 pub extern "C" fn rnInit() {
-    lnLogger!("Setuping up Timing ADC demo...\n");
+    logger!("Setuping up Timing ADC demo...\n");
 
     //pinMode(PS_PIN_VBAT          ,rn::rn_gpio::rnGpioMode::lnADC_MODE);
 }
@@ -22,19 +22,19 @@ pub extern "C" fn rnInit() {
 const SAMPLE_SIZE: usize = 32;
 #[unsafe(no_mangle)]
 pub extern "C" fn rnLoop() {
-    lnLogger!("Running Timing ADC demo...\n");
+    logger!("Running Timing ADC demo...\n");
 
-    pinMode(PIN_IN, rn::rn_gpio::rnGpioMode::lnADC_MODE);
+    pin_mode(PIN_IN, rust_esprit::GpioMode::lnADC_MODE);
     let mut output: [u16; SAMPLE_SIZE] = [0; SAMPLE_SIZE];
-    let pins: [rnPin; 1] = [PIN_IN];
-    let mut adc = rnTimingAdc::new(0);
+    let pins: [pin; 1] = [PIN_IN];
+    let mut adc = AdcTiming::new(0);
     adc.set_source(3, 3, 10000, &pins);
     loop {
         adc.multi_read(SAMPLE_SIZE as i32, &mut output);
         for i in 0..SAMPLE_SIZE {
-            lnLogger!(" {} : {}\n", i, output[i]);
+            logger!(" {} : {}\n", i, output[i]);
         }
-        rn::rn_os_helper::delay_ms(1000);
+        delay_ms(1000);
     }
 }
 // EOF
