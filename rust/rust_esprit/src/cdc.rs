@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use crate::prelude::*;
 use crate::rn_cdc_c;
 use core::ffi::c_void;
 use core::fmt;
@@ -58,7 +59,8 @@ impl CdcAcm {
         let raw = unsafe { rn_cdc_c::lncdc_create(instance) };
         assert!(!raw.is_null(), "lncdc_create returned NULL");
 
-        let cookie = Box::into_raw(handler) as *mut c_void;
+        // Double-box so the cookie is a thin pointer (Box<Box<dyn Trait>>).
+        let cookie = Box::into_raw(Box::new(handler)) as *mut c_void;
         unsafe {
             rn_cdc_c::lncdc_set_event_handler(raw, Some(Self::trampoline), cookie);
         }
@@ -96,10 +98,13 @@ impl CdcAcm {
 
     extern "C" fn trampoline(cookie: *mut c_void, interface: i32, event: i32, payload: u32) {
         unsafe {
-            let handler: Box<dyn CdcEventHandler> =
-                Box::from_raw(cookie as *mut dyn CdcEventHandler);
-            handler.handle(interface, CdcEvent::from(event as u32), payload);
-            let _ = Box::into_raw(handler);
+            // The cookie is a double-box: Box<Box<dyn CdcEventHandler>>.
+            // Recover the outer Box (thin pointer), call the handler, then
+            // re-box to keep ownership with the C driver.
+            let outer: Box<Box<dyn CdcEventHandler>> =
+                Box::from_raw(cookie as *mut Box<dyn CdcEventHandler>);
+            outer.handle(interface, CdcEvent::from(event as u32), payload);
+            let _ = Box::into_raw(outer);
         }
     }
 }

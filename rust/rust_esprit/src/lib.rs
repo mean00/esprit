@@ -1,4 +1,9 @@
-#![no_std]
+// When neither fake_std nor external_std is active → no_std bare-metal mode.
+// fake_std:  esprit provides its own std-compatible shim (FreeRTOS-backed).
+//            The crate itself is still no_std (runs on embedded target),
+//            but it exposes a `std` namespace for user code.
+// external_std: esprit is used inside an existing std-enabled framework.
+#![cfg_attr(not(feature = "external_std"), no_std)]
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
@@ -6,40 +11,119 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 #![allow(unused_imports)]
 
+// In no_std mode we use the `alloc` crate.
+// In fake_std mode we're also no_std (embedded target), so we need alloc too.
+// In external_std mode, `std` is available.
+#[cfg(not(feature = "external_std"))]
 extern crate alloc;
 
 use cfg_if::cfg_if;
-use core::alloc::{GlobalAlloc, Layout};
+
+// Bring prelude items into scope for the rest of the crate.
+use crate::prelude::*;
+
+// ---------------------------------------------------------------------------
+//  Re-export the right prelude items depending on mode
+// ---------------------------------------------------------------------------
+// NOTE: c_void is intentionally NOT in the prelude because
+// core::ffi::c_void and std::ffi::c_void, while the same type,
+// can cause trait resolution issues with Box::from_raw casts.
+// Import it explicitly as `use core::ffi::c_void;` where needed.
+
+#[cfg(not(any(feature = "fake_std", feature = "external_std")))]
+mod prelude {
+    pub use core::alloc::{GlobalAlloc, Layout};
+    pub use core::mem;
+    pub use core::ptr;
+    pub use core::slice;
+    pub use core::str;
+    pub use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+    pub use core::cell::UnsafeCell;
+    pub use core::marker::PhantomData;
+    pub use core::ops::{Deref, DerefMut};
+    pub use core::convert::Infallible;
+    pub use core::time::Duration;
+    pub use alloc::boxed::Box;
+    pub use alloc::vec::Vec;
+    pub use alloc::string::String;
+}
+
+#[cfg(feature = "fake_std")]
+mod prelude {
+    // fake_std runs on an embedded target – no real std, use core + alloc.
+    pub use core::alloc::{GlobalAlloc, Layout};
+    pub use core::mem;
+    pub use core::ptr;
+    pub use core::slice;
+    pub use core::str;
+    pub use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+    pub use core::cell::UnsafeCell;
+    pub use core::marker::PhantomData;
+    pub use core::ops::{Deref, DerefMut};
+    pub use core::convert::Infallible;
+    pub use core::time::Duration;
+    pub use alloc::boxed::Box;
+    pub use alloc::vec::Vec;
+    pub use alloc::string::String;
+}
+
+#[cfg(feature = "external_std")]
+mod prelude {
+    pub use std::alloc::{GlobalAlloc, Layout};
+    pub use std::mem;
+    pub use std::ptr;
+    pub use std::slice;
+    pub use std::str;
+    pub use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+    pub use std::cell::UnsafeCell;
+    pub use std::marker::PhantomData;
+    pub use std::ops::{Deref, DerefMut};
+    pub use std::convert::Infallible;
+    pub use std::time::Duration;
+    pub use std::boxed::Box;
+    pub use std::vec::Vec;
+    pub use std::string::String;
+}
 
 pub type size_t = cty::c_uint;
 
 // ---------------------------------------------------------------------------
 //  C‑bindgen modules (raw FFI) – kept for backward compatibility
 // ---------------------------------------------------------------------------
-#[cfg(feature = "cdc")]
-pub mod rn_cdc_c;
-mod rn_debug_c;
-mod rn_exti_c;
-mod rn_fast_event_c;
+/// Raw C bindings – moved to a subfolder for clarity.
+/// Re-exported below for backward compatibility.
+/// This module is **internal** – not part of the public API.
+pub(crate) mod c_api;
+
+// The fast-GPIO modules are not *c files and stay at the crate root.
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 pub mod rn_fast_gpio_bp;
 #[cfg(feature = "esp32")]
 pub mod rn_fast_gpio_esp32c3;
 #[cfg(feature = "rp2040")]
 pub mod rn_fast_gpio_rp2040;
-pub mod rn_freertos_c;
-#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
-pub mod rn_gpio_bp_c;
-#[cfg(feature = "esp32")]
-pub mod rn_gpio_esp32_c;
-#[cfg(feature = "rp2040")]
-pub mod rn_gpio_rp2040_c;
-mod rn_i2c_c;
-mod rn_spi_c;
-mod rn_timer_c;
-mod rn_timing_adc_c;
+
+// Re-export the C‑FFI modules internally so that existing code (e.g.
+// `crate::rn_freertos_c::xQueueCreateMutex(...)`) continues to work.
+// These are **internal** bindings, not part of the public API.
 #[cfg(feature = "cdc")]
-pub mod rn_usb_c;
+pub(crate) use c_api::rn_cdc_c;
+pub(crate) use c_api::rn_debug_c;
+pub(crate) use c_api::rn_exti_c;
+pub(crate) use c_api::rn_fast_event_c;
+pub(crate) use c_api::rn_freertos_c;
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+pub(crate) use c_api::rn_gpio_bp_c;
+#[cfg(feature = "esp32")]
+pub(crate) use c_api::rn_gpio_esp32_c;
+#[cfg(feature = "rp2040")]
+pub(crate) use c_api::rn_gpio_rp2040_c;
+pub(crate) use c_api::rn_i2c_c;
+pub(crate) use c_api::rn_spi_c;
+pub(crate) use c_api::rn_timer_c;
+pub(crate) use c_api::rn_timing_adc_c;
+#[cfg(feature = "cdc")]
+pub(crate) use c_api::rn_usb_c;
 
 // ---------------------------------------------------------------------------
 //  Legacy wrapper modules (kept for backward compat)
@@ -90,8 +174,12 @@ pub mod cdc;
 /// Time, delay, and task spawning functions.
 pub mod task;
 
+/// Synchronisation primitives wrapping FreeRTOS mutexes and semaphores.
+pub mod sync;
+
 /// `ufmt`‑based logging macros (`logger!`, `logger_init!`).
 pub mod logger;
+
 
 /// Optional `embedded-hal` trait implementations.
 #[cfg(feature = "embedded-hal")]
@@ -111,9 +199,27 @@ pub use exti::{
 pub use gpio::{GpioMode, Pin, lnPin, pin_to_lnpin};
 pub use i2c::I2cBus;
 pub use spi::SpiBus;
-pub use task::{delay_ms, delay_us, spawn, time_ms, time_us, time_us64};
+
+// -- Time and task types --
+pub use task::{
+    delay_ms, delay_us, spawn, spawn_raw, time_ms, time_us, time_us64, tick_count, current,
+    yield_now, TaskHandle, TaskEntry, Instant, Duration,
+};
+
+// -- Synchronisation primitives --
+pub use sync::{
+    Arc,
+    Mutex, MutexGuard,
+    RecursiveMutex, RecursiveMutexGuard,
+    RwLock, RwLockReadGuard, RwLockWriteGuard,
+    OnceLock,
+    LazyLock,
+    BinarySemaphore, CountingSemaphore, SemaphoreGuard,
+};
+
 #[cfg(feature = "cdc")]
 pub use usb::{UsbBus, UsbEvent, UsbEventHandler};
+
 
 // ---------------------------------------------------------------------------
 //  Legacy re‑exports (exist so that existing demo projects compile unchanged)
@@ -169,7 +275,7 @@ pub fn enable_interrupts() {
 //  Global allocator (FreeRTOS)
 // ---------------------------------------------------------------------------
 cfg_if! {
-    if #[cfg(all(not(target_os = "espidf"), not(feature = "use_std")))] {
+    if #[cfg(all(not(target_os = "espidf"), not(feature = "external_std")))] {
         pub struct FreeRtosAllocator;
 
         unsafe impl GlobalAlloc for FreeRtosAllocator {
@@ -208,8 +314,8 @@ cfg_if! {
             }
         }
 
-        // Panic handler
-        #[cfg(not(feature = "use_std"))]
+        // Panic handler (fake_std is also no_std on embedded target)
+        #[cfg(not(feature = "external_std"))]
         #[panic_handler]
         fn panic(_info: &core::panic::PanicInfo) -> ! {
             unsafe { deadEnd(55) }
@@ -217,3 +323,73 @@ cfg_if! {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+//  std-compatible namespace (fake_std mode)
+// ---------------------------------------------------------------------------
+// When `fake_std` is active, we provide a `std` module that re-exports
+// esprit's FreeRTOS-backed implementations under the standard paths.
+// This allows embedded crates that do `use std::sync::Mutex` to work
+// on the embedded target.
+//
+// NOTE: We use `mod std_shim` internally and re-export as `pub use std_shim as std`
+// to avoid a name conflict with the real `extern crate std`.
+// ---------------------------------------------------------------------------
+#[cfg(feature = "fake_std")]
+pub mod std_shim {
+    //! FreeRTOS-backed `std`-compatible namespace.
+    //!
+    //! When the `fake_std` feature is enabled, this module provides
+    //! `std::sync::Mutex`, `std::time::Instant`, etc. backed by
+    //! FreeRTOS primitives and the hardware timer.
+    //!
+    //! # Usage
+    //! ```ignore
+    //! // In your Cargo.toml:
+    //! // rust_esprit = { features = ["fake_std"] }
+    //!
+    //! // In your code:
+    //! use rust_esprit::std::sync::Mutex;
+    //! use rust_esprit::std::time::Instant;
+    //! ```
+
+    pub mod sync {
+        //! FreeRTOS-backed synchronisation primitives.
+        pub use crate::sync::{
+            Arc,
+            Mutex, MutexGuard,
+            RecursiveMutex, RecursiveMutexGuard,
+            RwLock, RwLockReadGuard, RwLockWriteGuard,
+            OnceLock,
+            LazyLock,
+            BinarySemaphore, CountingSemaphore, SemaphoreGuard,
+        };
+    }
+
+    pub mod time {
+        //! Hardware-timer-backed time types.
+        pub use crate::task::{Duration, Instant};
+    }
+
+    pub mod thread {
+        //! FreeRTOS-backed task spawning.
+        pub use crate::task::{spawn, yield_now, current, sleep, sleep_ms};
+    }
+
+    pub mod collections {
+        //! Heap-allocated collections (backed by FreeRTOS heap).
+        //! Re-exports from `alloc`.
+        pub use alloc::vec::Vec;
+        pub use alloc::string::String;
+        pub use alloc::boxed::Box;
+    }
+}
+
+/// Re-export the std-compatible shim as `std` for crate consumers.
+///
+/// When `fake_std` is enabled, users can write:
+/// ```ignore
+/// use rust_esprit::std::sync::Mutex;
+/// ```
+#[cfg(feature = "fake_std")]
+pub use std_shim as std;

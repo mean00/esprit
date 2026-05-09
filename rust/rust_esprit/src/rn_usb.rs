@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use alloc::boxed::Box;
+use crate::prelude::*;
 
 use crate::rn_usb_c::lnusb_c as usb_c;
 use crate::rn_usb_c::{

@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use crate::gpio::lnPin;
 use crate::rn_spi_c;

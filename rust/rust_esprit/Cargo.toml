@@ -17,10 +17,18 @@ embedded-hal = []
 rp2040 = []
 esp32 = []
 default = []
-use_std = []
+
+# esprit provides its own std-compatible shim (FreeRTOS-backed).
+# Removes #![no_std] and re-exports FreeRTOS-backed implementations
+# under a `std` namespace so that embedded crates depending on `std`
+# can compile on the embedded target.
+fake_std = []
+
+# esprit is used inside an existing std-enabled framework.
+# The framework provides the real `std`; esprit just removes #![no_std].
+external_std = []
 
 [lib]
 name = "rust_esprit"
 path = "src/lib.rs"
 crate-type = ["rlib"] # Creates static lib
-

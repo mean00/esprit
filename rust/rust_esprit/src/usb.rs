@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use crate::prelude::*;
 use crate::rn_usb_c;
 use core::ffi::c_void;
 
@@ -60,8 +61,8 @@ impl UsbBus {
         let raw = unsafe { rn_usb_c::lnusb_create(instance) };
         assert!(!raw.is_null(), "lnusb_create returned NULL");
 
-        // Set the event handler with a trampoline
-        let cookie = Box::into_raw(handler) as *const c_void;
+        // Double-box so the cookie is a thin pointer (Box<Box<dyn Trait>>).
+        let cookie = Box::into_raw(Box::new(handler)) as *const c_void;
         unsafe {
             rn_usb_c::lnusb_setEventHandler(raw, cookie, Some(Self::trampoline));
         }
@@ -105,10 +106,13 @@ impl UsbBus {
 
     extern "C" fn trampoline(cookie: *mut c_void, event: i32) {
         unsafe {
-            let handler: Box<dyn UsbEventHandler> = Box::from_raw(cookie as *mut dyn UsbEventHandler);
-            handler.handle(UsbEvent::from(event as u32));
-            // Re-box to prevent drop — ownership stays with the USB driver
-            let _ = Box::into_raw(handler);
+            // The cookie is a double-box: Box<Box<dyn UsbEventHandler>>.
+            // Recover the outer Box (thin pointer), call the handler, then
+            // re-box to keep ownership with the C driver.
+            let outer: Box<Box<dyn UsbEventHandler>> =
+                Box::from_raw(cookie as *mut Box<dyn UsbEventHandler>);
+            outer.handle(UsbEvent::from(event as u32));
+            let _ = Box::into_raw(outer);
         }
     }
 }

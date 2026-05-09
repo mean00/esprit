@@ -1,8 +1,10 @@
 #![allow(dead_code)]
 
+use crate::prelude::*;
 use crate::rn_debug_c;
-use core::convert::Infallible;
 use ufmt::uWrite;
+use core::result::Result;
+use core::result::Result::Ok;
 
 /// A `ufmt` writer that sends formatted output through the C `Logger_chars`
 /// function (which typically routes to UART / RTT / semihosting).

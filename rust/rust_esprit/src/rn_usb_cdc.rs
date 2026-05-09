@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use alloc::boxed::Box;
+use crate::prelude::*;
 
 use crate::rn_cdc_c::lncdc_c as cdc_c;
 use crate::rn_cdc_c::{
