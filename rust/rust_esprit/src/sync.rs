@@ -920,8 +920,10 @@ impl<T: ?Sized> Arc<T> {
 impl<T: ?Sized> Clone for Arc<T> {
     fn clone(&self) -> Self {
         // SAFETY: the reference count is at least 1, so incrementing is safe.
-        let old = self.inner().count.fetch_add(1, Ordering::Relaxed);
+        // Use load/store instead of fetch_add for targets without atomic CAS (e.g. Cortex-M0+).
+        let old = self.inner().count.load(Ordering::Relaxed);
         assert!(old < usize::MAX, "Arc::clone: reference count overflow");
+        self.inner().count.store(old + 1, Ordering::Relaxed);
         Self {
             ptr: self.ptr,
             _phantom: PhantomData,
@@ -939,14 +941,17 @@ impl<T: ?Sized> Deref for Arc<T> {
 impl<T: ?Sized> Drop for Arc<T> {
     fn drop(&mut self) {
         // If we were the last reference, deallocate.
-        if self.inner().count.fetch_sub(1, Ordering::Release) != 1 {
-            return;
-        }
-        // Synchronise with all previous writes.
-        core::sync::atomic::fence(Ordering::Acquire);
-        // SAFETY: we are the sole owner now.
-        unsafe {
-            let _ = Box::from_raw(self.ptr.as_ptr());
+        // Use load/store instead of fetch_sub for targets without atomic CAS (e.g. Cortex-M0+).
+        let old = self.inner().count.load(Ordering::Acquire);
+        if old <= 1 {
+            // We are the last reference.
+            core::sync::atomic::fence(Ordering::Acquire);
+            // SAFETY: we are the sole owner now.
+            unsafe {
+                let _ = Box::from_raw(self.ptr.as_ptr());
+            }
+        } else {
+            self.inner().count.store(old - 1, Ordering::Release);
         }
     }
 }
