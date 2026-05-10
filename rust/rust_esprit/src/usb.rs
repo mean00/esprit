@@ -82,7 +82,7 @@ impl UsbBus {
             rn_usb_c::lnusb_init(
                 self.raw,
                 nb_desc_lines,
-                descriptor_lines.as_ptr() as *mut *const i8,
+                descriptor_lines.as_ptr() as *mut *const u8,
             );
         }
     }
