@@ -66,6 +66,8 @@ bool lnNvmGd32::readSector(int sector, int offset, int size, uint8_t *data)
 {
     xAssert(_baseAddress == EEPROM_BEGIN);
     xAssert(sector < _nbSectors);
+    xAssert(size >= 0);
+    xAssert((offset + size) <= LN_NVM_SECTOR_SIZE);
     uint8_t *adr = (uint8_t *)(_baseAddress + sector * 1 * LN_NVM_SECTOR_SIZE + offset);
     memcpy(data, adr, size);
     return true;
