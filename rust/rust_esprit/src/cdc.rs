@@ -8,19 +8,33 @@ use core::fmt;
 pub use rn_cdc_c::lncdc_c;
 
 /// CDC‑ACM (virtual serial port) events.
+///
+/// Must match the C++ `lnUsbCDC::lnUsbCDCEvents` enum in `lnUsbCDC.h`:
+///
+/// ```cpp
+/// enum lnUsbCDCEvents {
+///     CDC_DATA_AVAILABLE,    // 0
+///     CDC_WRITE_AVAILABLE,   // 1
+///     CDC_SESSION_START,     // 2
+///     CDC_SESSION_END,       // 3
+///     CDC_SET_SPEED          // 4
+/// };
+/// ```
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 #[repr(u32)]
 pub enum CdcEvent {
     DataAvailable = 0,
-    SessionStart = 1,
-    SessionEnd = 2,
-    SetSpeed = 3,
+    WriteAvailable = 1,
+    SessionStart = 2,
+    SessionEnd = 3,
+    SetSpeed = 4,
 }
 
 impl CdcEvent {
     pub fn as_str(&self) -> &'static str {
         match self {
             CdcEvent::DataAvailable => "DATA_AVAILABLE",
+            CdcEvent::WriteAvailable => "WRITE_AVAILABLE",
             CdcEvent::SessionStart => "SESSION_START",
             CdcEvent::SessionEnd => "SESSION_END",
             CdcEvent::SetSpeed => "SET_SPEED",
@@ -32,26 +46,36 @@ impl From<u32> for CdcEvent {
     fn from(val: u32) -> Self {
         match val {
             0 => CdcEvent::DataAvailable,
-            1 => CdcEvent::SessionStart,
-            2 => CdcEvent::SessionEnd,
-            3 => CdcEvent::SetSpeed,
+            1 => CdcEvent::WriteAvailable,
+            2 => CdcEvent::SessionStart,
+            3 => CdcEvent::SessionEnd,
+            4 => CdcEvent::SetSpeed,
             _ => panic!("invalid CdcEvent: {}", val),
         }
     }
 }
+
 
 /// Types that can receive CDC‑ACM events.
 pub trait CdcEventHandler {
     fn handle(&self, interface: i32, event: CdcEvent, payload: u32);
 }
 
-/// Owned handle to a CDC‑ACM (virtual COM port) instance.
+/// Handle to a CDC‑ACM (virtual COM port) instance.
 ///
 /// Created via `CdcAcm::new(instance, handler)`.
-/// The underlying C object is destroyed on drop.
+///
+/// # Lifetime
+///
+/// The underlying C object is **not** destroyed on drop — it is owned by the
+/// USB stack (registered in the global `_cdc_instances[]` table) and must
+/// remain alive for as long as TinyUSB may deliver events.  Drop this handle
+/// only after the USB connection has been torn down, or leak it intentionally
+/// (e.g. store it in a `static`).
 pub struct CdcAcm {
     raw: *mut rn_cdc_c::lncdc_c,
 }
+
 
 impl CdcAcm {
     /// Create a new CDC instance on `instance` and attach `handler`.
@@ -109,13 +133,14 @@ impl CdcAcm {
     }
 }
 
-impl Drop for CdcAcm {
-    fn drop(&mut self) {
-        unsafe { rn_cdc_c::lncdc_delete(self.raw); }
-    }
-}
+// NOTE: no Drop — the underlying C++ `lnUsbCDC` object is registered in the
+// global `_cdc_instances[]` table and is owned by the USB stack.  Destroying
+// it while TinyUSB may still deliver events (e.g. `tud_cdc_line_coding_cb`)
+// would cause a use-after-free.  The C++ object lives until the USB stack is
+// fully deinitialised.
 
 /// Convenience `write_fmt` using `write`.
+
 impl fmt::Write for CdcAcm {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let bytes = s.as_bytes();
