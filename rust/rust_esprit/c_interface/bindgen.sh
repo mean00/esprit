@@ -27,3 +27,4 @@ gen_c lnFast_EventGroup_c.h ${DEST}/rn_fast_event_c.rs ${PWD} ../../../FreeRTOS
 echo "__________________c:FreeRTOS_________________________"
 bash ../../../cmake/rustgen.sh lnFreeRTOS_c.h ${DEST}/rn_freertos_c.rs ../../../freertos_config/ ../../../FreeRTOS/
 gen_cpp ../../../include/lnDebug.h ${DEST}/rn_debug_c.rs ${PWD}
+gen_c lnSerial_c.h ${DEST}/rn_serial_c.rs ${PWD}

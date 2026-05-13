@@ -25,6 +25,7 @@ ENDIF()
 ADD_LIBRARY(lnarduino_c_bindings OBJECT
     ${EXTRA}
     ${C}/lnFast_EventGroup_c.cpp
+    ${C}/lnSerial_c.cpp
   )
 TARGET_LINK_LIBRARIES(lnarduino_c_bindings PRIVATE esprit_dev)
 

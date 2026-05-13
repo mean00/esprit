@@ -121,6 +121,7 @@ pub(crate) use c_api::rn_gpio_rp2040_c;
 pub(crate) use c_api::rn_i2c_c;
 pub(crate) use c_api::rn_spi_c;
 pub(crate) use c_api::rn_timer_c;
+pub(crate) use c_api::rn_serial_c;
 pub(crate) use c_api::rn_timing_adc_c;
 #[cfg(feature = "cdc")]
 pub(crate) use c_api::rn_usb_c;
@@ -176,6 +177,9 @@ pub mod task;
 
 /// Synchronisation primitives wrapping FreeRTOS mutexes and semaphores.
 pub mod sync;
+
+/// UART serial communication (Tx‑only and bidirectional).
+pub mod serial;
 
 /// `ufmt`‑based logging macros (`logger!`, `logger_init!`).
 pub mod logger;
