@@ -2,6 +2,10 @@
 #include "stdbool.h"
 #include "stdint.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // ---------------------------------------------------------------------------
 //  Opaque handle types
 // ---------------------------------------------------------------------------
@@ -49,5 +53,9 @@ int              lnserial_rx_read(ln_serial_rx_c *s, int max, uint8_t *to);
 void             lnserial_rx_set_callback(ln_serial_rx_c *s, ln_serial_event_cb *cb, void *cookie);
 int              lnserial_rx_get_read_pointer(ln_serial_rx_c *s, uint8_t **to);
 void             lnserial_rx_consume(ln_serial_rx_c *s, int n);
+
+#ifdef __cplusplus
+}
+#endif
 
 // EOF

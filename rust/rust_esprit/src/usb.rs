@@ -3,6 +3,7 @@
 use crate::prelude::*;
 use crate::rn_usb_c;
 use core::ffi::c_void;
+use cty;
 
 pub use rn_usb_c::{lnusb_c, lnUsbStackEventHandler};
 
@@ -77,12 +78,12 @@ impl UsbBus {
     }
 
     /// Initialise USB with descriptors (called after `new` but before `start`).
-    pub fn init(&mut self, nb_desc_lines: i32, descriptor_lines: &[*const i8]) {
+    pub fn init(&mut self, nb_desc_lines: i32, descriptor_lines: &[*const cty::c_char]) {
         unsafe {
             rn_usb_c::lnusb_init(
                 self.raw,
                 nb_desc_lines,
-                descriptor_lines.as_ptr() as *mut *const u8,
+                descriptor_lines.as_ptr() as *mut *const cty::c_char,
             );
         }
     }
