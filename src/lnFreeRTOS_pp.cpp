@@ -7,6 +7,15 @@
 #include "lnFreeRTOS_pp.h"
 #include "lnIRQ.h"
 
+/*
+ * Reference the freeRTOSDebug struct so the linker always pulls in
+ * lnFreeRTOSDebug.cpp.obj from the archive, making the symbol available
+ * to the debugger (GDB, Rust FreeRTOS module, etc.).
+ */
+extern "C" const struct lnFreeRTOSDebug freeRTOSDebug;
+static const struct lnFreeRTOSDebug * const _force_freeRTOSDebug
+    __attribute__((used)) = &freeRTOSDebug;
+
 #define fos_ms2tick(ms) (((ms) + portTICK_PERIOD_MS - 1) / portTICK_PERIOD_MS)
 
 #define EVENT_INDEX 1
