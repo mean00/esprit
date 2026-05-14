@@ -124,6 +124,9 @@ SECTIONS
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .rodata*)
         *(.srodata*)
         . = ALIGN(4);
+        /* Keep the FreeRTOS debug struct so the debugger can always find it */
+        KEEP(*(.rodata.freertos_debug))
+        . = ALIGN(4);
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))
         . = ALIGN(4);
     } > FLASH

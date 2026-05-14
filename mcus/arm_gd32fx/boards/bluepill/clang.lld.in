@@ -185,6 +185,8 @@ SECTIONS
     .rodata :
       {
         *(.rodata .rodata.* .gnu.linkonce.r.*)
+        /* Keep the FreeRTOS debug struct so the debugger can always find it */
+        KEEP(*(.rodata.freertos_debug))
         /* .USER_FLASH: We allow users to allocate into Flash here */
         *(.USER_FLASH)
         /* ROM image configuration; for C startup */

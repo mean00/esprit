@@ -41,10 +41,14 @@ struct copyOfTcbStruct /* The old naming convention is used to prevent breaking 
 #endif
 };
 
-extern const uint32_t *lnGetFreeRTOSDebug() LN_USED;
+extern "C" const uint32_t *lnGetFreeRTOSDebug() LN_USED;
 
-extern "C" const lnFreeRTOSDebug freeRTOSDebug;
-const lnFreeRTOSDebug freeRTOSDebug = {
+// The `used` attribute forces the compiler to emit this symbol even if
+// nothing references it. The custom section with KEEP in the linker script
+// prevents --gc-sections from discarding it, ensuring it's always present
+// in any esprit-based binary so the debugger can find and read it.
+extern "C" const lnFreeRTOSDebug freeRTOSDebug LN_USED;
+__attribute__((section(".rodata.freertos_debug"))) const lnFreeRTOSDebug freeRTOSDebug = {
     LN_FREERTOS_MAGIC,
     sizeof(List_t),                // LIST_SIZE
     offsetof(xLIST_ITEM, pxNext),  // OFFSET_LIST_ITEM_NEXT;
@@ -70,7 +74,7 @@ const lnFreeRTOSDebug freeRTOSDebug = {
 /*
   dummy function to prevent the linker from removing it
 */
-const uint32_t *lnGetFreeRTOSDebug()
+extern "C" const uint32_t *lnGetFreeRTOSDebug()
 {
     return (uint32_t *)&freeRTOSDebug;
 }

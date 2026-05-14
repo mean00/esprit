@@ -3,6 +3,7 @@
 ADD_LIBRARY(ln_utils OBJECT)
 TARGET_SOURCES( ln_utils PRIVATE
                        lnFreeRTOS_pp.cpp
+                       lnFreeRTOSDebug.cpp
                        lnDebug.cpp
                        systemHelper.cpp
                        lnStopWatch.cpp)

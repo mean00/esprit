@@ -98,6 +98,8 @@ SECTIONS
         *(.text .text.* .gnu.linkonce.t.*)
         *(*.rodata)
         *(*.rodata.*)
+        /* Keep the FreeRTOS debug struct so the debugger can always find it */
+        KEEP(*(.rodata.freertos_debug))
 
         *(.plt)
         *(.eh_frame_hdr)
