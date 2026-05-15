@@ -1,3 +1,1 @@
-
 include(common_platformConfig)
-

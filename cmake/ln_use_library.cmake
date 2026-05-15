@@ -1,6 +1,5 @@
-
-MACRO(USE_LIBRARY lib)
+macro(USE_LIBRARY lib)
   add_subdirectory(${ESPRIT_ROOT}/libraries/${lib})
   include_directories(${ESPRIT_ROOT}/libraries/${lib})
-  LIST(APPEND USED_LIBS ${lib})
-ENDMACRO(USE_LIBRARY lib)
+  list(APPEND USED_LIBS ${lib})
+endmacro(USE_LIBRARY lib)

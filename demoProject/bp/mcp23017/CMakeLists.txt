@@ -1,24 +1,23 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20)
 
-SET(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-INCLUDE(common_CMakeLists)
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+include(common_CMakeLists)
 
-PROJECT(Longan_mcp23017 C CXX ASM)
+project(Longan_mcp23017 C CXX ASM)
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR})
-ADD_SUBDIRECTORY(${ESPRIT_ROOT})
+include_directories(${CMAKE_SOURCE_DIR})
+add_subdirectory(${ESPRIT_ROOT})
 
+include(${ESPRIT_ROOT}/setup.cmake)
 
-INCLUDE(${ESPRIT_ROOT}/setup.cmake)
-
-#generic MCP part
-SET( MCP23017 ${ESPRIT_ROOT}/libraries/mcp23017 )
-ADD_SUBDIRECTORY(${MCP23017})
-INCLUDE_DIRECTORIES( ${MCP23017} ${MCP23017}/)
+# generic MCP part
+set(MCP23017 ${ESPRIT_ROOT}/libraries/mcp23017)
+add_subdirectory(${MCP23017})
+include_directories(${MCP23017} ${MCP23017}/)
 
 # longan nano specific part
-INCLUDE_DIRECTORIES( ${MCP23017} ${MCP23017}/platformExample/longanNano)
-SET(LIBMCP23017  ${MCP23017}/platformExample/longanNano/lnMcp23017.cpp)
+include_directories(${MCP23017} ${MCP23017}/platformExample/longanNano)
+set(LIBMCP23017 ${MCP23017}/platformExample/longanNano/lnMcp23017.cpp)
 #
-GENERATE_GD32_FIRMWARE(demo_mcp23017 hello.cpp ${LIBMCP23017} )
+generate_gd32_firmware(demo_mcp23017 hello.cpp ${LIBMCP23017})
 target_link_libraries(demo_mcp23017 PRIVATE mcp23017)

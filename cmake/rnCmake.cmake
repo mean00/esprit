@@ -1,52 +1,64 @@
-IF(NOT Rust_CARGO_TARGET)
-  IF(LN_ARCH STREQUAL "RISCV")
-    IF(USE_HW_FPU)
-      SET(Rust_CARGO_TARGET "riscv32imafc-unknown-none-elf" CACHE INTERNAL "")
-      #SET(Rust_CARGO_TARGET "${ESPRIT_ROOT}/mcus/riscv_ch32v3x/riscv32imacf-unknown-none-elf.json" CACHE INTERNAL "")
-      #SET(LN_RUST_BUILD_FLAGS  -Z build-std=core,alloc CACHE INTERNAL "")
-      #MESSAGE(STATUS "Disabling rust-lto for riscv32-imacf, expect big binaries")
-      #SET(LN_LTO_RUST_FLAGS "" CACHE INTERNAL "")
-    ELSE()
-      SET(Rust_CARGO_TARGET "riscv32imac-unknown-none-elf" CACHE INTERNAL "")
-    ENDIF()
-  ELSE()
-    IF(LN_ARCH STREQUAL "ARM")
-      IF("${LN_MCU}" STREQUAL "M4")
-        #SET(Rust_CARGO_TARGET "${ESPRIT_ROOT}/arm_gd32fx/thumbv7em-none-eabihf.json" CACHE INTERNAL "")
-        #SET(LN_RUST_BUILD_FLAGS  -Z build-std=core,alloc CACHE INTERNAL "")
-        SET(Rust_CARGO_TARGET "thumbv7em-none-eabihf" CACHE INTERNAL "")
-      ELSEIF("${LN_MCU}" STREQUAL "M3")
-        #SET(Rust_CARGO_TARGET "${ESPRIT_ROOT}/arm_gd32fx/thumbv7m-none-eabi.json" CACHE INTERNAL "")
-        #SET(LN_RUST_BUILD_FLAGS  -Z build-std=core,alloc CACHE INTERNAL "")
-        SET(Rust_CARGO_TARGET "thumbv7m-none-eabi" CACHE INTERNAL "")
-      ELSEIF("${LN_MCU}" STREQUAL "RP2040")
-        #SET(Rust_CARGO_TARGET "${ESPRIT_ROOT}/arm_gd32fx/thumbv7m-none-eabi.json" CACHE INTERNAL "")
-        #SET(LN_RUST_BUILD_FLAGS  -Z build-std=core,alloc CACHE INTERNAL "")
-        SET(Rust_CARGO_TARGET "thumbv6m-none-eabi" CACHE INTERNAL "")
-      ELSEIF("${LN_MCU}" STREQUAL "RP2350")
-        SET(Rust_CARGO_TARGET "thumbv8m.main-none-eabi" CACHE INTERNAL "")
-      ENDIF()
-    ELSE()
-      SET(Rust_CARGO_TARGET "x86_64-unknown-linux-gnu"  CACHE INTERNAL "")
-    ENDIF()
-  ENDIF()
+if(NOT Rust_CARGO_TARGET)
+  if(LN_ARCH STREQUAL "RISCV")
+    if(USE_HW_FPU)
+      set(Rust_CARGO_TARGET
+          "riscv32imafc-unknown-none-elf"
+          CACHE INTERNAL "")
+      # SET(Rust_CARGO_TARGET "${ESPRIT_ROOT}/mcus/riscv_ch32v3x/riscv32imacf-unknown-none-elf.json" CACHE INTERNAL "")
+      # SET(LN_RUST_BUILD_FLAGS  -Z build-std=core,alloc CACHE INTERNAL "") MESSAGE(STATUS "Disabling rust-lto for
+      # riscv32-imacf, expect big binaries") SET(LN_LTO_RUST_FLAGS "" CACHE INTERNAL "")
+    else()
+      set(Rust_CARGO_TARGET
+          "riscv32imac-unknown-none-elf"
+          CACHE INTERNAL "")
+    endif()
+  else()
+    if(LN_ARCH STREQUAL "ARM")
+      if("${LN_MCU}" STREQUAL "M4")
+        # SET(Rust_CARGO_TARGET "${ESPRIT_ROOT}/arm_gd32fx/thumbv7em-none-eabihf.json" CACHE INTERNAL "")
+        # SET(LN_RUST_BUILD_FLAGS  -Z build-std=core,alloc CACHE INTERNAL "")
+        set(Rust_CARGO_TARGET
+            "thumbv7em-none-eabihf"
+            CACHE INTERNAL "")
+      elseif("${LN_MCU}" STREQUAL "M3")
+        # SET(Rust_CARGO_TARGET "${ESPRIT_ROOT}/arm_gd32fx/thumbv7m-none-eabi.json" CACHE INTERNAL "")
+        # SET(LN_RUST_BUILD_FLAGS  -Z build-std=core,alloc CACHE INTERNAL "")
+        set(Rust_CARGO_TARGET
+            "thumbv7m-none-eabi"
+            CACHE INTERNAL "")
+      elseif("${LN_MCU}" STREQUAL "RP2040")
+        # SET(Rust_CARGO_TARGET "${ESPRIT_ROOT}/arm_gd32fx/thumbv7m-none-eabi.json" CACHE INTERNAL "")
+        # SET(LN_RUST_BUILD_FLAGS  -Z build-std=core,alloc CACHE INTERNAL "")
+        set(Rust_CARGO_TARGET
+            "thumbv6m-none-eabi"
+            CACHE INTERNAL "")
+      elseif("${LN_MCU}" STREQUAL "RP2350")
+        set(Rust_CARGO_TARGET
+            "thumbv8m.main-none-eabi"
+            CACHE INTERNAL "")
+      endif()
+    else()
+      set(Rust_CARGO_TARGET
+          "x86_64-unknown-linux-gnu"
+          CACHE INTERNAL "")
+    endif()
+  endif()
 
-ENDIF()
+endif()
 #
-MESSAGE(STATUS " Rust cargo target : ${Rust_CARGO_TARGET} (ARCH = ${LN_ARCH})")
+message(STATUS " Rust cargo target : ${Rust_CARGO_TARGET} (ARCH = ${LN_ARCH})")
 #
-ADD_SUBDIRECTORY(${ESPRIT_ROOT}/rust/corrosion corrosion)
+add_subdirectory(${ESPRIT_ROOT}/rust/corrosion corrosion)
 #
-#
-MACRO(RUST_ADD tgt MANIFEST)
-  #MESSAGE(STATUS "${ARGC}:<${ARGN}>:<${LN_RUST_BUILD_FLAGS}>")
+macro(RUST_ADD tgt MANIFEST)
+  # MESSAGE(STATUS "${ARGC}:<${ARGN}>:<${LN_RUST_BUILD_FLAGS}>")
   set(CORROSION_RUSTFLAGS "-C no-default-libs")
-  corrosion_import_crate(MANIFEST_PATH ${MANIFEST} FLAGS "${LN_RUST_BUILD_FLAGS}" )
+  corrosion_import_crate(MANIFEST_PATH ${MANIFEST} FLAGS "${LN_RUST_BUILD_FLAGS}")
   corrosion_add_target_rustflags(${tgt} "${LN_LTO_RUST_FLAGS}")
-  IF(${ARGC} GREATER 2)
+  if(${ARGC} GREATER 2)
     set(ARGN_LIST ${ARGN})
     string(REPLACE ";" " " SPACE_SEPARATED_STRING "${ARGN_LIST}")
-    MESSAGE(STATUS "   RUST : Enabling feature(s) <${ARGN}> => <${ARGN_LIST}>")
-    corrosion_set_features( ${tgt} NO_DEFAULT_FEATURES FEATURES ${ARGN_LIST})
-  ENDIF()
-ENDMACRO()
+    message(STATUS "   RUST : Enabling feature(s) <${ARGN}> => <${ARGN_LIST}>")
+    corrosion_set_features(${tgt} NO_DEFAULT_FEATURES FEATURES ${ARGN_LIST})
+  endif()
+endmacro()

@@ -1,21 +1,19 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20)
 
-SET(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-INCLUDE(common_CMakeLists)
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+include(common_CMakeLists)
 
-PROJECT(lnAdvanceADC C CXX ASM)
+project(lnAdvanceADC C CXX ASM)
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR})
-ADD_SUBDIRECTORY(${ESPRIT_ROOT})
+include_directories(${CMAKE_SOURCE_DIR})
+add_subdirectory(${ESPRIT_ROOT})
 
-INCLUDE(${ESPRIT_ROOT}/setup.cmake)
+include(${ESPRIT_ROOT}/setup.cmake)
 
-SET( NVM ${ESPRIT_ROOT}/libraries/NeVerMind)
-INCLUDE_DIRECTORIES(${NVM})
-INCLUDE_DIRECTORIES(${NVM}/gd32)
+set(NVM ${ESPRIT_ROOT}/libraries/NeVerMind)
+include_directories(${NVM})
+include_directories(${NVM}/gd32)
 
-SET(NVM_SRC ${NVM}/nvmCore.cpp  ${NVM}/gd32/nvm_gd32.cpp)
+set(NVM_SRC ${NVM}/nvmCore.cpp ${NVM}/gd32/nvm_gd32.cpp)
 
-GENERATE_GD32_FIRMWARE(hello hello.cpp ${NVM_SRC})
-
-
+generate_gd32_firmware(hello hello.cpp ${NVM_SRC})

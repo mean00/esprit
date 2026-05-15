@@ -1,8 +1,9 @@
 include(ln_merge_libs)
 
-MACRO(GENERATE_GD32_FIRMWARE)
-    LN_MERGE_LIBS()
-ENDMACRO()
-MACRO(HASH_GD32_FIRMWARE)
-ENDMACRO()
+macro(GENERATE_GD32_FIRMWARE)
+  ln_merge_libs()
+endmacro()
+macro(HASH_GD32_FIRMWARE)
+
+endmacro()
 include(ln_use_library)

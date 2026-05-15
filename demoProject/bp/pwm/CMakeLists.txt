@@ -1,16 +1,15 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20)
 
-SET(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-INCLUDE(common_CMakeLists)
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+include(common_CMakeLists)
 
-PROJECT(lnPwm C CXX ASM)
+project(lnPwm C CXX ASM)
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR})
-ADD_SUBDIRECTORY(${ESPRIT_ROOT})
+include_directories(${CMAKE_SOURCE_DIR})
+add_subdirectory(${ESPRIT_ROOT})
 
-INCLUDE(${ESPRIT_ROOT}/setup.cmake)
+include(${ESPRIT_ROOT}/setup.cmake)
 
-GENERATE_GD32_FIRMWARE(simple_pwm simple_pwm.cpp)
-GENERATE_GD32_FIRMWARE(shifting_fq shifting_fq.cpp)
-GENERATE_GD32_FIRMWARE(single_shot single_shot.cpp)
-
+generate_gd32_firmware(simple_pwm simple_pwm.cpp)
+generate_gd32_firmware(shifting_fq shifting_fq.cpp)
+generate_gd32_firmware(single_shot single_shot.cpp)

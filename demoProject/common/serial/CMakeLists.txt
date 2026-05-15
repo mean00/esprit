@@ -1,15 +1,16 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.20)
-SET(LN_ENABLE_UART TRUE CACHE INTERNAL "")
+cmake_minimum_required(VERSION 3.20)
+set(LN_ENABLE_UART
+    TRUE
+    CACHE INTERNAL "")
 
-SET(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-INCLUDE(common_CMakeLists)
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+include(common_CMakeLists)
 
-PROJECT(lnPwm C CXX ASM)
+project(lnPwm C CXX ASM)
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR})
-ADD_SUBDIRECTORY(${ESPRIT_ROOT})
+include_directories(${CMAKE_SOURCE_DIR})
+add_subdirectory(${ESPRIT_ROOT})
 
-INCLUDE(${ESPRIT_ROOT}/setup.cmake)
+include(${ESPRIT_ROOT}/setup.cmake)
 
-GENERATE_GD32_FIRMWARE(hello hello.cpp)
-
+generate_gd32_firmware(hello hello.cpp)

@@ -1,36 +1,30 @@
+set(C ${CMAKE_CURRENT_SOURCE_DIR}/rust_esprit/c_interface)
 
-SET(C ${CMAKE_CURRENT_SOURCE_DIR}/rust_esprit/c_interface)
+include_directories(${C})
 
-INCLUDE_DIRECTORIES( ${C} )
+if(LN_ENABLE_USBD)
+  include(${ESPRIT_ROOT}/libraries/tinyUsb/tiny.cmake)
+  set(EXTRA ${EXTRA} ${C}/lnCDC_c.cpp ${C}/lnUSB_c.cpp)
+endif()
 
-IF(LN_ENABLE_USBD)
-  INCLUDE(${ESPRIT_ROOT}/libraries/tinyUsb/tiny.cmake)
-  SET(EXTRA ${EXTRA} ${C}/lnCDC_c.cpp ${C}/lnUSB_c.cpp)
-ENDIF()
+if(LN_ENABLE_SPI)
+  set(EXTRA ${EXTRA} ${C}/lnSPI_c.cpp)
+endif()
 
-IF(LN_ENABLE_SPI)
-  SET(EXTRA ${EXTRA} ${C}/lnSPI_c.cpp)
-ENDIF()
+if(USE_RP2040 OR USE_RP2350)
 
-IF(USE_RP2040 OR USE_RP2350)
-ELSE()
-  IF(LN_ENABLE_TIMING_ADC)
-    SET(EXTRA ${EXTRA} ${C}/lnTiming_adc_c.cpp)
-  ENDIF()
-  IF(LN_ENABLE_I2C)
-    SET(EXTRA ${EXTRA} ${C}/lnI2C_c.cpp)
-  ENDIF()
-ENDIF()
+else()
+  if(LN_ENABLE_TIMING_ADC)
+    set(EXTRA ${EXTRA} ${C}/lnTiming_adc_c.cpp)
+  endif()
+  if(LN_ENABLE_I2C)
+    set(EXTRA ${EXTRA} ${C}/lnI2C_c.cpp)
+  endif()
+endif()
 
-ADD_LIBRARY(lnarduino_c_bindings OBJECT
-    ${EXTRA}
-    ${C}/lnFast_EventGroup_c.cpp
-    ${C}/lnSerial_c.cpp
-  )
-TARGET_LINK_LIBRARIES(lnarduino_c_bindings PRIVATE esprit_dev)
+add_library(lnarduino_c_bindings OBJECT ${EXTRA} ${C}/lnFast_EventGroup_c.cpp ${C}/lnSerial_c.cpp)
+target_link_libraries(lnarduino_c_bindings PRIVATE esprit_dev)
 
-IF(LN_ENABLE_USBD)
-  TARGET_LINK_LIBRARIES(lnarduino_c_bindings  PRIVATE tinyUsb)
-ENDIF()
-
-
+if(LN_ENABLE_USBD)
+  target_link_libraries(lnarduino_c_bindings PRIVATE tinyUsb)
+endif()

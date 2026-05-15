@@ -1,16 +1,13 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20)
 
-SET(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-INCLUDE(common_CMakeLists)
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+include(common_CMakeLists)
 
-PROJECT(Hello_gd32_freetos C CXX ASM)
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR})
-ADD_SUBDIRECTORY(${ESPRIT_ROOT})
+project(Hello_gd32_freetos C CXX ASM)
+include_directories(${CMAKE_SOURCE_DIR})
+add_subdirectory(${ESPRIT_ROOT})
 
+include(${ESPRIT_ROOT}/setup.cmake)
 
-INCLUDE(${ESPRIT_ROOT}/setup.cmake)
-
-
-RP_PIO_GENERATE( ${CMAKE_SOURCE_DIR}/ws.pio ${CMAKE_BINARY_DIR}/ws.h)
-GENERATE_GD32_FIRMWARE(pio_ws2812 main_pio.cpp pio_ws2812.cpp ${CMAKE_BINARY_DIR}/ws.h)
-
+rp_pio_generate(${CMAKE_SOURCE_DIR}/ws.pio ${CMAKE_BINARY_DIR}/ws.h)
+generate_gd32_firmware(pio_ws2812 main_pio.cpp pio_ws2812.cpp ${CMAKE_BINARY_DIR}/ws.h)

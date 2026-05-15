@@ -1,38 +1,42 @@
 
-
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.20)
-MESSAGE(STATUS "======================")
-MESSAGE(STATUS "Starting usb test")
-MESSAGE(STATUS "======================")
+cmake_minimum_required(VERSION 3.20)
+message(STATUS "======================")
+message(STATUS "Starting usb test")
+message(STATUS "======================")
 
-SET(LN_ENABLE_USBD True CACHE INTERNAL "")
-SET(LN_ENABLE_I2C  FALSE CACHE INTERNAL "")
-SET(LN_ENABLE_SPI  FALSE CACHE INTERNAL "")
-SET(LN_USB_NB_CDC 1) # 1 CDC interfaces
-SET(LN_USB_NB_HID 0) # No HID
+set(LN_ENABLE_USBD
+    True
+    CACHE INTERNAL "")
+set(LN_ENABLE_I2C
+    FALSE
+    CACHE INTERNAL "")
+set(LN_ENABLE_SPI
+    FALSE
+    CACHE INTERNAL "")
+set(LN_USB_NB_CDC 1) # 1 CDC interfaces
+set(LN_USB_NB_HID 0) # No HID
 
-SET(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-INCLUDE(common_CMakeLists)
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+include(common_CMakeLists)
 
-PROJECT(lnUsb_usbcdc NONE) # the NONE is very important !
+project(lnUsb_usbcdc NONE) # the NONE is very important !
 
 enable_language(C CXX ASM) # this is important too!
 
 #
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR})
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/INCLUDE)
+include_directories(${CMAKE_SOURCE_DIR})
+include_directories(${CMAKE_SOURCE_DIR}/INCLUDE)
 
-#SET(LN_ENABLE_RUST ON CACHED "")
+# SET(LN_ENABLE_RUST ON CACHED "")
 
-ADD_SUBDIRECTORY(${ESPRIT_ROOT})
+add_subdirectory(${ESPRIT_ROOT})
 
-INCLUDE(${ESPRIT_ROOT}/setup.cmake)
-USE_LIBRARY(tinyUsb)
+include(${ESPRIT_ROOT}/setup.cmake)
+use_library(tinyUsb)
 
-INCLUDE(${ESPRIT_ROOT}/libraries/tinyUsb/tiny.cmake)
+include(${ESPRIT_ROOT}/libraries/tinyUsb/tiny.cmake)
 
-GENERATE_GD32_FIRMWARE(hello hello.cpp)
-
+generate_gd32_firmware(hello hello.cpp)
