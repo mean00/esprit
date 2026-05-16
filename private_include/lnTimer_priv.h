@@ -13,20 +13,20 @@
  */
 struct LN_Timers_Registersx
 {
-    uint32_t CTL0;      // 0
+    uint32_t CTL0;      // CR1 0
     uint32_t CTL1;      // 4
     uint32_t SMCFG;     // 8   Slave Mode
     uint32_t DMAINTEN;  // C   DMA update
     uint32_t INTF;      // 10
-    uint32_t SWEV;      // 14
-    uint32_t CHCTLs[2]; // 18/1C
+    uint32_t SWEV;      // EGR 14
+    uint32_t CHCTLs[2]; // CCM1R 18/1C
 
-    uint32_t CHCTL2;   // 20
+    uint32_t CHCTL2;   // CCER 20
     uint32_t CNT;      // 24
     uint32_t PSC;      // 28
-    uint32_t CAR;      // 2C
+    uint32_t CAR;      // ARR 2C
     uint32_t FILLER0;  // 30
-    uint32_t CHCVs[4]; // 34 38 3c 40
+    uint32_t CHCVs[4]; // CCR1 34 38 3c 40
     uint32_t FILLER1;  // 44
     uint32_t DMACFG;   // 48
     uint32_t DMATB;    // 4C

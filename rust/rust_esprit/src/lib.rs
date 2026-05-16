@@ -90,6 +90,10 @@ pub type size_t = cty::c_uint;
 // ---------------------------------------------------------------------------
 //  C‑bindgen modules (raw FFI) – kept for backward compatibility
 // ---------------------------------------------------------------------------
+/// Canonical `lnPin` type shared across all FFI binding modules.
+/// Re‑exports the platform‑specific `lnPin` from the GPIO bindings.
+pub mod pin_types;
+
 /// Raw C bindings – moved to a subfolder for clarity.
 /// Re-exported below for backward compatibility.
 /// This module is **internal** – not part of the public API.
@@ -178,6 +182,8 @@ pub mod task;
 /// Synchronisation primitives wrapping FreeRTOS mutexes and semaphores.
 pub mod sync;
 
+/// Timer wrapper with single‑shot pulse generation.
+pub mod timer;
 /// UART serial communication (Tx‑only and bidirectional).
 pub mod serial;
 

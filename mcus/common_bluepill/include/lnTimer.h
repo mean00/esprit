@@ -23,16 +23,16 @@ enum lnTimerMode
 class lnTimer
 {
   public:
-    lnTimer(int timer, int channel);
-    lnTimer(int pin);
+    lnTimer(uint32_t timer, uint32_t channel);
+    lnTimer(lnPin pin);
     virtual ~lnTimer();
     // PWM API
-    void setPwmMode(int ratio100);    // The ratio "low", 25 => 25% time low, 75=>75% time low
-    void setPwmFrequency(int fqInHz); // PMW bas frequency
+    void setPwmMode(uint32_t ratio100);    // The ratio "low", 25 => 25% time low, 75=>75% time low
+    void setPwmFrequency(uint32_t fqInHz); // PMW bas frequency
     // non PWM API
-    void setChannelRatio(int ratio100); // Ratio=100 => 100%, 50 => 50%, 0 => 0%
+    void setChannelRatio(uint32_t ratio100); // Ratio=100 => 100%, 50 => 50%, 0 => 0%
     //
-    void singleShot(int durationMs, bool down = false);
+    void singleShot(uint32_t durationMs, bool up = true);
     void setForceState(bool forceHigh = false);
     void disable();
     void enable();
@@ -46,8 +46,8 @@ class lnTimer
     }
 
   protected:
-    int _timer, _channel;
-    void setTickFrequency(int fqInHz);
+    uint32_t _timer, _channel;
+    void setTickFrequency(uint32_t fqInHz);
     void setMode(lnTimerMode mode);
 };
 
@@ -76,14 +76,14 @@ class lnAdcTimer : public lnTimer
 class lnSquareSignal : public lnTimer
 {
   public:
-    lnSquareSignal(int timer, int channel) : lnTimer(timer, channel)
+    lnSquareSignal(uint32_t timer, uint32_t channel) : lnTimer(timer, channel)
     {
     }
-    lnSquareSignal(int pin) : lnTimer(pin)
+    lnSquareSignal(lnPin pin) : lnTimer(pin)
     {
     }
     // this is a single pulse timer
-    void setFrequency(int fqInHz);
+    void setFrequency(uint32_t fqInHz);
 };
 
 /**

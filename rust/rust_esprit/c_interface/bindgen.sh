@@ -2,12 +2,12 @@
 #
 gen_cpp() {
   echo "__________________cpp:${1}_________________________"
-  bash ../../../cmake/rustgen.sh ${1} ${2} ${3}
+  bash ../../../cmake/rustgen.sh ${1} ${2} ${3} ${4} ${5} ${6}
 }
 
 gen_c() {
   echo "__________________c:${1}_________________________"
-  bash ../../../cmake/rustgen_c.sh ${1} ${2} ${3}
+  bash ../../../cmake/rustgen_c.sh ${1} ${2} ${3} ${4} ${5} ${6}
 }
 # Will work for CH32/STM32 and GD32
 DEST=../src/c_api
@@ -15,9 +15,9 @@ bash ../../../cmake/rustgen.sh lnGPIO_c.h ${DEST}/rn_gpio_bp_c.rs ../../../mcus/
 bash ../../../cmake/rustgen.sh lnGPIO_c.h ${DEST}/rn_gpio_rp2040_c.rs ../../../mcus/arm_rp2040/include  #${PWD}
 bash ../../../cmake/rustgen.sh lnGPIO_c.h ${DEST}/rn_gpio_esp32_c.rs ../../../mcus/riscv_esp32/include  #${PWD}
 
-gen_cpp lnTiming_adc_c.h ${DEST}/rn_timing_adc_c.rs ${PWD}
-gen_cpp lnTimer_c.h ${DEST}/rn_timer_c.rs ../../../mcus/common_bluepill/include
-gen_cpp lnExti_c.h ${DEST}/rn_exti_c.rs ${PWD}
+gen_cpp lnTiming_adc_c.h ${DEST}/rn_timing_adc_c.rs ${PWD} blocklist
+gen_cpp lnTimer_c.h ${DEST}/rn_timer_c.rs ../../../mcus/common_bluepill/include blocklist
+gen_cpp lnExti_c.h ${DEST}/rn_exti_c.rs ${PWD} blocklist
 gen_c lnI2C_c.h ${DEST}/rn_i2c_c.rs ${PWD}
 gen_cpp lnSPI_c.h ${DEST}/rn_spi_c.rs ${PWD}
 gen_c lnCDC_c.h ${DEST}/rn_cdc_c.rs ${PWD}

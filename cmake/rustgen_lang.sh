@@ -2,13 +2,8 @@
 #set -x
 #
 if [ "$#" -lt 4 ]; then
-  echo "rustgen.sh xxx.h xxx.rs"
+  echo "Usage: rustgen_lang.sh header.h output.rs lang extra_dir [extra_dir2] [blocklist]"
   exit 1
-fi
-if [ "$#" -eq 5 ]; then
-  export EXTRA_DIR2=-I$5
-else
-  export EXTRA_DIR2=""
 fi
 #input=$1
 output=$2
@@ -25,6 +20,22 @@ else
 fi
 echo " bindgen is $BINDGEN ."
 export LN=$(realpath $ME/..)
+
+# Parse optional arguments
+EXTRA_DIR2=""
+BLOCKLIST=""
+if [ "$#" -ge 5 ]; then
+  if [ "$5" = "blocklist" ]; then
+    BLOCKLIST="blocklist"
+  else
+    export EXTRA_DIR2=-I$5
+  fi
+fi
+if [ "$#" -ge 6 ]; then
+  if [ "$6" = "blocklist" ]; then
+    BLOCKLIST="blocklist"
+  fi
+fi
 
 export PLATFORM_CLANG_PATH=$(cmake -DUSE_CLANG=1 -DHOME=$LN -P $ME/toolchain_env.cmake 2>&1)
 #export PLATFORM_TOOLCHAIN_PATH=/home/fx/Arduino_stm32/arm-gcc-2021q4/bin
@@ -45,12 +56,20 @@ echo "   #define uint32_t unsigned int " >>$TMP
 echo "#endif" >>$TMP
 cat $1 >>$TMP
 \rm -f rnEsprit.rs.tmp
+
+# Build bindgen flags
+BINDGEN_FLAGS=""
+if [ "$BLOCKLIST" = "blocklist" ]; then
+  BINDGEN_FLAGS="--blocklist-type lnPin --raw-line \"use crate::pin_types::lnPin;\""
+fi
+
 $BINDGEN \
   --rust-edition 2024 --rust-target="1.85" \
   --use-core --no-doc-comments \
   --no-layout-tests $TMP \
   --ctypes-prefix cty \
   --rustified-enum "ln.*" \
+  ${BINDGEN_FLAGS} \
   -o $2.tmp \
   -- -x ${LANG} -DLN_ARCH=LN_ARCH_ARM \
   -funsigned-char \

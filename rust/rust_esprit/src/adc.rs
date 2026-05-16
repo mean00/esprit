@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::gpio::lnPin;
+use crate::lnPin;
 use crate::rn_timing_adc_c;
 
 pub use rn_timing_adc_c::ln_timing_adc_c;
@@ -67,7 +67,11 @@ impl AdcTiming {
             "output buffer too small"
         );
         unsafe {
-            rn_timing_adc_c::ln_timing_adc_multi_read(self.raw, nb_sample_per_channel, output.as_mut_ptr())
+            rn_timing_adc_c::ln_timing_adc_multi_read(
+                self.raw,
+                nb_sample_per_channel,
+                output.as_mut_ptr(),
+            )
         }
     }
 }

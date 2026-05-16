@@ -4,6 +4,7 @@
  */
 #include "lnTimer.h"
 #include "esprit.h"
+#include "lnBarrier.h"
 #include "lnPinMapping.h"
 #include "lnTimer_priv.h"
 LN_Timers_Registers *aTimer0 = (LN_Timers_Registers *)(LN_TIMER0_ADR);
@@ -21,7 +22,7 @@ LN_Timers_Registers *aTimer4 = (LN_Timers_Registers *)(LN_TIMER4_ADR);
     {                                                                                                                  \
         int shift = 8 * (channel & 1);                                                                                 \
         uint32_t r = t->CHCTLs[channel >> 1];                                                                          \
-        r &= 0xff << shift;                                                                                            \
+        r &= ~(0xff << shift);                                                                                         \
         r |= (val & 0xff) << shift;                                                                                    \
         t->CHCTLs[channel >> 1] = r;                                                                                   \
     }
@@ -37,7 +38,7 @@ LN_Timers_Registers *abTimers[5] = {(LN_Timers_Registers *)(LN_TIMER0_ADR), (LN_
  * @param timer
  * @param channel
  */
-lnTimer::lnTimer(int timer, int channel)
+lnTimer::lnTimer(uint32_t timer, uint32_t channel)
 {
     _timer = timer;
     _channel = channel;
@@ -47,7 +48,7 @@ lnTimer::lnTimer(int timer, int channel)
  *
  * @param pin
  */
-lnTimer::lnTimer(int pin)
+lnTimer::lnTimer(lnPin pin)
 {
     const LN_PIN_MAPPING *pins = pinMappings;
     while (1)
@@ -74,7 +75,7 @@ lnTimer::~lnTimer()
  *
  * @param timer
  */
-void lnTimer::setPwmFrequency(int fqInHz)
+void lnTimer::setPwmFrequency(uint32_t fqInHz)
 {
     //--
     LN_Timers_Registers *t = aTimers(_timer);
@@ -97,7 +98,7 @@ void lnTimer::setPwmFrequency(int fqInHz)
  *
  * @param fqInHz
  */
-void lnTimer::setTickFrequency(int fqInHz)
+void lnTimer::setTickFrequency(uint32_t fqInHz)
 {
     LN_Timers_Registers *t = aTimers(_timer);
     ;
@@ -110,14 +111,11 @@ void lnTimer::setTickFrequency(int fqInHz)
 
     int divider = (clock + fqInHz / 2) / (fqInHz);
     divider *= 2;
-    int preDiv = 2;
     while (divider > 65535)
     {
-        preDiv = preDiv * 2;
         divider = divider / 2;
     }
 
-    lnScratchRegister = t->CTL0;
     if (!divider)
         divider = 1;
     t->PSC = divider - 1;
@@ -151,7 +149,7 @@ void lnTimer::setMode(lnTimerMode mode)
  * @param timer
  * @param channel
  */
-void lnTimer::setPwmMode(int ratio1000)
+void lnTimer::setPwmMode(uint32_t ratio1000)
 {
     LN_Timers_Registers *t = aTimers(_timer);
     ;
@@ -197,7 +195,7 @@ void lnTimer::disable()
  *
  * @param ratioBy100
  */
-void lnTimer::setChannelRatio(int ratio1024)
+void lnTimer::setChannelRatio(uint32_t ratio1024)
 {
     LN_Timers_Registers *t = aTimers(_timer);
     ;
@@ -212,32 +210,85 @@ void lnTimer::setChannelRatio(int ratio1024)
 #else
 #define SPEEDUP 1
 #endif
-void lnTimer::singleShot(int durationMs, bool down)
+void lnTimer::singleShot(uint32_t durationMs, bool up)
 {
     LN_Timers_Registers *t = aTimers(_timer);
-    ;
+
     xAssert(durationMs <= 100);
-    // lnNoInterrupt();
+    // down = !down; // for some reason the code below has an inverted pulse
+    //   lnNoInterrupt();
     disable();
     setTickFrequency(10 * 1000 * SPEEDUP); // 1 tick=1ms
-    t->CAR = 10000 - 1;
-    t->CNT = 0;
 
-    uint32_t chCtl = READ_CHANNEL_CTL(_channel);
-    chCtl &= LN_TIME_CHCTL0_MS_MASK;
-    chCtl |= LN_TIME_CHCTL0_MS_OUPUT;
-    chCtl &= LN_TIME_CHCTL0_CTL_MASK;
-    chCtl |= LN_TIME_CHCTL0_CTL_PWM0;
-    WRITE_CHANNEL_CTL(_channel, chCtl)
-    t->CHCVs[_channel] = durationMs * 10; // high then low when timer elapsed
-    lnNoInterrupt();
-    // t->CTL0|=LN_TIMER_CTL0_SPM; // sign
-    t->CNT = t->CAR - 1;
-    t->CTL0 |= LN_TIMER_CTL0_CEN;
-    t->CHCTL2 |= LN_TIMER_CHTL2_CHxEN(_channel); // basic enable, active high
-    lnInterrupts();
-    xDelay(durationMs + 10);
-    disable();
+    uint32_t duration_tick = 10 * durationMs;
+    t->CAR = duration_tick;
+    t->CHCVs[_channel] = duration_tick;
+
+    // --- 1. SET THE DEFAULT OUTPUT STATE BEFORE ENABLING THE CHANNEL ---
+    // disable() left O0CPRE forced low. For a negative pulse we need the
+    // default to be VCC, so force high first, then enable the channel
+    // while still in FORCE_HIGH mode so the pin goes to VCC.
+    uint32_t ctl = READ_CHANNEL_CTL(_channel);
+    ctl &= LN_TIME_CHCTL0_CTL_MASK; // Clear CH0COMCTL bits (Bits 4-6)
+    if (up)
+    {
+        // Negative pulse: default=VCC, pulse=GND for duration, back to VCC
+        // Step A: Force high while channel is still disabled (CHxEN=0)
+        ctl |= LN_TIME_CHCTL0_CTL_FORCE_HIGH;
+        WRITE_CHANNEL_CTL(_channel, ctl);
+
+        // Step B: Enable the channel NOW while still in FORCE_HIGH mode.
+        // This connects the timer output to the pin at VCC (default state).
+        uint32_t ctl2 = t->CHCTL2;
+        ctl2 &= ~(LN_TIMER_CHTL2_CHxP(_channel));
+        ctl2 |= (LN_TIMER_CHTL2_CHxEN(_channel));
+        t->CHCTL2 = ctl2;
+
+        // Step C: Switch to PWM1 mode. With CEN=0 and CNT=0 < CHCV,
+        // PWM1 outputs inactive (low=GND). The pin immediately goes
+        // from VCC to GND — this IS the start of the negative pulse.
+        ctl &= LN_TIME_CHCTL0_CTL_MASK;
+        ctl |= LN_TIME_CHCTL0_CTL_PWM1;
+        WRITE_CHANNEL_CTL(_channel, ctl);
+    }
+    else
+    {
+        // Positive pulse: default=GND, pulse=VCC for duration, back to GND
+        // disable() already forced low, so O0CPRE is already GND (default).
+        // Switch to PWM0: CNT < CHCV -> active (high=VCC = pulse),
+        // CNT >= CHCV -> inactive (low=GND = default)
+        ctl |= LN_TIME_CHCTL0_CTL_PWM0;
+        WRITE_CHANNEL_CTL(_channel, ctl);
+
+        // Enable the channel (CHxEN) — pin goes from high-impedance to
+        // O0CPRE which is low (GND = default). Then CEN starts the counter.
+        uint32_t ctl2 = t->CHCTL2;
+        ctl2 &= ~(LN_TIMER_CHTL2_CHxP(_channel));
+        ctl2 |= (LN_TIMER_CHTL2_CHxEN(_channel));
+        t->CHCTL2 = ctl2;
+    }
+
+    t->CTL0 |= LN_TIMER_CTL0_SPM; // Set Bit 3 (SPM), single shot
+
+    t->SWEV |=
+        LN_TIMER_SWEVG_UPG; // Set Bit 6 (UPG) to force a software update event, latching the configurations immediately
+    t->INTF &= ~(1 << 0);   // Clear UPIF
+    //
+    // --- 6. TRIGGER THE HARDWARE PULSE ---
+    t->CTL0 |= LN_TIMER_CTL0_CEN; // Set Bit 0 (CEN) to start the hardware counter
+    // Read-back CTL0 to flush the AHB→APB write buffer, ensuring the
+    // CEN=1 write has reached the timer before we poll for CEN to clear.
+    (void)t->CTL0;
+    LN_DATA_BARRIER();
+    LN_SYNC_BARRIER();
+
+    // --- 7. WAIT FOR AUTOMATIC HARDWARE SHUTDOWN ---
+    // The hardware automatically sets the output, increments the counter, resets the output, and shuts off CEN.
+    while ((t->CTL0 & LN_TIMER_CTL0_CEN) != 0)
+    {
+        // Polling loop waiting exclusively for the hardware to drop the CEN bit back to 0 on completion
+        __asm__("nop");
+    }
 }
 /**
  *
@@ -300,7 +351,7 @@ void lnAdcTimer::setPwmFrequency(int fqInHz)
  * @param timer
  */
 
-void lnSquareSignal::setFrequency(int fqInHz)
+void lnSquareSignal::setFrequency(uint32_t fqInHz)
 {
     LN_Timers_Registers *t = aTimers(_timer);
     ;
