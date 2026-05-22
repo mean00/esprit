@@ -34,7 +34,7 @@ static int nbSkipped = 0;
  * @return true
  * @return false
  */
-bool lnSPI_bp::dmaWriteInternal(int wordSize, int nbTransfer, const uint8_t *data, bool repeat)
+bool lnSPI_bp::dmaWriteInternal(int wordSize, uint32_t nbTransfer, const uint8_t *data, bool repeat)
 {
     bool r = true;
     sdisable();
@@ -105,7 +105,7 @@ void lnSPI_bp::exTxDone(void *c, lnDMA::DmaInterruptType it)
  * @return true
  * @return false
  */
-bool lnSPI_bp::asyncWrite(int wordSize, int nbWord, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
+bool lnSPI_bp::asyncWrite(int wordSize, uint32_t nbWord, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
 {
     bool r = true;
     _done.tryTake();
@@ -199,7 +199,7 @@ void lnSPI_bp::invokeCallback()
  * @return true
  * @return false
  */
-bool lnSPI_bp::nextWrite(int nbTransfer, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
+bool lnSPI_bp::nextWrite(uint32_t nbTransfer, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
 {
     if (0 == nbTransfer)
         return false;

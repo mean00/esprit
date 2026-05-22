@@ -28,7 +28,7 @@ class timerLink : public lnPeriodicTimer
 class lnSerialBpRxTxDma : public lnSerialBpTxOnlyBufferedDma, public lnSerialRxTx
 {
   public:
-    lnSerialBpRxTxDma(int instance, int bufferSize);
+    lnSerialBpRxTxDma(uint32_t instance, uint32_t bufferSize);
     virtual ~lnSerialBpRxTxDma();
     void setCallback(lnSerialCallback *cb, void *cookie)
     {
@@ -38,20 +38,20 @@ class lnSerialBpRxTxDma : public lnSerialBpTxOnlyBufferedDma, public lnSerialRxT
     {
         return lnSerialBpCore::init();
     }
-    bool setSpeed(int speed)
+    bool setSpeed(uint32_t speed)
     {
         return lnSerialBpCore::setSpeed(speed);
     }
-    virtual bool rawWrite(int count, const uint8_t *buffer)
+    virtual bool rawWrite(uint32_t count, const uint8_t *buffer)
     {
         LN_USART_Registers *d = (LN_USART_Registers *)_adr;
         return ln_serial_rawWrite(d, count, buffer);
     }
-    int transmitNoBlock(int size, const uint8_t *buffer)
+    int transmitNoBlock(uint32_t size, const uint8_t *buffer)
     {
         return lnSerialBpTxOnlyBufferedDma::transmitNoBlock(size, buffer);
     }
-    bool transmit(int size, const uint8_t *buffer)
+    bool transmit(uint32_t size, const uint8_t *buffer)
     {
         return lnSerialBpTxOnlyBufferedDma::transmit(size, buffer);
     }
@@ -59,10 +59,10 @@ class lnSerialBpRxTxDma : public lnSerialBpTxOnlyBufferedDma, public lnSerialRxT
     static void _rxDmaCb(void *me, lnDMA::DmaInterruptType type);
     virtual bool enableRx(bool enabled);
     virtual void purgeRx();
-    virtual int read(int max, uint8_t *to);
+    virtual int read(uint32_t max, uint8_t *to);
     // no copy interface
     virtual int getReadPointer(uint8_t **to);
-    virtual void consume(int n);
+    virtual void consume(uint32_t n);
     void timerCallback();
 
   protected:

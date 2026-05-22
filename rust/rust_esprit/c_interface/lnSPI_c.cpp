@@ -25,7 +25,7 @@ static rcSPI *_spis[3] = {NULL, NULL, NULL};
  *
  *
  */
-ln_spi_c *lnspi_create(int instance, int pin)
+ln_spi_c *lnspi_create(uint32_t instance, int pin)
 {
     if (!_spis[instance]) // create on the fly if needed
     {
@@ -54,7 +54,7 @@ void lnspi_delete(ln_spi_c *i2c)
 /**
  *
  */
-void lnspi_set_speed(ln_spi_c *ptr, int speed)
+void lnspi_set_speed(ln_spi_c *ptr, uint32_t speed)
 {
     WRAPME(ptr)->setSpeed(speed);
 }

@@ -10,7 +10,7 @@ extern "C"
 }
 /**
  */
-void lnPinMode(const lnPin pin, const lnGpioMode mode, const int speedInMhz)
+void lnPinMode(const lnPin pin, const lnGpioMode mode, const uint32_t speedInMhz)
 {
     gpio_config_t io_conf = {.pin_bit_mask = (1ULL << pin),
                              .mode = GPIO_MODE_INPUT,

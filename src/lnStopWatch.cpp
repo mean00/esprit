@@ -23,7 +23,7 @@ uint32_t now(uint32_t startAt)
  *
  * @param ms
  */
-lnStopWatch::lnStopWatch(int ms)
+lnStopWatch::lnStopWatch(uint32_t ms)
 {
     _start = now(0);
     _end = ms;
@@ -33,7 +33,7 @@ lnStopWatch::lnStopWatch(int ms)
  * @param durationMs
  * @return
  */
-bool lnStopWatch::restart(int durationMs)
+bool lnStopWatch::restart(uint32_t durationMs)
 {
     _start = now(0);
     _end = durationMs;

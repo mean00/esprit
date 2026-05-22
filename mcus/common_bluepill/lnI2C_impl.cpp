@@ -86,7 +86,7 @@ lnTwoWire *irqHandler[2] = {NULL, NULL};
 /*
  *
  */
-lnI2C *lnI2C::create(int instance, int speed)
+lnI2C *lnI2C::create(uint32_t instance, uint32_t speed)
 {
     lnPeripherals::enable((Peripherals)(pI2C0 + instance));
     return new lnTwoWire(instance, speed);
@@ -226,7 +226,7 @@ static bool waitCTL0BitClear(LN_I2C_Registers *reg, uint32_t bit)
  */
 #define M(x) i2c_descriptors[instance].x
 
-lnTwoWire::lnTwoWire(int instance, int speed)
+lnTwoWire::lnTwoWire(uint32_t instance, uint32_t speed)
     : _dmaTx(lnDMA::DMA_MEMORY_TO_PERIPH, M(_dmaEngine), M(_dmaChannelTx), 8, 16),
       _dmaRx(lnDMA::DMA_PERIPH_TO_MEMORY, M(_dmaEngine), M(_dmaChannelRx), 8, 8)
 {
@@ -248,7 +248,7 @@ lnTwoWire::~lnTwoWire()
  * @param target
  * @return
  */
-bool lnTwoWire::begin(int target)
+bool lnTwoWire::begin(uint32_t target)
 {
     // reset peripheral
     Peripherals periph = (Peripherals)(pI2C0 + _instance);
@@ -278,7 +278,7 @@ bool lnTwoWire::begin(int target)
  *
  * @param speed
  */
-void lnTwoWire::setSpeed(int newSpeed)
+void lnTwoWire::setSpeed(uint32_t newSpeed)
 {
 
     LN_I2C_Registers *adr = _d->adr;
@@ -305,7 +305,7 @@ void lnTwoWire::setSpeed(int newSpeed)
 /**
  */
 #ifdef I2C_USES_INTERRUPT
-bool lnTwoWire::multiWrite(int target, uint32_t nbSeqn, const uint32_t *seqLength, const uint8_t **seqData)
+bool lnTwoWire::multiWrite(uint32_t target, uint32_t nbSeqn, const uint32_t *seqLength, const uint8_t **seqData)
 {
     volatile uint32_t stat1, stat0;
     // Send start
@@ -348,7 +348,7 @@ bool lnTwoWire::multiWrite(int target, uint32_t nbSeqn, const uint32_t *seqLengt
  * @param data
  * @return
  */
-bool lnTwoWire::write(int target, uint32_t n, const uint8_t *data)
+bool lnTwoWire::write(uint32_t target, uint32_t n, const uint8_t *data)
 {
     return multiWrite(target, 1, &n, &data);
 }
@@ -380,7 +380,7 @@ void lnTwoWire::clearup_state()
  * @param data
  * @return
  */
-bool lnTwoWire::multiRead(int target, uint32_t nbSeqn, const uint32_t *seqLength, uint8_t **seqData)
+bool lnTwoWire::multiRead(uint32_t target, uint32_t nbSeqn, const uint32_t *seqLength, uint8_t **seqData)
 {
     volatile uint32_t stat1, stat0;
     LN_I2C_Registers *adr = _d->adr;
@@ -430,7 +430,7 @@ bool lnTwoWire::multiRead(int target, uint32_t nbSeqn, const uint32_t *seqLength
  * @param data
  * @return
  */
-bool lnTwoWire::read(int target, uint32_t n, uint8_t *data)
+bool lnTwoWire::read(uint32_t target, uint32_t n, uint8_t *data)
 {
     return lnTwoWire::multiRead(target, 1, &n, &data);
 }

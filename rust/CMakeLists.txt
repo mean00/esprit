@@ -4,7 +4,7 @@ add_library(lnarduino_c_bindings OBJECT)
 target_include_directories(lnarduino_c_bindings PRIVATE ${C})
 target_link_libraries(lnarduino_c_bindings PRIVATE esprit_dev)
 
-target_sources(lnarduino_c_bindings PRIVATE ${EXTRA} ${C}/lnFast_EventGroup_c.cpp ${C}/lnSerial_c.cpp ${C}/lnTimer_c.cpp)
+target_sources(lnarduino_c_bindings PRIVATE ${EXTRA} ${C}/lnFast_EventGroup_c.cpp ${C}/lnSerial_c.cpp ${C}/lnTimer_c.cpp ${C}/lnMultiPulse_c.cpp ${C}/lnGPIO_c.cpp)
 if(LN_ENABLE_USBD)
   include(${ESPRIT_ROOT}/libraries/tinyUsb/tiny.cmake)
   target_sources(lnarduino_c_bindings PRIVATE  ${C}/lnCDC_c.cpp ${C}/lnUSB_c.cpp)

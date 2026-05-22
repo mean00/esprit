@@ -12,7 +12,7 @@
  * @param nbLeds
  * @param s
  */
-WS2812B_base::WS2812B_base(int nbLeds)
+WS2812B_base::WS2812B_base(uint32_t nbLeds)
 {
     _nbLeds = nbLeds;
     _brightness = 0xff;
@@ -41,7 +41,7 @@ WS2812B_base::~WS2812B_base()
  *
  * @param value
  */
-void WS2812B_base::setGlobalBrightness(int value)
+void WS2812B_base::setGlobalBrightness(uint8_t value)
 {
     _brightness = value;
 }
@@ -51,7 +51,7 @@ void WS2812B_base::setGlobalBrightness(int value)
  * @param g
  * @param b
  */
-void WS2812B_base::setColor(int r, int g, int b)
+void WS2812B_base::setColor(uint8_t r, uint8_t g, uint8_t b)
 {
     uint8_t *pr = _ledsColor;
     uint8_t *pg = _ledsColor + 1;
@@ -73,7 +73,7 @@ void WS2812B_base::setColor(int r, int g, int b)
  * @param g
  * @param b
  */
-void WS2812B_base::setLedColor(int led, int r, int g, int b)
+void WS2812B_base::setLedColor(uint32_t led, uint8_t r, uint8_t g, uint8_t b)
 {
     uint8_t *p = _ledsColor + led * 3;
     p[0] = g;
@@ -85,7 +85,26 @@ void WS2812B_base::setLedColor(int led, int r, int g, int b)
  * @param led
  * @param brightness
  */
-void WS2812B_base::setLedBrightness(int led, int brightness)
+void WS2812B_base::setLedColors(uint32_t start, uint32_t nb_led, const uint8_t *data)
+{
+    xAssert(start + nb_led <= this->_nbLeds);
+    uint8_t *p = _ledsColor + start * 3;
+    const uint8_t *src = data;
+    for (int i = 0; i < nb_led; i++)
+    {
+        p[0] = src[1];
+        p[1] = src[0];
+        p[2] = src[2];
+        p += 3;
+        src += 3;
+    }
+}
+/**
+ *
+ * @param led
+ * @param brightness
+ */
+void WS2812B_base::setLedBrightness(uint32_t led, uint8_t brightness)
 {
     _ledsBrightness[led] = brightness;
 }

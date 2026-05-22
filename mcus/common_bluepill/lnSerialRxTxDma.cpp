@@ -43,7 +43,7 @@ void lnSerialBpRxTxDma::_interrupt()
  * @param instance
  * @param bufferSize
  */
-lnSerialBpRxTxDma::lnSerialBpRxTxDma(int instance, int bufferSize)
+lnSerialBpRxTxDma::lnSerialBpRxTxDma(uint32_t instance, uint32_t bufferSize)
     : lnSerialBpTxOnlyBufferedDma(instance, bufferSize >> 1), lnSerialRxTx(instance),
       _rxDma(lnDMA::DMA_PERIPH_TO_MEMORY, M(dmaEngine), M(dmaRxChannel), 32, 8), _timer(this)
 {
@@ -72,7 +72,7 @@ lnSerialBpRxTxDma::~lnSerialBpRxTxDma()
  * @param to
  * @return int
  */
-int lnSerialBpRxTxDma::read(int max, uint8_t *to)
+int lnSerialBpRxTxDma::read(uint32_t max, uint8_t *to)
 {
     uint8_t *ptr;
 
@@ -229,7 +229,7 @@ int lnSerialBpRxTxDma::getReadPointer(uint8_t **to)
  *
  * @param n
  */
-void lnSerialBpRxTxDma::consume(int n)
+void lnSerialBpRxTxDma::consume(uint32_t n)
 {
     ENTER_CRITICAL();
     xAssert(n <= _rxBufferSize);
@@ -333,7 +333,7 @@ void timerLink::timerCallback()
  * @return lnSerialRxTx*
  */
 
-lnSerialRxTx *createLnSerialRxTx(int instance, int rxBufferSize, bool dma)
+lnSerialRxTx *createLnSerialRxTx(uint32_t instance, uint32_t rxBufferSize, bool dma)
 {
     if (dma)
         return new lnSerialBpRxTxDma(instance, rxBufferSize);

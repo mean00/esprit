@@ -46,7 +46,7 @@ bool lnSerialBpTxOnlyBufferedDma::_programTx()
  *
  * @param instance
  */
-lnSerialBpTxOnlyBufferedDma::lnSerialBpTxOnlyBufferedDma(int instance, int txBufferSize)
+lnSerialBpTxOnlyBufferedDma::lnSerialBpTxOnlyBufferedDma(uint32_t instance, uint32_t txBufferSize)
     : lnSerialTxOnly(instance), lnSerialBpCore(instance),
       _txDma(lnDMA::DMA_MEMORY_TO_PERIPH, M(dmaEngine), M(dmaTxChannel), 8, 32), _txRingBuffer(txBufferSize)
 {
@@ -105,7 +105,7 @@ void lnSerialBpTxOnlyBufferedDma::txDmaCb2(lnDMA::DmaInterruptType it)
  * @param buffer
  * @return int
  */
-int lnSerialBpTxOnlyBufferedDma::transmitNoBlock(int size, const uint8_t *buffer)
+int lnSerialBpTxOnlyBufferedDma::transmitNoBlock(uint32_t size, const uint8_t *buffer)
 {
     int processed = 0;
     while (size != 0)
@@ -138,7 +138,7 @@ int lnSerialBpTxOnlyBufferedDma::transmitNoBlock(int size, const uint8_t *buffer
  * @return true
  * @return false
  */
-bool lnSerialBpTxOnlyBufferedDma::transmit(int size, const uint8_t *buffer)
+bool lnSerialBpTxOnlyBufferedDma::transmit(uint32_t size, const uint8_t *buffer)
 {
     while (size)
     {

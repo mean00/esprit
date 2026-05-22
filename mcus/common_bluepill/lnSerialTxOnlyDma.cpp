@@ -48,7 +48,7 @@ bool lnSerialBpTxOnlyDma::_programTx()
  *
  * @param instance
  */
-lnSerialBpTxOnlyDma::lnSerialBpTxOnlyDma(int instance)
+lnSerialBpTxOnlyDma::lnSerialBpTxOnlyDma(uint32_t instance)
     : lnSerialTxOnly(instance), lnSerialBpCore(instance),
       _txDma(lnDMA::DMA_MEMORY_TO_PERIPH, M(dmaEngine), M(dmaTxChannel), 8, 32)
 {
@@ -91,7 +91,7 @@ void lnSerialBpTxOnlyDma::txDmaCb(lnDMA::DmaInterruptType it)
  * @return true
  * @return false
  */
-bool lnSerialBpTxOnlyDma::transmit(int size, const uint8_t *buffer)
+bool lnSerialBpTxOnlyDma::transmit(uint32_t size, const uint8_t *buffer)
 {
     LN_USART_Registers *d = (LN_USART_Registers *)_adr;
     _txMutex.lock();        // lock uart

@@ -18,7 +18,7 @@ class rcI2C
         count = 0;
     }
     lnI2C *i2c;
-    int count;
+    uint32_t count;
 };
 static rcI2C *_i2cs[3] = {NULL, NULL, NULL};
 
@@ -27,7 +27,7 @@ static rcI2C *_i2cs[3] = {NULL, NULL, NULL};
  *
  *
  */
-ln_i2c_c *lni2c_create(int instance, int speed)
+ln_i2c_c *lni2c_create(uint32_t instance, uint32_t speed)
 {
     if (!_i2cs[instance]) // create on the fly if needed
     {
@@ -57,14 +57,14 @@ void lni2c_delete(ln_i2c_c *i2c)
 /**
  *
  */
-void lni2c_setSpeed(ln_i2c_c *ptr, int speed)
+void lni2c_setSpeed(ln_i2c_c *ptr, uint32_t speed)
 {
     WRAPME(ptr)->setSpeed(speed);
 }
 /**
  *
  */
-void lni2c_setAddress(ln_i2c_c *ptr, int address)
+void lni2c_setAddress(ln_i2c_c *ptr, uint32_t address)
 {
     WRAPME(ptr)->setAddress(address);
 }
@@ -85,28 +85,29 @@ bool lni2c_read(ln_i2c_c *ptr, uint32_t n, uint8_t *data)
 /**
  *
  */
-bool lni2c_write_to(ln_i2c_c *ptr, int target, uint32_t n, const uint8_t *data)
+bool lni2c_write_to(ln_i2c_c *ptr, uint32_t target, uint32_t n, const uint8_t *data)
 {
     return WRAPME(ptr)->write(target, n, data);
 }
 /**
  *
  */
-bool lni2c_multi_write_to(ln_i2c_c *ptr, int target, uint32_t nbSeqn, const uint32_t *seqLength, const uint8_t **data)
+bool lni2c_multi_write_to(ln_i2c_c *ptr, uint32_t target, uint32_t nbSeqn, const uint32_t *seqLength,
+                          const uint8_t **data)
 {
     return WRAPME(ptr)->multiWrite(target, nbSeqn, seqLength, data);
 }
 /**
  *
  */
-bool lni2c_read_from(ln_i2c_c *ptr, int target, uint32_t n, uint8_t *data)
+bool lni2c_read_from(ln_i2c_c *ptr, uint32_t target, uint32_t n, uint8_t *data)
 {
     return WRAPME(ptr)->read(target, n, data);
 }
 /**
  *
  */
-bool lni2c_begin(ln_i2c_c *ptr, int target)
+bool lni2c_begin(ln_i2c_c *ptr, uint32_t target)
 {
     return WRAPME(ptr)->begin(target);
 }

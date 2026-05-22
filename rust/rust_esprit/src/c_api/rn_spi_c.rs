@@ -235,8 +235,8 @@ pub struct ln_spi_c {
     pub dummy: *mut cty::c_void,
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_Z12lnspi_createii"]
-    pub fn lnspi_create(instance: cty::c_int, pinCs: cty::c_int) -> *mut ln_spi_c;
+    #[link_name = "\u{1}_Z12lnspi_createji"]
+    pub fn lnspi_create(instance: cty::c_uint, pinCs: cty::c_int) -> *mut ln_spi_c;
 }
 unsafe extern "C" {
     #[link_name = "\u{1}_Z12lnspi_deleteP8ln_spi_c"]

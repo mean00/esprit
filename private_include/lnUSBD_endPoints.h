@@ -35,18 +35,18 @@ class EndPoints
     };
 
   public:
-    static BTableEntry *getBTable(int ep)
+    static BTableEntry *getBTable(uint32_t ep)
     {
         BTableEntry *b = btables + ep;
         return b;
     }
 
-    static xfer_descriptor *getDescriptor(int ep, int dir)
+    static xfer_descriptor *getDescriptor(uint32_t ep, uint32_t dir)
     {
         return (xfer_status + 2 * (ep & 0x7f) + (!!dir));
     }
 
-    static void setRxBufferSize(int ep, int size)
+    static void setRxBufferSize(uint32_t ep, uint32_t size)
     {
         uint32_t out;
         if (size > 62)
@@ -63,7 +63,7 @@ class EndPoints
         b->RxSize = out;
     }
 
-    static int initEpRam(int address, int size)
+    static uint32_t initEpRam(uint32_t address, uint32_t size)
     {
         int epnum = address & 0x7f;
         int dir = !!(address & 0x80);
@@ -81,7 +81,7 @@ class EndPoints
         ep_nbEp++;
         return ret;
     }
-    static void freeEndpoint(int address)
+    static void freeEndpoint(uint32_t address)
     {
         xAssert(ep_nbEp > 2);
         ep_nbEp--;
@@ -106,7 +106,7 @@ class EndPoints
             desc++;
         }
     }
-    static void setBlock(int ep, bool isTx, int address, int size)
+    static void setBlock(uint32_t ep, bool isTx, uint32_t address, uint32_t size)
     {
         uint16_t *ptr = (uint16_t *)aUSBD0_SRAM;
         ptr += 8 * ep;

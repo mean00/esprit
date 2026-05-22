@@ -7,10 +7,10 @@
  *
  * @param instance
  */
-lnSerialBpTxOnlyInterrupt::lnSerialBpTxOnlyInterrupt(int instance) : lnSerialTxOnly(instance), lnSerialBpCore(instance)
+lnSerialBpTxOnlyInterrupt::lnSerialBpTxOnlyInterrupt(uint32_t instance) : lnSerialTxOnly(instance), lnSerialBpCore(instance)
 {
 }
-int lnSerialBpTxOnlyInterrupt::transmitNoBlock(int size, const uint8_t *buffer)
+int lnSerialBpTxOnlyInterrupt::transmitNoBlock(uint32_t size, const uint8_t *buffer)
 {
     xAssert(0);
     return 0;
@@ -75,7 +75,7 @@ void lnSerialBpTxOnlyInterrupt::txInterruptHandler(void)
  * @param buffer
  * @return
  */
-bool lnSerialBpTxOnlyInterrupt::transmit(int size, const uint8_t *buffer)
+bool lnSerialBpTxOnlyInterrupt::transmit(uint32_t size, const uint8_t *buffer)
 {
     // return true;
     LN_USART_Registers *d = (LN_USART_Registers *)_adr;

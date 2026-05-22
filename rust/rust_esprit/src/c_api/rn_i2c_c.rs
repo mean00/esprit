@@ -139,16 +139,16 @@ pub struct ln_i2c_c {
     pub dummy: *mut cty::c_void,
 }
 unsafe extern "C" {
-    pub fn lni2c_create(instance: cty::c_int, speed: cty::c_int) -> *mut ln_i2c_c;
+    pub fn lni2c_create(instance: cty::c_uint, speed: cty::c_uint) -> *mut ln_i2c_c;
 }
 unsafe extern "C" {
     pub fn lni2c_delete(i2c: *mut ln_i2c_c);
 }
 unsafe extern "C" {
-    pub fn lni2c_setSpeed(ptr: *mut ln_i2c_c, speed: cty::c_int);
+    pub fn lni2c_setSpeed(ptr: *mut ln_i2c_c, speed: cty::c_uint);
 }
 unsafe extern "C" {
-    pub fn lni2c_setAddress(ptr: *mut ln_i2c_c, address: cty::c_int);
+    pub fn lni2c_setAddress(ptr: *mut ln_i2c_c, address: cty::c_uint);
 }
 unsafe extern "C" {
     pub fn lni2c_write(ptr: *mut ln_i2c_c, n: cty::c_uint, data: *const u8) -> bool;
@@ -159,7 +159,7 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn lni2c_write_to(
         ptr: *mut ln_i2c_c,
-        target: cty::c_int,
+        target: cty::c_uint,
         n: cty::c_uint,
         data: *const u8,
     ) -> bool;
@@ -167,7 +167,7 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn lni2c_multi_write_to(
         ptr: *mut ln_i2c_c,
-        target: cty::c_int,
+        target: cty::c_uint,
         nbSeqn: cty::c_uint,
         seqLength: *const cty::c_uint,
         data: *mut *const u8,
@@ -176,11 +176,11 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn lni2c_read_from(
         ptr: *mut ln_i2c_c,
-        target: cty::c_int,
+        target: cty::c_uint,
         n: cty::c_uint,
         data: *mut u8,
     ) -> bool;
 }
 unsafe extern "C" {
-    pub fn lni2c_begin(ptr: *mut ln_i2c_c, target: cty::c_int) -> bool;
+    pub fn lni2c_begin(ptr: *mut ln_i2c_c, target: cty::c_uint) -> bool;
 }

@@ -13,8 +13,7 @@
  * to the debugger (GDB, Rust FreeRTOS module, etc.).
  */
 extern "C" const struct lnFreeRTOSDebug freeRTOSDebug;
-static const struct lnFreeRTOSDebug * const _force_freeRTOSDebug
-    __attribute__((used)) = &freeRTOSDebug;
+static const struct lnFreeRTOSDebug *const _force_freeRTOSDebug __attribute__((used)) = &freeRTOSDebug;
 
 #define fos_ms2tick(ms) (((ms) + portTICK_PERIOD_MS - 1) / portTICK_PERIOD_MS)
 
@@ -45,7 +44,7 @@ extern "C"
         \brief return size in uint32_t adjusted for the arch
         The input is in bytes
     */
-    static int adjustStackSize(int stackSizeInBytes)
+    static uint32_t adjustStackSize(uint32_t stackSizeInBytes)
     {
         configSTACK_DEPTH_TYPE systemExtraStack = 0;
 
@@ -56,7 +55,7 @@ extern "C"
         systemExtraStack += 32;
 #endif
 
-        int adjustedStackDepth = (stackSizeInBytes / 4) + systemExtraStack;
+        uint32_t adjustedStackDepth = (stackSizeInBytes / 4) + systemExtraStack;
         return adjustedStackDepth;
     }
 
@@ -91,9 +90,9 @@ bool lnBinarySemaphore::take()
  * @param timeoutMs
  * @return
  */
-bool lnBinarySemaphore::take(int timeoutMs)
+bool lnBinarySemaphore::take(uint32_t timeoutMs)
 {
-    int ticks = 1 + (timeoutMs * configTICK_RATE_HZ + 500) / 1000;
+    TickType_t ticks = 1 + (timeoutMs * configTICK_RATE_HZ + 500) / 1000;
     return (bool)xSemaphoreTake(_handle, ticks);
 }
 /**
@@ -164,7 +163,7 @@ bool lnMutex::unlock()
  * @param priority
  * @param taskSize
  */
-lnTask::lnTask(const char *name, int priority, int taskSize)
+lnTask::lnTask(const char *name, uint32_t priority, uint32_t taskSize)
 {
     _priority = priority;
     _taskSize = taskSize;
@@ -229,7 +228,7 @@ void lnEventGroup::setEvents(uint32_t events)
  * @param timeout
  * @return
  */
-uint32_t lnEventGroup::waitEvents(uint32_t maskint, int timeout)
+uint32_t lnEventGroup::waitEvents(uint32_t maskint, uint32_t timeout)
 {
     if (timeout == 0)
         timeout = portMAX_DELAY - 1;
@@ -330,7 +329,7 @@ void lnFastEventGroup::setEvents(uint32_t events)
  * @return
  */
 
-uint32_t lnFastEventGroup::waitEvents(uint32_t maskint, int timeout)
+uint32_t lnFastEventGroup::waitEvents(uint32_t maskint, int32_t timeout)
 {
     xAssert(_waitingTask != INVALID_TASK);
     xAssert(!underInterrupt);
@@ -391,7 +390,7 @@ uint32_t lnFastEventGroup::readEvents(uint32_t maskInt)
 bool lnCreateTask(
     TaskFunction_t pxTaskCode,
     const char *const pcName, /*lint !e971 Unqualified char types are allowed for strings and single characters only. */
-    int stackSizeInBytes,     // in bytes  !, // in bytes!
+    uint32_t stackSizeInBytes, // in bytes  !, // in bytes!
     void *const pvParameters, UBaseType_t uxPriority)
 {
     if (pdPASS == xTaskCreate(pxTaskCode, pcName, adjustStackSize(stackSizeInBytes), pvParameters, uxPriority, NULL))
@@ -423,7 +422,7 @@ lnPeriodicTimer::lnPeriodicTimer()
  * @param name
  * @param periodInMs
  */
-void lnPeriodicTimer::init(const char *name, int periodInMs)
+void lnPeriodicTimer::init(const char *name, uint32_t periodInMs)
 {
     _timerHandle = xTimerCreate(name, periodInMs, true, this, lnTimerCallbackFunction);
 }

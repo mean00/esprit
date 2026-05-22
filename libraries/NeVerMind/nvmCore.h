@@ -39,14 +39,14 @@ struct LN_NVM_ENTRY
 class lnNvm
 {
   public:
-    lnNvm(int nbSectors);
+    lnNvm(uint32_t nbSectors);
     virtual ~lnNvm();
     bool begin();
     bool format();
-    bool read(int id, int size, uint8_t *data);
-    bool write(int id, int size, uint8_t *data);
+    bool read(uint32_t id, uint32_t size, uint8_t *data);
+    bool write(uint32_t id, uint32_t size, uint8_t *data);
 
-    bool dumpEntries(int sector);
+    bool dumpEntries(uint32_t sector);
 
   protected:
     int _nbSectors;
@@ -55,16 +55,16 @@ class lnNvm
     int _writeIndex;
     int _readIndex;
 
-    virtual bool eraseSector(int sector) = 0;
-    virtual bool writeSector(int sector, int offset, int size, uint8_t *data) = 0;
-    virtual bool readSector(int sector, int offset, int size, uint8_t *data) = 0;
-    virtual bool verifyErase(int sector) = 0;
+    virtual bool eraseSector(uint32_t sector) = 0;
+    virtual bool writeSector(uint32_t sector, uint32_t offset, uint32_t size, uint8_t *data) = 0;
+    virtual bool readSector(uint32_t sector, uint32_t offset, uint32_t size, uint8_t *data) = 0;
+    virtual bool verifyErase(uint32_t sector) = 0;
 
-    bool prepareSector(int sector);
+    bool prepareSector(uint32_t sector);
     bool garbageCollection();
 
-    LN_NVM_SECTOR_STATE getSectorState(int sector);
-    bool setSectorState(int sector, LN_NVM_SECTOR_STATE state);
+    LN_NVM_SECTOR_STATE getSectorState(uint32_t sector);
+    bool setSectorState(uint32_t sector, LN_NVM_SECTOR_STATE state);
 
     bool findEntry(int id, uint32_t &offset, LN_NVM_ENTRY &entry);
     bool getWriteAddress(uint32_t &address);

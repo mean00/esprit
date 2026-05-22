@@ -2,8 +2,10 @@
  *  (C) 2021 MEAN00 fixounet@free.fr
  *  See license file
  */
-#include "lnGPIO.h"
 #include "esprit.h"
+//
+#include "lnGPIO.h"
+//
 #include "lnAFIO_priv.h"
 #include "lnGPIO_priv.h"
 #include "lnPeripheral_priv.h"
@@ -26,7 +28,7 @@ LN_AFIO *aAfio = (LN_AFIO *)LN_AFIO_ADR;
  * @param pin
  * @param mode
  */
-void lnPinMode(const lnPin xpin, const GpioMode mode, const int speedInMhz)
+void lnPinMode(const lnPin xpin, const lnGpioMode mode, const uint32_t speedInMhz)
 {
     LN_GPIO *port = gpio[xpin >> 4];
     const LN_PIN_MAPPING *lnPin = pinMappings + xpin;

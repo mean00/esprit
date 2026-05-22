@@ -26,7 +26,7 @@
  *
  * @param nbSectors
  */
-lnNvm::lnNvm(int nbSectors)
+lnNvm::lnNvm(uint32_t nbSectors)
 {
     _nbSectors = nbSectors;
     _currentSector = NVM_INVALID_SECTOR;
@@ -201,7 +201,7 @@ bool lnNvm::findEntry(int id, uint32_t &offset, LN_NVM_ENTRY &entry)
  * @param data
  * @return
  */
-bool lnNvm::read(int id, int size, uint8_t *data)
+bool lnNvm::read(uint32_t id, uint32_t size, uint8_t *data)
 {
     if (!id)
     {
@@ -268,7 +268,7 @@ bool lnNvm::getWriteAddress(uint32_t &offset)
  * @param data
  * @return
  */
-bool lnNvm::write(int id, int size, uint8_t *data)
+bool lnNvm::write(uint32_t id, uint32_t size, uint8_t *data)
 {
     if (_currentSector == NVM_INVALID_SECTOR)
     {
@@ -350,7 +350,7 @@ bool lnNvm::write(int id, int size, uint8_t *data)
  * @param sector
  * @return
  */
-bool lnNvm::prepareSector(int sector)
+bool lnNvm::prepareSector(uint32_t sector)
 {
     if (!eraseSector(sector))
         return false;
@@ -362,7 +362,7 @@ bool lnNvm::prepareSector(int sector)
  * @param state
  * @return
  */
-bool lnNvm::setSectorState(int sector, LN_NVM_SECTOR_STATE state)
+bool lnNvm::setSectorState(uint32_t sector, LN_NVM_SECTOR_STATE state)
 {
     LN_NVM_SECTOR_STATE oldState = getSectorState(sector);
     uint16_t val = 0;
@@ -386,7 +386,7 @@ bool lnNvm::setSectorState(int sector, LN_NVM_SECTOR_STATE state)
  * @param sector
  * @return
  */
-LN_NVM_SECTOR_STATE lnNvm::getSectorState(int sector)
+LN_NVM_SECTOR_STATE lnNvm::getSectorState(uint32_t sector)
 {
     uint16_t a, b;
     if (!readSector(sector, 0, 2, (uint8_t *)&a))
@@ -496,7 +496,7 @@ bool lnNvm::garbageCollection()
 }
 /**
  */
-bool lnNvm::dumpEntries(int sector)
+bool lnNvm::dumpEntries(uint32_t sector)
 {
     if (sector == -1)
         sector = _currentSector;

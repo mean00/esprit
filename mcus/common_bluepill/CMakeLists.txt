@@ -13,6 +13,7 @@ set(OVERLAY_SRCS
     lnDelayTimer.cpp
     lnTimer.cpp
     lnDmaTimer.cpp
+    lnMultiPulse.cpp
     # lnStopWatch.cpp
     lnDAC.cpp
     lnADC.cpp

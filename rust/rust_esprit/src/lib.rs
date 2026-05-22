@@ -127,6 +127,7 @@ pub(crate) use c_api::rn_spi_c;
 pub(crate) use c_api::rn_timer_c;
 pub(crate) use c_api::rn_serial_c;
 pub(crate) use c_api::rn_timing_adc_c;
+pub(crate) use c_api::rn_multi_pulse_c;
 #[cfg(feature = "cdc")]
 pub(crate) use c_api::rn_usb_c;
 
@@ -184,6 +185,10 @@ pub mod sync;
 
 /// Timer wrapper with single‑shot pulse generation.
 pub mod timer;
+
+/// DMA-based multi-pulse generator.
+pub mod multi_pulse;
+
 /// UART serial communication (Tx‑only and bidirectional).
 pub mod serial;
 

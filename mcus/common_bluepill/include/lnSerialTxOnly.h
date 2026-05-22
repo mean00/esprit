@@ -18,21 +18,21 @@
 class lnSerialBpTxOnlyInterrupt : public lnSerialBpCore, public lnSerialTxOnly
 {
   public:
-    lnSerialBpTxOnlyInterrupt(int instance);
+    lnSerialBpTxOnlyInterrupt(uint32_t instance);
     virtual bool _programTx();
     bool init()
     {
         return lnSerialBpCore::init();
     }
-    bool setSpeed(int speed)
+    bool setSpeed(uint32_t speed)
     {
         return lnSerialBpCore::setSpeed(speed);
     }
-    virtual bool transmit(int size, const uint8_t *buffer);
-    virtual int transmitNoBlock(int size, const uint8_t *buffer);
+    virtual bool transmit(uint32_t size, const uint8_t *buffer);
+    virtual int transmitNoBlock(uint32_t size, const uint8_t *buffer);
     void txInterruptHandler(void);
     virtual void _interrupt(void);
-    virtual bool rawWrite(int count, const uint8_t *buffer)
+    virtual bool rawWrite(uint32_t count, const uint8_t *buffer)
     {
         LN_USART_Registers *d = (LN_USART_Registers *)_adr;
         return ln_serial_rawWrite(d, count, buffer);

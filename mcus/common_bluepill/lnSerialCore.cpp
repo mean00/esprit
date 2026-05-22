@@ -37,7 +37,7 @@ const UsartMapping usartMapping[3] = {
  * @param instance
  * @param rxBufferSize
  */
-lnSerialBpCore::lnSerialBpCore(int instance) : lnSerialCore(instance)
+lnSerialBpCore::lnSerialBpCore(uint32_t instance) : lnSerialCore(instance)
 {
     const UsartMapping *m = usartMapping + instance;
     _instance = instance;
@@ -63,7 +63,7 @@ void lnSerialBpCore::enableInterrupt(bool tx, bool rx)
  * @param speed
  * @return
  */
-bool lnSerialBpCore::setSpeed(int speed)
+bool lnSerialBpCore::setSpeed(uint32_t speed)
 {
     int freq;
 
@@ -143,7 +143,7 @@ IRQHANDLER(3)
  * @param dma
  * @return lnSerialTxOnly*
  */
-lnSerialTxOnly *createLnSerialTxOnly(int instance, bool dma, bool buffered)
+lnSerialTxOnly *createLnSerialTxOnly(uint32_t instance, bool dma, bool buffered)
 {
     if (dma)
     {
@@ -166,7 +166,7 @@ lnSerialTxOnly *createLnSerialTxOnly(int instance, bool dma, bool buffered)
  * @return true
  * @return false
  */
-bool ln_serial_rawWrite(LN_USART_Registers *d, int count, unsigned char const *c)
+bool ln_serial_rawWrite(LN_USART_Registers *d, uint32_t count, unsigned char const *c)
 {
     while (count--)
     {

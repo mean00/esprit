@@ -39,13 +39,13 @@
 class lnSPI
 {
   public:
-    static lnSPI *create(int instance, int pinCs = -1);
+    static lnSPI *create(uint32_t instance, int pinCs = -1);
 
     virtual ~lnSPI()
     {
     }
 
-    virtual void begin(int dataSize = 8) = 0;
+    virtual void begin(uint32_t dataSize = 8) = 0;
     virtual void end() = 0;
     void set(const lnSPISettings &st)
     {
@@ -56,8 +56,8 @@ class lnSPI
     }
     virtual void setBitOrder(spiBitOrder order) = 0;
     virtual void setDataMode(spiDataMode mode) = 0;
-    virtual void setSpeed(int speed) = 0; // speed in b/s
-    void setSSEL(int ssel)
+    virtual void setSpeed(uint32_t speed) = 0; // speed in b/s
+    void setSSEL(int ssel) // int for -1 sentinel
     {
         _internalSettings.pinCS = (ssel);
     };
@@ -67,12 +67,12 @@ class lnSPI
     // async next
     // finish
     // end()
-    virtual bool asyncWrite8(int nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie,
+    virtual bool asyncWrite8(uint32_t nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie,
                              bool repeat = false) = 0;
-    virtual bool nextWrite8(int nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat = false) = 0;
-    virtual bool asyncWrite16(int nbWords, const uint16_t *data, lnSpiCallback *cb, void *cookie,
+    virtual bool nextWrite8(uint32_t nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat = false) = 0;
+    virtual bool asyncWrite16(uint32_t nbWords, const uint16_t *data, lnSpiCallback *cb, void *cookie,
                               bool repeat = false) = 0;
-    virtual bool nextWrite16(int nbWords, const uint16_t *data, lnSpiCallback *cb, void *cookie,
+    virtual bool nextWrite16(uint32_t nbWords, const uint16_t *data, lnSpiCallback *cb, void *cookie,
                              bool repeat = false) = 0;
     virtual bool finishAsyncDma() = 0;
     virtual bool waitForAsync() = 0;
@@ -91,19 +91,19 @@ class lnSPI
     // blockWrite
     // ...
     // end
-    virtual bool blockWrite16(int nbWord, const uint16_t *data) = 0;
-    virtual bool blockWrite16Repeat(int nbWord, const uint16_t data) = 0;
-    virtual bool blockWrite8(int nbBytes, const uint8_t *data) = 0;
-    virtual bool blockWrite8Repeat(int nbBytes, const uint8_t data) = 0;
+    virtual bool blockWrite16(uint32_t nbWord, const uint16_t *data) = 0;
+    virtual bool blockWrite16Repeat(uint32_t nbWord, const uint16_t data) = 0;
+    virtual bool blockWrite8(uint32_t nbBytes, const uint8_t *data) = 0;
+    virtual bool blockWrite8Repeat(uint32_t nbBytes, const uint8_t data) = 0;
     virtual void waitForCompletion() const = 0;
 
     // slow read/write
-    virtual bool transfer(int nbBytes, uint8_t *dataOut, uint8_t *dataIn) = 0;
+    virtual bool transfer(uint32_t nbBytes, uint8_t *dataOut, uint8_t *dataIn) = 0;
 
     // wait for everything to be COMPLETELY done
     // virtual void waitForCompletion()=0;
     // This reads over the MOSI pin, i.e. only when only 2 wires are used MOSI + CLK, no MISO
-    virtual bool read1wire(int nbRead, uint8_t *rd) = 0; // read, reuse MOSI
+    virtual bool read1wire(uint32_t nbRead, uint8_t *rd) = 0; // read, reuse MOSI
     //
     int getInstance()
     {
@@ -117,7 +117,7 @@ class lnSPI
     void *_callbackCookie;
 
   protected:
-    lnSPI(int instance, int pinCs = -1)
+    lnSPI(uint32_t instance, int pinCs = -1)
         : _internalSettings(1000000, SPI_MSBFIRST, SPI_MODE0, -1), _callback(NULL), _callbackCookie(NULL)
     {
     }

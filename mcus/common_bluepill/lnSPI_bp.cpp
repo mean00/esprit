@@ -37,7 +37,7 @@ LN_SPI_Registers *aspi2 = (LN_SPI_Registers *)LN_SPI2_ADR;
  * @return lnSPI*
  */
 
-lnSPI *lnSPI::create(int instance, int pinCs)
+lnSPI *lnSPI::create(uint32_t instance, int pinCs)
 {
     return new lnSPI_bp(instance, pinCs);
 }
@@ -145,7 +145,7 @@ lnSPI_bp::~lnSPI_bp()
  *
  */
 
-void lnSPI_bp::begin(int bitSize)
+void lnSPI_bp::begin(uint32_t bitSize)
 {
     setup();
     updateMode(_regs, lnTxOnly);
@@ -194,7 +194,7 @@ bool lnSPI_bp::writeInternal(int sz, int data)
  * @return true
  * @return false
  */
-bool lnSPI_bp::writesInternal(int sz, int nb, const uint8_t *data, bool repeat)
+bool lnSPI_bp::writesInternal(int sz, uint32_t nb, const uint8_t *data, bool repeat)
 {
     switch (sz)
     {
@@ -240,7 +240,7 @@ bool lnSPI_bp::writesInternal(int sz, int nb, const uint8_t *data, bool repeat)
  * @return true
  * @return false
  */
-bool lnSPI_bp::write16(int nbWord, const uint16_t *data)
+bool lnSPI_bp::write16(uint32_t nbWord, const uint16_t *data)
 {
     for (int i = 0; i < nbWord; i++)
         write16(data[i]);
@@ -254,7 +254,7 @@ bool lnSPI_bp::write16(int nbWord, const uint16_t *data)
  * @return true
  * @return false
  */
-bool lnSPI_bp::write8(int nbBytes, const uint8_t *data)
+bool lnSPI_bp::write8(uint32_t nbBytes, const uint8_t *data)
 {
     for (int i = 0; i < nbBytes; i++)
         write8(data[i]);
@@ -340,7 +340,7 @@ void lnSPI_bp::waitForCompletion() const
  * @return true
  * @return false
  */
-bool lnSPI_bp::read1wire(int nbRead, uint8_t *rd)
+bool lnSPI_bp::read1wire(uint32_t nbRead, uint8_t *rd)
 {
     updateMode(_regs, lnRxOnly); // 1 Wire RX
 
@@ -366,7 +366,7 @@ bool lnSPI_bp::read1wire(int nbRead, uint8_t *rd)
  * @return true
  * @return false
  */
-bool lnSPI_bp::transfer(int nbBytes, uint8_t *dataOut, uint8_t *dataIn)
+bool lnSPI_bp::transfer(uint32_t nbBytes, uint8_t *dataOut, uint8_t *dataIn)
 {
     for (size_t i = 0; i < nbBytes; i++)
     {
@@ -498,7 +498,7 @@ void lnSPI_bp::setDataMode(spiDataMode mode)
  *
  * @param speed
  */
-void lnSPI_bp::setSpeed(int speed)
+void lnSPI_bp::setSpeed(uint32_t speed)
 {
     _internalSettings.speed = speed;
     setup();

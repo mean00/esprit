@@ -45,16 +45,16 @@ class simplerAD9833
         Sine
     };
 
-    simplerAD9833(lnSPI *spi, lnPin cs, int baseClock = 25000000);
+    simplerAD9833(lnSPI *spi, lnPin cs, uint32_t baseClock = 25000000);
     virtual ~simplerAD9833();
     void enable();
     void disable();
     void setWaveForm(WaveForm wf);
-    void setFrequency(int frequency);
+    void setFrequency(uint32_t frequency);
 
   protected:
-    int readRegister(int addr);
-    void writeRegister(int addr, int value);
+    uint32_t readRegister(uint32_t addr);
+    void writeRegister(uint32_t addr, uint32_t value);
     lnSPI *_spi;
     lnPin _cs;
     WaveForm _waveform;

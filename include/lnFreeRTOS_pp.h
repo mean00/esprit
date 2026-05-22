@@ -16,7 +16,7 @@ class lnBinarySemaphore
     lnBinarySemaphore();
     bool take();
     bool tryTake();
-    bool take(int timeoutMs);
+    bool take(uint32_t timeoutMs);
     bool give();
 
   protected:
@@ -30,7 +30,7 @@ class lnBinarySemaphore
 class lnTask
 {
   public:
-    lnTask(const char *name, int priority = 3, int taskSize = 100);
+    lnTask(const char *name, uint32_t priority = 3, uint32_t taskSize = 100);
     virtual ~lnTask();
     void start();
     virtual void run() = 0; // Put your code here
@@ -43,8 +43,8 @@ class lnTask
   protected:
     TaskHandle_t _taskHandle;
     const char *_name;
-    int _priority;
-    int _taskSize;
+    uint32_t _priority;
+    uint32_t _taskSize;
 };
 /**
  *
@@ -56,8 +56,8 @@ class lnEventGroup
     virtual ~lnEventGroup();
     void setEvents(uint32_t events); // /!\ Cannot be used from interrupt !!!!
     uint32_t waitEvents(uint32_t maskint,
-                        int timeout = 0);  //  the events are cleared upon return from here ! returns  0 if timeout
-    uint32_t readEvents(uint32_t maskInt); // it is also cleared automatically !
+                        uint32_t timeout = 0); //  the events are cleared upon return from here ! returns  0 if timeout
+    uint32_t readEvents(uint32_t maskInt);     // it is also cleared automatically !
   protected:
     EventGroupHandle_t _handle;
 };
@@ -74,8 +74,8 @@ class lnFastEventGroup
     void setEvents(uint32_t events);
     // -1 timeout means wait forever
     uint32_t waitEvents(uint32_t maskint,
-                        int timeout = -1); //  the events are cleared upon return from here ! returns  0 if timeout
-    uint32_t readEvents(uint32_t maskInt); // it is also cleared automatically !
+                        int32_t timeout = -1); //  the events are cleared upon return from here ! returns  0 if timeout
+    uint32_t readEvents(uint32_t maskInt);     // it is also cleared automatically !
   protected:
     volatile uint32_t _value;
     volatile uint32_t _mask;
@@ -130,7 +130,7 @@ class lnPeriodicTimer
     lnPeriodicTimer();
     virtual ~lnPeriodicTimer();
     virtual void timerCallback() = 0;
-    void init(const char *name, int periodInMs);
+    void init(const char *name, uint32_t periodInMs);
     bool start();
     bool stop();
     bool restart();

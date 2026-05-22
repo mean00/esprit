@@ -26,6 +26,8 @@ lnTimingAdc::lnTimingAdc(int instance)
     _fq = -1;
     _adcTimer = NULL;
     _nbPins = -1;
+    _asyncCallback = NULL;
+    _asyncCtx = NULL;
 }
 /**
  *
@@ -178,6 +180,72 @@ bool lnTimingAdc::multiRead(int nbSamplePerChannel, uint16_t *output)
     adc->CTL1 &= ~LN_ADC_CTL1_CTN;
     _dma.endTransfer();
     return true;
+}
+
+/**
+ * Async DMA completion trampoline (static).
+ */
+void lnTimingAdc::dmaDoneAsync_(void *t, lnDMA::DmaInterruptType typ)
+{
+    lnTimingAdc *me = (lnTimingAdc *)t;
+    me->dmaDoneAsync();
+}
+
+/**
+ * Async DMA completion handler.
+ *
+ * 1. Captures the callback/ctx
+ * 2. Zeros them (prevents re-entrancy)
+ * 3. Cleans up hardware (disables timer, clears DMA flags, ends DMA transfer)
+ * 4. Fires the user callback (safe to restart another asyncMultiRead from here)
+ */
+void lnTimingAdc::dmaDoneAsync()
+{
+    // Capture and zero before cleanup
+    auto cb = _asyncCallback;
+    auto ctx = _asyncCtx;
+    _asyncCallback = NULL;
+    _asyncCtx = NULL;
+
+    // Hardware cleanup (same as end of multiRead)
+    LN_ADC_Registers *adc = lnAdcDesc[_instance].registers;
+    _adcTimer->disable();
+    adc->CTL1 &= ~LN_ADC_CTL1_DMA;
+    adc->CTL1 &= ~LN_ADC_CTL1_CTN;
+    _dma.endTransfer();
+
+    // Fire user callback (HW is clean, cb/ctx are zeroed)
+    if (cb)
+        cb(ctx);
+}
+
+/**
+ * Non-blocking DMA read.
+ *
+ * Starts a timer-triggered DMA transfer and returns immediately.
+ * When the transfer completes, `cb(ctx)` is called from the DMA ISR
+ * after hardware cleanup.
+ */
+bool lnTimingAdc::asyncMultiRead(int nbSamplePerChannel, uint16_t *output,
+                                 void (*cb)(void *), void *ctx)
+{
+    LN_ADC_Registers *adc = lnAdcDesc[_instance].registers;
+    xAssert(_fq > 0);
+
+    _asyncCallback = cb;
+    _asyncCtx = ctx;
+
+    // Program DMA (same setup as multiRead)
+    _dma.beginTransfer();
+    _dma.attachCallback(lnTimingAdc::dmaDoneAsync_, this);
+    _dma.doPeripheralToMemoryTransferNoLock(nbSamplePerChannel * _nbPins, (uint16_t *)output, (uint16_t *)&(adc->RDATA),
+                                            false);
+    // Start hardware
+    adc->CTL1 &= ~LN_ADC_CTL1_CTN;
+    adc->CTL1 |= LN_ADC_CTL1_DMA;
+    _adcTimer->enable();
+
+    return true; // non-blocking: returns immediately
 }
 
 // EOF

@@ -22,9 +22,13 @@ def grab_demo_folders(path):
     dbg("Scanning "+path)
     for item in os.scandir(path):
         if item.is_dir():
-            if not (item.name in blacklist):
-                #print(item.name)
-                projects.append(item.name)
+            if item.name in blacklist:
+                continue
+            if item.name == 'esprit':
+                continue
+            if item.name.startswith('build_'):
+                continue
+            projects.append(item.name)
     projects.sort()
     dbg(str(projects))
     return projects

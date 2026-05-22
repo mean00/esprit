@@ -28,6 +28,7 @@ pub mod rn_i2c_c;
 pub mod rn_spi_c;
 pub mod rn_timer_c;
 pub mod rn_timing_adc_c;
+pub mod rn_multi_pulse_c;
 pub mod rn_serial_c;
 #[cfg(feature = "cdc")]
 pub mod rn_usb_c;

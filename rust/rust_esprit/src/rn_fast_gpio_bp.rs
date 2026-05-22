@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-
 use crate::rn_gpio::{pinMode, rnPin};
 use crate::rn_gpio_bp_c as gpio;
 use gpio::{lnGetGpioToggleRegister, lnGpioMode as rnGpioMode};
@@ -17,19 +16,21 @@ impl rnFastIO {
         let r: rnFastIO;
         unsafe {
             r = rnFastIO {
-                onoff_adr: lnGetGpioToggleRegister(((pin as usize) >> 4) as i32),
+                onoff_adr: lnGetGpioToggleRegister(((pin as usize) >> 4) as u32),
                 on_bit: bit,
                 off_bit: bit << 16,
             };
         }
         r
     }
+
     #[inline(always)]
     pub fn on(&mut self) {
         unsafe {
             *self.onoff_adr = self.on_bit;
         }
     }
+
     #[inline(always)]
     pub fn off(&mut self) {
         unsafe {
@@ -37,4 +38,3 @@ impl rnFastIO {
         }
     }
 }
-//

@@ -34,7 +34,7 @@ lnNvmGd32::~lnNvmGd32()
  * @param sector
  * @return
  */
-bool lnNvmGd32::eraseSector(int sector)
+bool lnNvmGd32::eraseSector(uint32_t sector)
 {
     xAssert(_baseAddress == EEPROM_BEGIN);
     xAssert(sector < _nbSectors);
@@ -48,7 +48,7 @@ bool lnNvmGd32::eraseSector(int sector)
  * @param data
  * @return
  */
-bool lnNvmGd32::writeSector(int sector, int offset, int size, uint8_t *data)
+bool lnNvmGd32::writeSector(uint32_t sector, uint32_t offset, uint32_t size, uint8_t *data)
 {
     xAssert(_baseAddress == EEPROM_BEGIN);
     xAssert(sector < _nbSectors);
@@ -62,7 +62,7 @@ bool lnNvmGd32::writeSector(int sector, int offset, int size, uint8_t *data)
  * @param data
  * @return
  */
-bool lnNvmGd32::readSector(int sector, int offset, int size, uint8_t *data)
+bool lnNvmGd32::readSector(uint32_t sector, uint32_t offset, uint32_t size, uint8_t *data)
 {
     xAssert(_baseAddress == EEPROM_BEGIN);
     xAssert(sector < _nbSectors);
@@ -75,7 +75,7 @@ bool lnNvmGd32::readSector(int sector, int offset, int size, uint8_t *data)
  * @param sector
  * @return
  */
-bool lnNvmGd32::verifyErase(int sector)
+bool lnNvmGd32::verifyErase(uint32_t sector)
 {
     xAssert(_baseAddress == EEPROM_BEGIN);
     xAssert(sector < _nbSectors);

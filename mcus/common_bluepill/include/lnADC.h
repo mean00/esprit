@@ -78,15 +78,21 @@ class lnTimingAdc : public lnBaseAdc
     virtual ~lnTimingAdc();
     bool setSource(int timer, int channel, int fq, int nbPins, const lnPin *pins);
     bool multiRead(int nbSamplePerChannel, uint16_t *output); // read N pins in one go POLLING
+    bool asyncMultiRead(int nbSamplePerChannel, uint16_t *output,
+                        void (*cb)(void *), void *ctx); // non-blocking DMA read
   public:
     static void dmaDone_(void *foo, lnDMA::DmaInterruptType typ);
+    static void dmaDoneAsync_(void *foo, lnDMA::DmaInterruptType typ);
 
   protected:
     void dmaDone();
+    void dmaDoneAsync();
     int _timer, _channel, _fq;
     lnDMA _dma;
     lnBinarySemaphore _dmaSem;
     lnAdcTimer *_adcTimer;
     int _nbPins;
+    void (*_asyncCallback)(void *);
+    void *_asyncCtx;
 };
 // EOF

@@ -194,8 +194,8 @@ pub enum lnGpioMode {
     lnUART_Alt = 13,
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_Z9lnPinMode5lnPin10lnGpioModei"]
-    pub fn lnPinMode(pin: lnPin, mode: lnGpioMode, speedInMhz: cty::c_int);
+    #[link_name = "\u{1}_Z9lnPinMode5lnPin10lnGpioModej"]
+    pub fn lnPinMode(pin: lnPin, mode: lnGpioMode, speedInMhz: cty::c_uint);
 }
 unsafe extern "C" {
     #[link_name = "\u{1}_Z14lnDigitalWrite5lnPinb"]
@@ -214,20 +214,20 @@ unsafe extern "C" {
     pub fn lnOpenDrainClose(pin: lnPin, close: bool);
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_Z23lnGetGpioToggleRegisteri"]
-    pub fn lnGetGpioToggleRegister(port: cty::c_int) -> *mut cty::c_uint;
+    #[link_name = "\u{1}_Z23lnGetGpioToggleRegisterj"]
+    pub fn lnGetGpioToggleRegister(port: cty::c_uint) -> *mut cty::c_uint;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_Z26lnGetGpioDirectionRegisteri"]
-    pub fn lnGetGpioDirectionRegister(port: cty::c_int) -> *mut cty::c_uint;
+    #[link_name = "\u{1}_Z26lnGetGpioDirectionRegisterj"]
+    pub fn lnGetGpioDirectionRegister(port: cty::c_uint) -> *mut cty::c_uint;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_Z22lnGetGpioValueRegisteri"]
-    pub fn lnGetGpioValueRegister(port: cty::c_int) -> *mut cty::c_uint;
+    #[link_name = "\u{1}_Z22lnGetGpioValueRegisterj"]
+    pub fn lnGetGpioValueRegister(port: cty::c_uint) -> *mut cty::c_uint;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_Z10lnReadPorti"]
-    pub fn lnReadPort(port: cty::c_int) -> cty::c_uint;
+    #[link_name = "\u{1}_Z10lnReadPortj"]
+    pub fn lnReadPort(port: cty::c_uint) -> cty::c_uint;
 }
 pub const LnRemapTimer_NoRemap: LnRemapTimer = 0;
 pub const LnRemapTimer_PartialRemap: LnRemapTimer = 1;
@@ -257,10 +257,11 @@ impl lnFastIO {
     }
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_Z19lnGetGpioOnRegisteri"]
-    pub fn lnGetGpioOnRegister(port: cty::c_int) -> *mut cty::c_uint;
+    pub fn lnGetGpioOnRegister(port: cty::c_uint) -> *mut cty::c_uint;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_Z20lnGetGpioOffRegisteri"]
-    pub fn lnGetGpioOffRegister(port: cty::c_int) -> *mut cty::c_uint;
+    pub fn lnGetGpioOffRegister(port: cty::c_uint) -> *mut cty::c_uint;
+}
+unsafe extern "C" {
+    pub fn lnPinMode_c(pin: lnPin, mode: lnGpioMode, speedInMhz: cty::c_uint);
 }

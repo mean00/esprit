@@ -64,7 +64,7 @@ struct lnUart_t
  * @return true
  * @return false
  */
-bool rp_uart_rawWrite(uart_inst_t *u, int size, const uint8_t *buffer)
+bool rp_uart_rawWrite(uart_inst_t *u, uint32_t size, const uint8_t *buffer)
 {
     io_rw_32 *dr = &(uart_get_hw(u)->dr);
     for (int i = 0; i < size; i++)
@@ -92,21 +92,21 @@ class lnRpSerialTxOnly : public lnSerialTxOnly
 {
   public:
     // public API
-    lnRpSerialTxOnly(int instance, int bufferSize);
+    lnRpSerialTxOnly(uint32_t instance, uint32_t bufferSize);
     virtual bool init();
-    bool setSpeed(int speed);
-    bool transmit(int size, const uint8_t *buffer);
+    bool setSpeed(uint32_t speed);
+    bool transmit(uint32_t size, const uint8_t *buffer);
 
     // no copy interface
-    virtual bool rawWrite(int size, const uint8_t *buffer)
+    virtual bool rawWrite(uint32_t size, const uint8_t *buffer)
     {
         uart_inst_t *u = (uart_inst_t *)uarts[lnSerialTxOnly::_instance].hw;
         return rp_uart_rawWrite(u, size, buffer);
     }
-    virtual int transmitNoBlock(int size, const uint8_t *buffer);
+    virtual int transmitNoBlock(uint32_t size, const uint8_t *buffer);
     // custom
     virtual void irq_handler();
-    bool transmitDma(int size, const uint8_t *buffer);
+    bool transmitDma(uint32_t size, const uint8_t *buffer);
     void txDmaCb();
     bool igniteTx();
 
@@ -159,7 +159,7 @@ void uart1_irq_handler()
     \fn
     \brief
 */
-lnRpSerialTxOnly::lnRpSerialTxOnly(int instance, int bufferSize) : lnSerialTxOnly(instance), _txRingBuffer(bufferSize)
+lnRpSerialTxOnly::lnRpSerialTxOnly(uint32_t instance, uint32_t bufferSize) : lnSerialTxOnly(instance), _txRingBuffer(bufferSize)
 {
     xAssert(instance < 2);
     xAssert(nullptr == rpSerialInstances[instance]);
@@ -224,7 +224,7 @@ bool lnRpSerialTxOnly::init()
     \fn
     \brief
 */
-bool lnRpSerialTxOnly::setSpeed(int speed)
+bool lnRpSerialTxOnly::setSpeed(uint32_t speed)
 {
     auto *u = (uart_inst_t *)uarts[lnSerialTxOnly::_instance].hw;
     uart_set_baudrate(u, speed);
@@ -234,7 +234,7 @@ bool lnRpSerialTxOnly::setSpeed(int speed)
     \fn
     \brief
 */
-bool lnRpSerialTxOnly::transmit(int size, const uint8_t *buffer)
+bool lnRpSerialTxOnly::transmit(uint32_t size, const uint8_t *buffer)
 {
     if (size == 0)
         return true;
@@ -267,7 +267,7 @@ bool lnRpSerialTxOnly::transmit(int size, const uint8_t *buffer)
  * @param buffer
  * @return int
  */
-int lnRpSerialTxOnly::transmitNoBlock(int size, const uint8_t *buffer)
+int lnRpSerialTxOnly::transmitNoBlock(uint32_t size, const uint8_t *buffer)
 {
     if (size == 0)
         return 0;
@@ -334,17 +334,17 @@ class lnRpSerialRxTx : public lnRpSerialTxOnly, public lnSerialRxTx, public lnPe
 {
   public:
     // public API
-    lnRpSerialRxTx(int instance, int rxBufferSize = 128);
+    lnRpSerialRxTx(uint32_t instance, uint32_t rxBufferSize = 128);
     virtual bool init();
-    bool setSpeed(int speed)
+    bool setSpeed(uint32_t speed)
     {
         return lnRpSerialTxOnly::setSpeed(speed);
     }
-    bool transmit(int size, const uint8_t *buffer)
+    bool transmit(uint32_t size, const uint8_t *buffer)
     {
         return lnRpSerialTxOnly::transmit(size, buffer);
     }
-    int transmitNoBlock(int size, const uint8_t *buffer)
+    int transmitNoBlock(uint32_t size, const uint8_t *buffer)
     {
         return lnRpSerialTxOnly::transmitNoBlock(size, buffer);
     }
@@ -354,10 +354,10 @@ class lnRpSerialRxTx : public lnRpSerialTxOnly, public lnSerialRxTx, public lnPe
     }
     bool enableRx(bool enabled);
     void purgeRx();
-    int read(int max, uint8_t *to);
+    int read(uint32_t max, uint8_t *to);
     // no copy interface
     int getReadPointer(uint8_t **to);
-    void consume(int n);
+    void consume(uint32_t n);
 
     void copyToBuffer(uint32_t startFrom, uint32_t count);
     void timerCallback();
@@ -386,7 +386,7 @@ static void cbRxDma(void *cookie)
  * @param instance
  * @param rxBufferSize
  */
-lnRpSerialRxTx::lnRpSerialRxTx(int instance, int rxBufferSize)
+lnRpSerialRxTx::lnRpSerialRxTx(uint32_t instance, uint32_t rxBufferSize)
     : lnRpSerialTxOnly(instance, rxBufferSize >> 1), _rxRingBuffer(rxBufferSize), lnSerialRxTx(instance)
 {
     xAssert(rxBufferSize >= (UART_RX_DMA_BUFFER * 2));
@@ -438,7 +438,7 @@ void lnRpSerialRxTx::purgeRx()
  * @return int
  */
 
-int lnRpSerialRxTx::read(int max, uint8_t *to)
+int lnRpSerialRxTx::read(uint32_t max, uint8_t *to)
 {
     DISABLE_INTERRUPTS();
     int ret = _rxRingBuffer.get(max, to);
@@ -463,7 +463,7 @@ int lnRpSerialRxTx::getReadPointer(uint8_t **to)
  *
  * @param n
  */
-void lnRpSerialRxTx::consume(int n)
+void lnRpSerialRxTx::consume(uint32_t n)
 {
     DISABLE_INTERRUPTS();
     _rxRingBuffer.consume(n);
@@ -568,7 +568,7 @@ void lnRpSerialRxTx::copyToBuffer(uint32_t startFrom, uint32_t count)
  * @param buffered
  * @return lnSerialTxOnly*
  */
-lnSerialTxOnly *createLnSerialTxOnly(int instance, bool /*dma*/, bool /*buffered*/)
+lnSerialTxOnly *createLnSerialTxOnly(uint32_t instance, bool /*dma*/, bool /*buffered*/)
 {
     return new lnRpSerialTxOnly(instance, 128);
 }
@@ -580,7 +580,7 @@ lnSerialTxOnly *createLnSerialTxOnly(int instance, bool /*dma*/, bool /*buffered
  * @param dma
  * @return lnSerialRxTx*
  */
-lnSerialRxTx *createLnSerialRxTx(int instance, int rxBufferSize, bool dma)
+lnSerialRxTx *createLnSerialRxTx(uint32_t instance, uint32_t rxBufferSize, bool dma)
 {
     return new lnRpSerialRxTx(instance, rxBufferSize);
 }

@@ -66,7 +66,7 @@ static void spiHandler1()
  * @param instance
  * @param pinCs
  */
-rpSPI::rpSPI(int instance, int pinCs) : lnSPI(instance, pinCs)
+rpSPI::rpSPI(uint32_t instance, int pinCs) : lnSPI(instance, pinCs)
 {
     xAssert(!instances[instance]);
     instances[instance] = this;
@@ -102,7 +102,7 @@ rpSPI::~rpSPI()
  *
  * @param wordsize
  */
-void rpSPI::begin(int wordsize)
+void rpSPI::begin(uint32_t wordsize)
 {
     _wordSize = wordsize;
     xAssert(_wordSize == 8 || _wordSize == 16);
@@ -144,7 +144,7 @@ void rpSPI::end(void)
  *
  * @param speed
  */
-void rpSPI::setSpeed(int speed)
+void rpSPI::setSpeed(uint32_t speed)
 {
 
     uint32_t fq_in = clock_get_hz(clk_peri);
@@ -196,7 +196,7 @@ void rpSPI::setBitOrder(spiBitOrder order)
  *
  * @param dataSize
  */
-void rpSPI::setDataSize(int dataSize)
+void rpSPI::setDataSize(uint32_t dataSize)
 {
     _cr0 &= ~LN_RP_SPI_CR0_BITS_MASK;
     switch (dataSize)
@@ -262,7 +262,7 @@ void rpSPI::waitForCompletion() const
     }
 }
 
-bool rpSPI::blockWrite_all(int wordSize, int nbExchange, const uint32_t *data, bool repeat)
+bool rpSPI::blockWrite_all(uint32_t wordSize, uint32_t nbExchange, const uint32_t *data, bool repeat)
 {
     xAssert(_wordSize == wordSize);
     _callback = nullptr;
@@ -285,7 +285,7 @@ bool rpSPI::blockWrite_all(int wordSize, int nbExchange, const uint32_t *data, b
  * @return true
  * @return false
  */
-bool rpSPI::blockWrite8(int nbBytes, const uint8_t *data)
+bool rpSPI::blockWrite8(uint32_t nbBytes, const uint8_t *data)
 {
     return blockWrite_all(8, nbBytes, (const uint32_t *)data, false);
 }
@@ -297,7 +297,7 @@ bool rpSPI::blockWrite8(int nbBytes, const uint8_t *data)
  * @return true
  * @return false
  */
-bool rpSPI::blockWrite16(int nbHalfWord, const uint16_t *data)
+bool rpSPI::blockWrite16(uint32_t nbHalfWord, const uint16_t *data)
 {
     return blockWrite_all(16, nbHalfWord, (const uint32_t *)data, false);
 }
@@ -310,7 +310,7 @@ bool rpSPI::blockWrite16(int nbHalfWord, const uint16_t *data)
  * @return true
  * @return false
  */
-bool rpSPI::blockWrite16Repeat(int nbHalfWord, const uint16_t data)
+bool rpSPI::blockWrite16Repeat(uint32_t nbHalfWord, const uint16_t data)
 {
     return blockWrite_all(16, nbHalfWord, (const uint32_t *)&data, true);
 }
@@ -323,7 +323,7 @@ bool rpSPI::blockWrite16Repeat(int nbHalfWord, const uint16_t data)
  * @return true
  * @return false
  */
-bool rpSPI::blockWrite8Repeat(int nbBytes, const uint8_t data)
+bool rpSPI::blockWrite8Repeat(uint32_t nbBytes, const uint8_t data)
 {
     return blockWrite_all(8, nbBytes, (const uint32_t *)&data, true);
 }
@@ -401,12 +401,12 @@ void rpSPI::set(lnSPISettings &settings)
  * @param b
  * @return lnSPI*
  */
-lnSPI *lnSPI::create(int instance, int pinCs)
+lnSPI *lnSPI::create(uint32_t instance, int pinCs)
 {
     return new rpSPI(instance, pinCs);
 }
 //--- not implemented ---
-bool rpSPI::transfer(int nbBytes, uint8_t *dataOut, uint8_t *dataIn)
+bool rpSPI::transfer(uint32_t nbBytes, uint8_t *dataOut, uint8_t *dataIn)
 {
     xAssert(0);
     return false;
@@ -434,7 +434,7 @@ bool rpSPI::finishAsyncDma()
  * @return true
  * @return false
  */
-bool rpSPI::asyncWrite8(int nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
+bool rpSPI::asyncWrite8(uint32_t nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
 {
     this->_callback = cb;
     this->_callbackCookie = cookie;
@@ -458,7 +458,7 @@ bool rpSPI::asyncWrite8(int nbBytes, const uint8_t *data, lnSpiCallback *cb, voi
  * @return true
  * @return false
  */
-bool rpSPI::nextWrite8(int nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
+bool rpSPI::nextWrite8(uint32_t nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
 {
     this->_callback = cb;
     this->_callbackCookie = cookie;
@@ -506,7 +506,7 @@ bool rpSPI::write16(const uint16_t data)
 }
 
 // --- not implemented ---
-bool rpSPI::read1wire(int nbRead, uint8_t *rd)
+bool rpSPI::read1wire(uint32_t nbRead, uint8_t *rd)
 {
     return false;
 } // read, reuse MOSI
@@ -531,7 +531,7 @@ bool rpSPI::waitForAsync()
  * @return true
  * @return false
  */
-bool rpSPI::asyncWrite16(int nbWord, const uint16_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
+bool rpSPI::asyncWrite16(uint32_t nbWord, const uint16_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
 {
     this->_callback = cb;
     this->_callbackCookie = cookie;
@@ -556,7 +556,7 @@ bool rpSPI::asyncWrite16(int nbWord, const uint16_t *data, lnSpiCallback *cb, vo
  * @return true
  * @return false
  */
-bool rpSPI::nextWrite16(int nbWord, const uint16_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
+bool rpSPI::nextWrite16(uint32_t nbWord, const uint16_t *data, lnSpiCallback *cb, void *cookie, bool repeat)
 {
     this->_callback = cb;
     this->_callbackCookie = cookie;

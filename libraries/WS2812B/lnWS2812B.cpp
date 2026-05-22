@@ -14,7 +14,7 @@
  * @param nbLeds
  * @param s
  */
-WS2812B::WS2812B(int nbLeds, lnSPI *s) : WS2812B_base(nbLeds)
+WS2812B::WS2812B(uint32_t nbLeds, lnSPI *s) : WS2812B_base(nbLeds)
 {
     _spi = s;
     int up = ((nbLeds + 3) & (~3)) + (WS_PREAMBLE + 23) / 24; // next multiple of 4 + add one before / one after
@@ -64,7 +64,7 @@ WS2812B::~WS2812B()
  *
  * @param value
  */
-void WS2812B::setGlobalBrightness(int value)
+void WS2812B::setGlobalBrightness(uint32_t value)
 {
     WS2812B_base::setGlobalBrightness(value);
     convertAll();
@@ -75,7 +75,7 @@ void WS2812B::setGlobalBrightness(int value)
  * @param g
  * @param b
  */
-void WS2812B::setColor(int r, int g, int b)
+void WS2812B::setColor(uint32_t r, uint32_t g, uint32_t b)
 {
     WS2812B_base::setColor(r, g, b);
     convertAll();
@@ -87,7 +87,7 @@ void WS2812B::setColor(int r, int g, int b)
  * @param g
  * @param b
  */
-void WS2812B::setLedColor(int led, int r, int g, int b)
+void WS2812B::setLedColor(uint32_t led, uint32_t r, uint32_t g, uint32_t b)
 {
     WS2812B_base::setLedColor(led, r, g, b);
     convert(led);
@@ -97,7 +97,7 @@ void WS2812B::setLedColor(int led, int r, int g, int b)
  * @param led
  * @param brightness
  */
-void WS2812B::setLedBrightness(int led, int brightness)
+void WS2812B::setLedBrightness(uint32_t led, uint32_t brightness)
 {
     WS2812B_base::setLedBrightness(led, brightness);
     convert(led);
@@ -136,7 +136,7 @@ static void convertOne(int color, int b16, uint8_t *target)
  *
  * @param led
  */
-void WS2812B::convert(int led)
+void WS2812B::convert(uint32_t led)
 {
     uint8_t *p = _ledsColorSPI + 3 * 8 * led + WS_PREAMBLE;
     uint8_t *c = _ledsColor + led * 3;

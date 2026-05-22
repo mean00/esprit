@@ -14,7 +14,7 @@
 #define WRAP_TX(x)  (reinterpret_cast<lnSerialTxOnly *>(x))
 #define WRAP_RX(x)  (reinterpret_cast<lnSerialRxTx *>(x))
 
-ln_serial_tx_c *lnserial_tx_create(int instance, bool dma, bool buffered)
+ln_serial_tx_c *lnserial_tx_create(uint32_t instance, bool dma, bool buffered)
 {
     auto *p = createLnSerialTxOnly(instance, dma, buffered);
     return reinterpret_cast<ln_serial_tx_c *>(p);
@@ -30,17 +30,17 @@ bool lnserial_tx_init(ln_serial_tx_c *s)
     return WRAP_TX(s)->init();
 }
 
-bool lnserial_tx_set_speed(ln_serial_tx_c *s, int speed)
+bool lnserial_tx_set_speed(ln_serial_tx_c *s, uint32_t speed)
 {
     return WRAP_TX(s)->setSpeed(speed);
 }
 
-bool lnserial_tx_transmit(ln_serial_tx_c *s, int size, const uint8_t *buffer)
+bool lnserial_tx_transmit(ln_serial_tx_c *s, uint32_t size, const uint8_t *buffer)
 {
     return WRAP_TX(s)->transmit(size, buffer);
 }
 
-bool lnserial_tx_raw_write(ln_serial_tx_c *s, int size, const uint8_t *buffer)
+bool lnserial_tx_raw_write(ln_serial_tx_c *s, uint32_t size, const uint8_t *buffer)
 {
     return WRAP_TX(s)->rawWrite(size, buffer);
 }
@@ -49,7 +49,7 @@ bool lnserial_tx_raw_write(ln_serial_tx_c *s, int size, const uint8_t *buffer)
 //  Rx+Tx
 // ---------------------------------------------------------------------------
 
-ln_serial_rx_c *lnserial_rx_create(int instance, int rxBufferSize, bool dma)
+ln_serial_rx_c *lnserial_rx_create(uint32_t instance, uint32_t rxBufferSize, bool dma)
 {
     auto *p = createLnSerialRxTx(instance, rxBufferSize, dma);
     return reinterpret_cast<ln_serial_rx_c *>(p);
@@ -65,17 +65,17 @@ bool lnserial_rx_init(ln_serial_rx_c *s)
     return WRAP_RX(s)->init();
 }
 
-bool lnserial_rx_set_speed(ln_serial_rx_c *s, int speed)
+bool lnserial_rx_set_speed(ln_serial_rx_c *s, uint32_t speed)
 {
     return WRAP_RX(s)->setSpeed(speed);
 }
 
-bool lnserial_rx_transmit(ln_serial_rx_c *s, int size, const uint8_t *buffer)
+bool lnserial_rx_transmit(ln_serial_rx_c *s, uint32_t size, const uint8_t *buffer)
 {
     return WRAP_RX(s)->transmit(size, buffer);
 }
 
-int lnserial_rx_transmit_no_block(ln_serial_rx_c *s, int size, const uint8_t *buffer)
+int lnserial_rx_transmit_no_block(ln_serial_rx_c *s, uint32_t size, const uint8_t *buffer)
 {
     return WRAP_RX(s)->transmitNoBlock(size, buffer);
 }
@@ -90,7 +90,7 @@ void lnserial_rx_purge_rx(ln_serial_rx_c *s)
     WRAP_RX(s)->purgeRx();
 }
 
-int lnserial_rx_read(ln_serial_rx_c *s, int max, uint8_t *to)
+int lnserial_rx_read(ln_serial_rx_c *s, uint32_t max, uint8_t *to)
 {
     return WRAP_RX(s)->read(max, to);
 }
@@ -109,7 +109,7 @@ int lnserial_rx_get_read_pointer(ln_serial_rx_c *s, uint8_t **to)
     return WRAP_RX(s)->getReadPointer(to);
 }
 
-void lnserial_rx_consume(ln_serial_rx_c *s, int n)
+void lnserial_rx_consume(ln_serial_rx_c *s, uint32_t n)
 {
     WRAP_RX(s)->consume(n);
 }

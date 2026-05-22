@@ -9,8 +9,8 @@
 class lnStopWatch
 {
   public:
-    lnStopWatch(int ms);
-    bool restart(int durationMs);
+    lnStopWatch(uint32_t ms);
+    bool restart(uint32_t durationMs);
     bool elapsed();
 
   protected:

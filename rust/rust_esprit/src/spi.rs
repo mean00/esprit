@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
-
 use crate::gpio::lnPin;
 use crate::rn_spi_c;
 
@@ -51,7 +50,6 @@ impl From<BitOrder> for rn_spi_c::spiBitOrder {
 // ---------- the SpiBus wrapper ----------
 
 /// Owned, non‑copy handle to an SPI peripheral.
-///
 /// Created via `SpiBus::new(instance, cs_pin)`.
 /// The underlying C object is destroyed when `SpiBus` is dropped.
 pub struct SpiBus {
@@ -60,9 +58,8 @@ pub struct SpiBus {
 
 impl SpiBus {
     /// Create a new SPI bus on hardware instance `instance` with chip-select `cs_pin`.
-    ///
-    /// `cs_pin` is the C `lnPin` enum value.  Use `lnPin::PA4` etc.
-    pub fn new(instance: i32, cs_pin: lnPin) -> Self {
+    /// `cs_pin` is the C `lnPin` enum val.  Use `lnPin::PA4` etc.
+    pub fn new(instance: u32, cs_pin: lnPin) -> Self {
         let raw = unsafe { rn_spi_c::lnspi_create(instance, cs_pin as i32) };
         assert!(!raw.is_null(), "lnspi_create returned NULL");
         Self { raw }
@@ -74,8 +71,6 @@ impl SpiBus {
         self.raw
     }
 
-    // ---------- begin / end ----------
-
     /// Initialise the bus with a given data size (typically 8).
     pub fn begin(&mut self, data_size_bits: u32) {
         unsafe { rn_spi_c::lnspi_begin(self.raw, data_size_bits); }
@@ -85,8 +80,6 @@ impl SpiBus {
     pub fn end(&mut self) {
         unsafe { rn_spi_c::lnspi_end(self.raw); }
     }
-
-    // ---------- configuration ----------
 
     pub fn set_bit_order(&mut self, order: BitOrder) {
         unsafe { rn_spi_c::lnspi_set_bit_order(self.raw, order.into()); }
@@ -121,7 +114,7 @@ impl SpiBus {
         unsafe { rn_spi_c::lnspi_write16(self.raw, data) }
     }
 
-    /// Block until the previous write completes.
+    /// Block until the prev write completes.
     pub fn wait_done(&mut self) -> bool {
         unsafe { rn_spi_c::lnspi_wait_for_completion(self.raw) }
     }
@@ -140,14 +133,14 @@ impl SpiBus {
         }
     }
 
-    /// Repeatedly write the same 8‑bit value `count` times.
-    pub fn fill8(&mut self, count: u32, value: u8) -> bool {
-        unsafe { rn_spi_c::lnspi_block_write8_repeat(self.raw, count, value) }
+    /// Repeatedly write the same 8‑bit val `count` times.
+    pub fn fill8(&mut self, count: u32, val: u8) -> bool {
+        unsafe { rn_spi_c::lnspi_block_write8_repeat(self.raw, count, val) }
     }
 
-    /// Repeatedly write the same 16‑bit value `count` times.
-    pub fn fill16(&mut self, count: u32, value: u16) -> bool {
-        unsafe { rn_spi_c::lnspi_block_write16_repeat(self.raw, count, value) }
+    /// Repeatedly write the same 16‑bit val `count` times.
+    pub fn fill16(&mut self, count: u32, val: u16) -> bool {
+        unsafe { rn_spi_c::lnspi_block_write16_repeat(self.raw, count, val) }
     }
 
     /// Bidirectional transfer: sends `tx` slice, receives into `rx` slice.
@@ -161,7 +154,7 @@ impl SpiBus {
 
     // ---------- DMA / async (raw API) ----------
 
-    /// Start an asynchronous 8‑bit DMA write.
+    /// Start an async 8‑bit DMA write.
     pub fn async_write8(
         &mut self,
         data: &[u8],
@@ -181,7 +174,7 @@ impl SpiBus {
         }
     }
 
-    /// Queue another 8‑bit DMA write (use after a previous async write finishes).
+    /// Queue another 8‑bit DMA write (use after a prev async write finishes).
     pub fn next_write8(
         &mut self,
         data: &[u8],
@@ -201,7 +194,7 @@ impl SpiBus {
         }
     }
 
-    /// Start an asynchronous 16‑bit DMA write.
+    /// Start an async 16‑bit DMA write.
     pub fn async_write16(
         &mut self,
         data: &[u16],

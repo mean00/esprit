@@ -30,7 +30,7 @@
     @brief  Instantiates a new MCP4725 class
 */
 /**************************************************************************/
-myMCP4725::myMCP4725(lnI2C &wire, int address) : _i2c(wire)
+myMCP4725::myMCP4725(lnI2C &wire, uint32_t address) : _i2c(wire)
 {
     _i2caddr = address;
 }
@@ -50,7 +50,7 @@ myMCP4725::myMCP4725(lnI2C &wire, int address) : _i2c(wire)
                 after power-down or reset.
 */
 /**************************************************************************/
-void myMCP4725::setVoltage(int output)
+void myMCP4725::setVoltage(uint32_t output)
 {
 #if 0
   // slow
@@ -66,7 +66,7 @@ void myMCP4725::setVoltage(int output)
  * @param output
  * @param writeEEPROM
  */
-void myMCP4725::setDefaultValue(int output)
+void myMCP4725::setDefaultValue(uint32_t output)
 {
     uint8_t datas[3] = {MCP4726_CMD_WRITEDACEEPROM, (uint8_t)(output >> 4), (uint8_t)((output & 0xf) << 4)};
     _i2c.write(_i2caddr, 3, datas);

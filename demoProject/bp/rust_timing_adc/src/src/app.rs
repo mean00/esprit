@@ -18,7 +18,8 @@ pub extern "C" fn rnInit() {
  *
  *
  */
-
+struct AdcStruct {}
+//
 const SAMPLE_SIZE: usize = 32;
 #[unsafe(no_mangle)]
 pub extern "C" fn rnLoop() {
@@ -27,7 +28,7 @@ pub extern "C" fn rnLoop() {
     pin_mode(PIN_IN, rust_esprit::GpioMode::lnADC_MODE);
     let mut output: [u16; SAMPLE_SIZE] = [0; SAMPLE_SIZE];
     let pins: [pin; 1] = [PIN_IN];
-    let mut adc = AdcTiming::new(0);
+    let mut adc = AdcTiming::<AdcStruct>::new(0);
     adc.set_source(3, 3, 10000, &pins);
     loop {
         adc.multi_read(SAMPLE_SIZE as i32, &mut output);

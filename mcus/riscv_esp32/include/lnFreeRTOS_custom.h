@@ -44,9 +44,9 @@ extern "C"
 #include "stdint.h"
 
     bool lnCreateTask(TaskFunction_t pxTaskCode,
-                      const char *const pcName, /*lint !e971 Unqualified char types are allowed for strings and single
-                                                   characters only. */
-                      int stackSizeInBytes,     // in bytes  !
+                      const char *const pcName,  /*lint !e971 Unqualified char types are allowed for strings and single
+                                                    characters only. */
+                      uint32_t stackSizeInBytes, // in bytes  !
                       void *const pvParameters, UBaseType_t uxPriority);
 #ifdef __cplusplus
 }

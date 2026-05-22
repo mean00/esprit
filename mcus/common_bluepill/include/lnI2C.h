@@ -13,14 +13,14 @@
 class lnI2C
 {
   public:
-    static lnI2C *create(int instance, int speed = 0);
+    static lnI2C *create(uint32_t instance, uint32_t speed = 0);
     virtual ~lnI2C() {};
-    virtual void setSpeed(int speed) = 0;
-    virtual void setAddress(int address) = 0;
+    virtual void setSpeed(uint32_t speed) = 0;
+    virtual void setAddress(uint32_t address) = 0;
     virtual bool write(uint32_t n, const uint8_t *data) = 0;
     virtual bool read(uint32_t n, uint8_t *data) = 0;
-    virtual bool write(int target, uint32_t n, const uint8_t *data) = 0;
-    virtual bool multiWrite(int target, uint32_t nbSeqn, const uint32_t *seqLength, const uint8_t **data) = 0;
-    virtual bool read(int target, uint32_t n, uint8_t *data) = 0;
-    virtual bool begin(int target = 0) = 0;
+    virtual bool write(uint32_t target, uint32_t n, const uint8_t *data) = 0;
+    virtual bool multiWrite(uint32_t target, uint32_t nbSeqn, const uint32_t *seqLength, const uint8_t **data) = 0;
+    virtual bool read(uint32_t target, uint32_t n, uint8_t *data) = 0;
+    virtual bool begin(uint32_t target = 0) = 0;
 };

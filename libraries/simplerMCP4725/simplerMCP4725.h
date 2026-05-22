@@ -26,9 +26,9 @@
 class myMCP4725
 {
   public:
-    myMCP4725(lnI2C &wire, int address = MCP4725_DEFAULT_I2C_ADDRESS);
-    void setVoltage(int output);
-    void setDefaultValue(int output); // untested
+    myMCP4725(lnI2C &wire, uint32_t address = MCP4725_DEFAULT_I2C_ADDRESS);
+    void setVoltage(uint32_t output);
+    void setDefaultValue(uint32_t output); // untested
 
   private:
     uint8_t _i2caddr;

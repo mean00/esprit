@@ -13,7 +13,7 @@
  * @param nbLeds
  * @param s
  */
-WS2812B_timer::WS2812B_timer(int nbLeds, lnPin pin) : WS2812B_base(nbLeds)
+WS2812B_timer::WS2812B_timer(uint32_t nbLeds, lnPin pin) : WS2812B_base(nbLeds)
 {
     _pin = pin;
     _timer = new lnDmaTimer(8, pin);
@@ -89,6 +89,9 @@ void WS2812B_timer::convertRgb(int hilow, uint8_t *rgb)
  */
 void WS2812B_timer::update()
 {
+    // Clear any stale semaphore from a previous update
+    _sem.tryTake();
+
     convertRgb(false, _ledsColor);
     if (_nbLeds == 1)
     {
@@ -100,7 +103,7 @@ void WS2812B_timer::update()
         _nextLed = 2;
         convertRgb(true, _ledsColor + 3);
     }
-    // start PWM
+    // start PWM (circular, 48-byte ping-pong buffer)
     _timer->start(48, _timerPwmValue);
     _sem.take(100);
     _timer->stop();
@@ -112,25 +115,32 @@ void WS2812B_timer::update()
  */
 bool WS2812B_timer::timerCallback(bool half)
 {
+    // Single LED: give semaphore on half (24 bytes sent = 1 LED done)
     if (_nbLeds == 1 && half == true)
     {
         _sem.give();
         _nextLed++;
         return true;
     }
+
+    // More LEDs to send: write next LED into the half that was just consumed
     if (_nextLed < _nbLeds)
     {
+        // half=true  → first half (bytes 0-23) was just consumed → write there
+        // half=false → second half (bytes 24-47) was just consumed → write there
         convertRgb(!half, _ledsColor + 3 * _nextLed);
         _nextLed++;
         return true;
     }
 
+    // All LEDs written, last batch still being sent
     if (_nextLed == _nbLeds)
     {
-        // ok we just wrote the last one, it is not sent yet
         _nextLed++;
         return true;
     }
+
+    // Last batch fully sent → signal completion
     if (_nextLed == _nbLeds + 1)
     {
         _sem.give();

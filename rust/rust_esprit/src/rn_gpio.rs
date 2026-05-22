@@ -76,7 +76,7 @@ pub fn pinMode(pin: rnPin, mode: rnGpioMode) {
 /*
  */
 
-pub fn pinModeSpeed(pin: rnPin, mode: rnGpioMode, speed: i32) {
+pub fn pinModeSpeed(pin: rnPin, mode: rnGpioMode, speed: u32) {
     unsafe {
         gpio::lnPinMode(rnpin2lnpin(pin), mode, speed);
     }
@@ -106,16 +106,17 @@ pub fn digital_read(pin: rnPin) -> bool {
  */
 pub fn pin_mode(pin: rnPin, mode: rnGpioMode) {
     unsafe {
-        gpio::lnPinMode(rnpin2lnpin(pin), mode, 0);
+        gpio::lnPinMode_c(rnpin2lnpin(pin), mode, 0);
     }
 }
 
 /*
  */
-pub fn pin_mode_speed(pin: rnPin, mode: rnGpioMode, speed: i32) {
+pub fn pin_mode_speed(pin: rnPin, mode: rnGpioMode, speed: u32) {
     unsafe {
-        gpio::lnPinMode(rnpin2lnpin(pin), mode, speed);
+        gpio::lnPinMode_c(rnpin2lnpin(pin), mode, speed);
     }
 }
 
 //--
+

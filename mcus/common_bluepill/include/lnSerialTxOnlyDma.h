@@ -9,22 +9,22 @@
 class lnSerialBpTxOnlyDma : public lnSerialBpCore, public lnSerialTxOnly
 {
   public:
-    lnSerialBpTxOnlyDma(int instance);
+    lnSerialBpTxOnlyDma(uint32_t instance);
 
     bool init()
     {
         return lnSerialBpCore::init();
     }
-    bool setSpeed(int speed)
+    bool setSpeed(uint32_t speed)
     {
         return lnSerialBpCore::setSpeed(speed);
     }
-    virtual bool rawWrite(int count, const uint8_t *buffer)
+    virtual bool rawWrite(uint32_t count, const uint8_t *buffer)
     {
         LN_USART_Registers *d = (LN_USART_Registers *)_adr;
         return ln_serial_rawWrite(d, count, buffer);
     }
-    virtual bool transmit(int size, const uint8_t *buffer);
+    virtual bool transmit(uint32_t size, const uint8_t *buffer);
     virtual void _interrupt(void)
     {
         xAssert(0);
@@ -41,23 +41,23 @@ class lnSerialBpTxOnlyDma : public lnSerialBpCore, public lnSerialTxOnly
 class lnSerialBpTxOnlyBufferedDma : public lnSerialBpCore, public lnSerialTxOnly
 {
   public:
-    lnSerialBpTxOnlyBufferedDma(int instance, int txBufferSize);
+    lnSerialBpTxOnlyBufferedDma(uint32_t instance, uint32_t txBufferSize);
     virtual ~lnSerialBpTxOnlyBufferedDma();
     bool init()
     {
         return lnSerialBpCore::init();
     }
-    bool setSpeed(int speed)
+    bool setSpeed(uint32_t speed)
     {
         return lnSerialBpCore::setSpeed(speed);
     }
-    virtual bool rawWrite(int count, const uint8_t *buffer)
+    virtual bool rawWrite(uint32_t count, const uint8_t *buffer)
     {
         LN_USART_Registers *d = (LN_USART_Registers *)_adr;
         return ln_serial_rawWrite(d, count, buffer);
     }
-    virtual bool transmit(int size, const uint8_t *buffer);
-    virtual int transmitNoBlock(int size, const uint8_t *buffer);
+    virtual bool transmit(uint32_t size, const uint8_t *buffer);
+    virtual int transmitNoBlock(uint32_t size, const uint8_t *buffer);
     virtual void _interrupt(void)
     {
         xAssert(0);

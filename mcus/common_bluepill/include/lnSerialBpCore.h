@@ -22,9 +22,9 @@ class lnSerialBpCore : public lnSerialCore
     };
 
     // public API
-    lnSerialBpCore(int instance);
+    lnSerialBpCore(uint32_t instance);
     bool init();
-    bool setSpeed(int speed);
+    bool setSpeed(uint32_t speed);
 
     // implementation
     virtual void _interrupt(void) = 0;
@@ -65,7 +65,7 @@ class lnSerialBpCore : public lnSerialCore
  * @return true
  * @return false
  */
-bool ln_serial_rawWrite(LN_USART_Registers *d, int count, unsigned char const *c);
+bool ln_serial_rawWrite(LN_USART_Registers *d, uint32_t count, unsigned char const *c);
 
 /**
  * @brief

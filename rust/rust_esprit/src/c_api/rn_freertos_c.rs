@@ -1179,7 +1179,7 @@ unsafe extern "C" {
     pub fn lnCreateTask(
         pxTaskCode: TaskFunction_t,
         pcName: *const cty::c_char,
-        stackSizeInBytes: cty::c_int,
+        stackSizeInBytes: cty::c_uint,
         pvParameters: *mut cty::c_void,
         uxPriority: UBaseType_t,
     ) -> bool;

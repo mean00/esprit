@@ -219,6 +219,8 @@ pub type uint_fast64_t = cty::c_ulonglong;
 pub struct ln_timing_adc_c {
     pub dummy: *mut cty::c_void,
 }
+pub type ln_timing_adc_async_callback_t =
+    ::core::option::Option<unsafe extern "C" fn(arg1: *mut cty::c_void)>;
 unsafe extern "C" {
     pub fn ln_timing_adc_create(instance: cty::c_int) -> *mut ln_timing_adc_c;
 }
@@ -228,17 +230,26 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn ln_timing_adc_set_source(
         instance: *mut ln_timing_adc_c,
-        timer: cty::c_int,
-        channel: cty::c_int,
-        fq: cty::c_int,
-        nbPins: cty::c_int,
+        timer: cty::c_uint,
+        channel: cty::c_uint,
+        fq: cty::c_uint,
+        nbPins: cty::c_uint,
         pin: *const lnPin,
     ) -> bool;
 }
 unsafe extern "C" {
     pub fn ln_timing_adc_multi_read(
         instance: *mut ln_timing_adc_c,
-        nbSamplePerChannel: cty::c_int,
+        nbSamplePerChannel: cty::c_uint,
         output: *mut u16,
+    ) -> bool;
+}
+unsafe extern "C" {
+    pub fn ln_timing_adc_async_read(
+        instance: *mut ln_timing_adc_c,
+        nbSamplePerChannel: cty::c_uint,
+        output: *mut u16,
+        cb: ln_timing_adc_async_callback_t,
+        ctx: *mut cty::c_void,
     ) -> bool;
 }

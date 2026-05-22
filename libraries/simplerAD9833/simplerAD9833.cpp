@@ -19,7 +19,7 @@
  * @param spi
  * @param cs
  */
-simplerAD9833::simplerAD9833(lnSPI *spi, lnPin cs, int baseClock)
+simplerAD9833::simplerAD9833(lnSPI *spi, lnPin cs, uint32_t baseClock)
 {
     _spi = spi;
     _cs = cs;
@@ -55,7 +55,7 @@ simplerAD9833::~simplerAD9833()
  * @param addr
  * @return
  */
-int simplerAD9833::readRegister(int addr)
+uint32_t simplerAD9833::readRegister(uint32_t addr)
 {
     return 0;
 }
@@ -107,7 +107,7 @@ void simplerAD9833::disable()
  *
  * @param fq
  */
-void simplerAD9833::setFrequency(int fq)
+void simplerAD9833::setFrequency(uint32_t fq)
 {
     _frequency = fq;
     if (fq > _baseClock)
@@ -134,7 +134,7 @@ void simplerAD9833::setFrequency(int fq)
  * @param addr
  * @param value
  */
-void simplerAD9833::writeRegister(int addr, int value)
+void simplerAD9833::writeRegister(uint32_t addr, uint32_t value)
 {
     _spi->begin(16);
     lnDigitalWrite(_cs, false);

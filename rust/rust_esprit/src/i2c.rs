@@ -1,12 +1,9 @@
 #![allow(dead_code)]
-
 use crate::rn_i2c_c;
 use crate::rn_i2c_c::lni2c_multi_write_to;
-
 pub use rn_i2c_c::ln_i2c_c;
 
 /// Owned, non‑copy handle to an I²C peripheral.
-///
 /// Created via `I2cBus::new(instance, speed_hz)`.
 /// The underlying C object is destroyed when `I2cBus` is dropped.
 pub struct I2cBus {
@@ -15,7 +12,7 @@ pub struct I2cBus {
 
 impl I2cBus {
     /// Create a new I²C bus on hardware instance `instance` at `speed_hz` Hz.
-    pub fn new(instance: i32, speed_hz: i32) -> Self {
+    pub fn new(instance: u32, speed_hz: u32) -> Self {
         let raw = unsafe { rn_i2c_c::lni2c_create(instance, speed_hz) };
         assert!(!raw.is_null(), "lni2c_create returned NULL");
         Self { raw }
@@ -28,7 +25,7 @@ impl I2cBus {
     }
 
     /// Set bus speed in Hz.
-    pub fn set_speed(&mut self, speed_hz: i32) {
+    pub fn set_speed(&mut self, speed_hz: u32) {
         unsafe {
             rn_i2c_c::lni2c_setSpeed(self.raw, speed_hz);
         }
@@ -37,14 +34,14 @@ impl I2cBus {
     /// Set the default 7‑bit address for subsequent `begin` / `write` / `read` calls.
     pub fn set_address(&mut self, addr: u8) {
         unsafe {
-            rn_i2c_c::lni2c_setAddress(self.raw, addr as i32);
+            rn_i2c_c::lni2c_setAddress(self.raw, addr as u32);
         }
     }
 
     /// Initiate a START condition and send the target address (the one set by
     /// `set_address`). Returns `true` if the device acknowledged.
     pub fn begin(&mut self, addr: u8) -> bool {
-        unsafe { rn_i2c_c::lni2c_begin(self.raw, addr as i32) }
+        unsafe { rn_i2c_c::lni2c_begin(self.raw, addr as u32) }
     }
 
     /// Write `data` bytes to the currently addressed device.
@@ -59,13 +56,13 @@ impl I2cBus {
 
     /// Write `data` bytes to device at address `addr` (includes START/STOP).
     pub fn write_to(&mut self, addr: u8, data: &[u8]) -> bool {
-        unsafe { rn_i2c_c::lni2c_write_to(self.raw, addr as i32, data.len() as u32, data.as_ptr()) }
+        unsafe { rn_i2c_c::lni2c_write_to(self.raw, addr as u32, data.len() as u32, data.as_ptr()) }
     }
 
     /// Read `data.len()` bytes from device at address `addr` (includes START/STOP).
     pub fn read_from(&mut self, addr: u8, data: &mut [u8]) -> bool {
         unsafe {
-            rn_i2c_c::lni2c_read_from(self.raw, addr as i32, data.len() as u32, data.as_mut_ptr())
+            rn_i2c_c::lni2c_read_from(self.raw, addr as u32, data.len() as u32, data.as_mut_ptr())
         }
     }
 
@@ -83,7 +80,7 @@ impl I2cBus {
     }
 
     /// Request `len` bytes from `addr` and read them into `data`.
-    pub fn request_from(&mut self, addr: u8, data: &mut [u8]) -> bool {
+    pub fn req_from(&mut self, addr: u8, data: &mut [u8]) -> bool {
         self.read_from(addr, data)
     }
 
@@ -96,7 +93,6 @@ impl I2cBus {
         if nb == 0 {
             panic!("I2C  Zero multiwrite \n");
         }
-
         if nb > 3 {
             panic!("Oops");
         }
@@ -109,7 +105,7 @@ impl I2cBus {
         unsafe {
             lni2c_multi_write_to(
                 self.raw,
-                tgt as cty::c_int,
+                tgt as cty::c_uint,
                 nb as cty::c_uint,
                 sequence_lengh,
                 sequence_data,
@@ -125,4 +121,3 @@ impl Drop for I2cBus {
         }
     }
 }
-

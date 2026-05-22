@@ -80,7 +80,7 @@ void lnSerialBpRxTx::rxInterruptHandler(void)
  *
  * @param instance
  */
-lnSerialBpRxTx::lnSerialBpRxTx(int instance, int bufferSize)
+lnSerialBpRxTx::lnSerialBpRxTx(uint32_t instance, uint32_t bufferSize)
     : lnSerialBpTxOnlyInterrupt(instance), lnSerialRxTx(instance)
 {
     _rxEnabled = false;
@@ -130,7 +130,7 @@ int lnSerialBpRxTx::getReadPointer(uint8_t **to)
  * @param to
  * @return int
  */
-int lnSerialBpRxTx::read(int max, uint8_t *to)
+int lnSerialBpRxTx::read(uint32_t max, uint8_t *to)
 {
     int total = 0;
     while (1)
@@ -215,7 +215,7 @@ bool lnSerialBpRxTx::enableRx(bool enabled)
  *
  * @param n
  */
-void lnSerialBpRxTx::consume(int n)
+void lnSerialBpRxTx::consume(uint32_t n)
 {
     disableInterrupt();
     _rxHead = modulo(_rxHead + n);

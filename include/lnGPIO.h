@@ -32,17 +32,17 @@ enum lnGpioMode
 };
 #define GpioMode lnGpioMode
 // typedef int lnPin;
-void lnPinMode(const lnPin pin, const lnGpioMode mode, const int speedInMhz = 0);
+void lnPinMode(const lnPin pin, const lnGpioMode mode, const uint32_t speedInMhz = 0);
 void lnDigitalWrite(const lnPin pin, bool value);
 bool lnDigitalRead(const lnPin pin);
 void lnDigitalToggle(const lnPin pin);
 void lnOpenDrainClose(const lnPin pin, const bool close); // if true, the open drain is passing, else it is hiz
 
-volatile uint32_t *lnGetGpioToggleRegister(int port); // Bop register for port "port" with port A:0, B:1, ...
+volatile uint32_t *lnGetGpioToggleRegister(uint32_t port); // Bop register for port "port" with port A:0, B:1, ...
 volatile uint32_t *lnGetGpioDirectionRegister(
-    int port); // Direction register for the bit 0..7 of port "port" , A=0, B=1, ...
-volatile uint32_t *lnGetGpioValueRegister(int port); // Bit value for LOW bits of port "port"
-uint32_t lnReadPort(int port);
+    uint32_t port); // Direction register for the bit 0..7 of port "port" , A=0, B=1, ...
+volatile uint32_t *lnGetGpioValueRegister(uint32_t port); // Bit value for LOW bits of port "port"
+uint32_t lnReadPort(uint32_t port);
 
 enum LnRemapTimer
 {

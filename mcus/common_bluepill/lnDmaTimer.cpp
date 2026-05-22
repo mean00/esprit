@@ -174,6 +174,12 @@ bool lnDmaTimer::start(int nbSample, uint8_t *data)
     t->CHCVs[_channel] = _rollover / 2;
     t->DMAINTEN |= DMA_EVENT;
     t->CTL1 |= LN_TIMER_CTL1_DMAS;
+    // Restore PWM mode before enabling the channel.
+    // disable() may have left the channel in FORCE_LOW mode.
+    setMode(lnTimerModePwm0);
+    // Reset counter to 0 so the first compare event has full period timing.
+    // enable() sets CNT = CAR - 1 which makes the first cycle almost instant.
+    t->CNT = 0;
     enable();
     return true;
 }

@@ -13,7 +13,7 @@ struct LN_I2C_DESCRIPTOR;
 class lnI2CSession
 {
   public:
-    lnI2CSession(int t, uint32_t nb, const uint32_t *sz, const uint8_t **dt)
+    lnI2CSession(uint32_t t, uint32_t nb, const uint32_t *sz, const uint8_t **dt)
     {
         target = t;
         nbTransaction = nb;
@@ -50,26 +50,13 @@ class lnTwoWire : public lnI2C
 
   public:
     void clearup_state();
-    lnTwoWire(int instance, int speed = 0);
+    lnTwoWire(uint32_t instance, uint32_t speed = 0);
     ~lnTwoWire();
-    void setSpeed(int speed);
-    void setAddress(int address)
+    void setSpeed(uint32_t speed);
+    void setAddress(uint32_t address)
     {
         _targetAddress = address;
     }
-    bool write(int n, const uint8_t *data)
-    {
-        return write(_targetAddress, n, data);
-    }
-    bool read(int n, uint8_t *data)
-    {
-        return read(_targetAddress, n, data);
-    }
-    bool write(int target, uint32_t n, const uint8_t *data);
-    bool multiWrite(int target, uint32_t nbSeqn, const uint32_t *seqLength, const uint8_t **data);
-    bool read(int target, uint32_t n, uint8_t *data);
-    bool multiRead(int target, uint32_t nbSeqn, const uint32_t *seqLength, uint8_t **seqData);
-    bool begin(int target = 0);
     bool write(uint32_t n, const uint8_t *data)
     {
         return write(_targetAddress, n, data);
@@ -78,6 +65,11 @@ class lnTwoWire : public lnI2C
     {
         return read(_targetAddress, n, data);
     }
+    bool write(uint32_t target, uint32_t n, const uint8_t *data);
+    bool multiWrite(uint32_t target, uint32_t nbSeqn, const uint32_t *seqLength, const uint8_t **data);
+    bool read(uint32_t target, uint32_t n, uint8_t *data);
+    bool multiRead(uint32_t target, uint32_t nbSeqn, const uint32_t *seqLength, uint8_t **seqData);
+    bool begin(uint32_t target = 0);
 
   protected:
     void stopIrq();

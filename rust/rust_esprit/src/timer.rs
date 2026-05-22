@@ -41,7 +41,7 @@ impl Timer {
     ///
     /// * `duration_ms` – pulse duration in milliseconds (max 100 ms).
     /// * `down` – if `true`, the output goes low for the pulse duration;
-    ///            if `false`, it goes high.
+    ///   if `false`, it goes high.
     pub fn single_shot(&mut self, duration_ms: u32, up: bool) {
         unsafe { ln_timer_single_shot(self.inner, duration_ms, up) }
     }
