@@ -41,7 +41,7 @@ else()
   set(CRT0 ${CMAKE_CURRENT_SOURCE_DIR}/../sdk_copy/crt0.S)
 endif()
 
-set(RP_LN_SOURCES ${RP_COMMON_FOLDER}/ln_rp_gpio.cpp ${RP_COMMON_FOLDER}/ln_rp_dma.cpp ln_rp_spi.cpp ln_rp_adc.cpp
+set(RP_LN_SOURCES ${RP_COMMON_FOLDER}/ln_rp_gpio.cpp ${RP_COMMON_FOLDER}/ln_rp_dma.cpp ${RP_COMMON_FOLDER}/ln_rp_spi.cpp ln_rp_adc.cpp
                   ${RP_COMMON_FOLDER}/ln_rp_pio.cpp ${RP_COMMON_FOLDER}/lnStubs.cpp)
 set(BASE_SOURCES
     ${PICO_SDK_PATH}/src/rp2_common/hardware_timer/timer.c
@@ -117,6 +117,8 @@ target_include_directories(
             ${RP_PLATFORM_INCLUDE})
 target_include_directories(esprit_dev INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 target_include_directories(esprit_dev INTERFACE ../private_include)
+target_include_directories(esprit_dev INTERFACE ${RP_COMMON_FOLDER}/../include)
+target_include_directories(esprit_dev INTERFACE ${RP_COMMON_FOLDER}/../private_include)
 target_compile_definitions(esprit_dev INTERFACE PICO_${RP_CHIP2}=1)
 target_compile_definitions(esprit_dev INTERFACE RP_SDK_VERSION=${RP_SDK_VERSION})
 target_link_libraries(esprit_lib PRIVATE esprit_dev)
