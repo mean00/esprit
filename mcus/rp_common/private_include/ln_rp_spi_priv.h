@@ -30,7 +30,7 @@ class LN_RP_SPIx
 typedef volatile LN_RP_SPIx LN_RP_SPI;
 
 #define LN_RP_SPI_CR0_DIVIDER(x) ((uint32_t)x << 8U)
-#define LN_RP_SPI_CR0_DIVIDER_MASK (0xff << 8)
+#define LN_RP_SPI_CR0_DIVIDER_MASK (0xffU << 8U)
 #define LN_RP_SPI_CR0_MODE(x) ((uint32_t)x << 6U) // PHASE  / POLARITY, motoroal only
 #define LN_RP_SPI_CR0_FORMAT_MOTOROLA (0 << 4)
 #define LN_RP_SPI_CR0_FORMAT_TI (1 << 4)

@@ -109,6 +109,40 @@ rpSPI::~rpSPI()
     instances[_instance] = NULL;
 }
 /**
+ * @brief Synchronise SPI frame size and DMA element size.
+ *
+ * No-op if @p bits already matches @c _currentWordWidth.
+ * Otherwise updates SPI CR0, both DMA channel sizes and the dummy pattern.
+ *
+ * @param bits  8 or 16
+ */
+void rpSPI::setTransferSize(int bits)
+{
+    if (bits == _currentWordWidth)
+        return;
+
+    xAssert(bits == 8 || bits == 16);
+
+    // 1. Update SPI frame size
+    _cr0 &= ~LN_RP_SPI_CR0_BITS_MASK;
+    if (bits == 16)
+        _cr0 |= LN_RP_SPI_CR0_16_BITS;
+    else
+        _cr0 |= LN_RP_SPI_CR0_8_BITS;
+    _spi->CR0 = _cr0;
+
+    // 2. Update DMA element sizes
+    _txDma->setTransferSize(bits);
+    if (_rxDma)
+        _rxDma->setTransferSize(bits);
+
+    // 3. Update dummy pattern for read operations
+    _dummyFF = (bits == 16) ? 0xFFFF : 0xFF;
+
+    _currentWordWidth = bits;
+}
+
+/**
  * @brief
  *
  * @param wordsize
@@ -117,23 +151,9 @@ void rpSPI::begin(uint32_t wordsize)
 {
     _wordSize = wordsize;
     xAssert(_wordSize == 8 || _wordSize == 16);
-    _cr0 &= ~LN_RP_SPI_CR0_BITS_MASK;
-    switch (_wordSize)
-    {
-    case 8:
-        _cr0 |= LN_RP_SPI_CR0_8_BITS;
-        _dummyFF = 0xFF;
-        break;
-    case 16:
-        _cr0 |= LN_RP_SPI_CR0_16_BITS;
-        _dummyFF = 0xFFFF;
-        break;
-    default:
-        xAssert(0);
-        break;
-    }
 
-    _spi->CR0 = _cr0;
+    setTransferSize(wordsize);
+
     _spi->CR1 = _cr1;
     _spi->CPSR = _prescaler;
     _spi->IMSC = 0;
@@ -182,6 +202,8 @@ void rpSPI::setSpeed(uint32_t speed)
     _cr0 |= LN_RP_SPI_CR0_DIVIDER(scaler);
 
     _spi->CR0 = _cr0;
+    // YOU MUST CALL END/bEGIN for it to have effect....
+    // _spi->CPSR = _prescaler;
 }
 
 /**
@@ -211,22 +233,7 @@ void rpSPI::setBitOrder(spiBitOrder order)
  */
 void rpSPI::setDataSize(uint32_t dataSize)
 {
-    _cr0 &= ~LN_RP_SPI_CR0_BITS_MASK;
-    switch (dataSize)
-    {
-    case 8:
-        _cr0 |= LN_RP_SPI_CR0_8_BITS;
-        _dummyFF = 0xFF;
-        break;
-    case 16:
-        _cr0 |= LN_RP_SPI_CR0_16_BITS;
-        _dummyFF = 0xFFFF;
-        break;
-    default:
-        xAssert(0);
-        break;
-    }
-    _spi->CR0 = _cr0;
+    setTransferSize(dataSize);
 }
 
 /**
@@ -280,11 +287,11 @@ void rpSPI::waitForCompletion() const
 bool rpSPI::blockWrite_all(uint32_t wordSize, uint32_t nbExchange, const uint32_t *data, bool repeat)
 {
     xAssert(_wordSize == wordSize);
+    setTransferSize(wordSize);
     _callback = nullptr;
     _spi->DMACR = LN_RP_SPI_DMACR_RX | LN_RP_SPI_DMACR_TX;
     _spi->IMSC |= LN_RP_SPI_INT_TX;
     _txDone.tryTake();
-    _txDma->setTransferSize(wordSize);
     _txDma->doMemoryToPeripheralTransferNoLock(nbExchange, data, (const uint32_t *)&(_spi->DR), repeat);
     _txDma->beginTransfer();
     _txDone.take();
@@ -512,6 +519,7 @@ bool rpSPI::transfer(uint32_t nbBytes, const uint8_t *dataOut, uint8_t *dataIn)
 {
     if (nbBytes < RP_SPI_MIN_DMA)
     {
+        clearStallRx();
         return transferPolling(nbBytes, dataOut, dataIn);
     }
 
@@ -519,11 +527,11 @@ bool rpSPI::transfer(uint32_t nbBytes, const uint8_t *dataOut, uint8_t *dataIn)
     _txDone.tryTake();
     _rxDone.tryTake();
 
+    clearStallRx();
     _spi->DMACR = LN_RP_SPI_DMACR_RX | LN_RP_SPI_DMACR_TX;
     _spi->IMSC |= LN_RP_SPI_INT_TX;
 
-    _txDma->setTransferSize(_wordSize);
-    _rxDma->setTransferSize(_wordSize);
+    setTransferSize(_wordSize);
 
     _txDma->doMemoryToPeripheralTransferNoLock(nbBytes, (const uint32_t *)dataOut, (const uint32_t *)&(_spi->DR),
                                                false);
@@ -552,6 +560,7 @@ bool rpSPI::read(uint32_t nbBytes, uint8_t *dataIn)
     if (nbBytes < RP_SPI_MIN_DMA)
     {
         //_txDone.take();
+        clearStallRx();
         bool r = readPolling(nbBytes, dataIn);
         //_txDone.give();
         return r;
@@ -561,11 +570,11 @@ bool rpSPI::read(uint32_t nbBytes, uint8_t *dataIn)
     _txDone.tryTake();
     _rxDone.tryTake();
 
+    clearStallRx();
     _spi->DMACR = LN_RP_SPI_DMACR_RX | LN_RP_SPI_DMACR_TX;
     _spi->IMSC |= LN_RP_SPI_INT_TX;
 
-    _txDma->setTransferSize(_wordSize);
-    _rxDma->setTransferSize(_wordSize);
+    setTransferSize(_wordSize);
 
     // TX: repeat-send dummy byte to generate clocks
     _txDma->doMemoryToPeripheralTransferNoLock(nbBytes, (const uint32_t *)&_dummyFF, (const uint32_t *)&(_spi->DR),
@@ -581,7 +590,22 @@ bool rpSPI::read(uint32_t nbBytes, uint8_t *dataIn)
     waitForCompletion();
     return true;
 }
+//
+bool rpSPI::clearStallRx()
+{
+    // 2. Drain the RX FIFO entirely
+    // While the "Receive Not Empty" bit is set, keep popping data out
+    while (_spi->SR & LN_RP_SPI_SR_RNE)
+    {
+        volatile uint32_t dummy = _spi->DR;
+        (void)dummy; // Discard the stale byte to unblock the FIFO line
+    }
 
+    // 3. Clear the sticky Receive Overrun (ROR) flag
+    // This unfreezes the RX FIFO tracking logic so it accepts new data from the W5500
+    _spi->ICR = LN_RP_SPI_ICR_OVR;
+    return true;
+}
 /**
  * @brief Async full-duplex transfer
  *
@@ -600,11 +624,11 @@ bool rpSPI::asyncTransfer(uint32_t nbBytes, const uint8_t *dataOut, uint8_t *dat
     _txDone.tryTake();
     _rxDone.tryTake();
 
+    clearStallRx();
     _spi->DMACR = LN_RP_SPI_DMACR_RX | LN_RP_SPI_DMACR_TX;
     _spi->IMSC |= LN_RP_SPI_INT_TX;
 
-    _txDma->setTransferSize(_wordSize);
-    _rxDma->setTransferSize(_wordSize);
+    setTransferSize(_wordSize);
 
     _txDma->attachCallback(dmaCb, this);
     _rxDma->attachCallback(dmaRxCb, this);
@@ -637,9 +661,9 @@ bool rpSPI::asyncRead(uint32_t nbBytes, uint8_t *dataIn, lnSpiCallback *cb, void
 
     _spi->DMACR = LN_RP_SPI_DMACR_RX | LN_RP_SPI_DMACR_TX;
     _spi->IMSC |= LN_RP_SPI_INT_TX;
+    clearStallRx();
 
-    _txDma->setTransferSize(_wordSize);
-    _rxDma->setTransferSize(_wordSize);
+    setTransferSize(_wordSize);
 
     _txDma->attachCallback(dmaCb, this);
     _rxDma->attachCallback(dmaRxCb, this);
@@ -697,6 +721,7 @@ bool rpSPI::asyncWrite8(uint32_t nbBytes, const uint8_t *data, lnSpiCallback *cb
     this->_callback = cb;
     this->_callbackCookie = cookie;
     // source targer
+    setTransferSize(8);
     _spi->DMACR = LN_RP_SPI_DMACR_TX;
     _spi->IMSC |= LN_RP_SPI_INT_TX;
     _txDone.tryTake();
@@ -720,6 +745,7 @@ bool rpSPI::nextWrite8(uint32_t nbBytes, const uint8_t *data, lnSpiCallback *cb,
 {
     this->_callback = cb;
     this->_callbackCookie = cookie;
+    setTransferSize(8);
     _txDma->attachCallback(dmaCb, this);
     return _txDma->continueMemoryToPeripheralTransferNoLock(nbBytes, (const uint32_t *)data);
 }
@@ -794,10 +820,10 @@ bool rpSPI::asyncWrite16(uint32_t nbWord, const uint16_t *data, lnSpiCallback *c
     this->_callback = cb;
     this->_callbackCookie = cookie;
     // source target
+    setTransferSize(16);
     _spi->DMACR = LN_RP_SPI_DMACR_TX;
     _spi->IMSC |= LN_RP_SPI_INT_TX;
     _txDone.tryTake();
-    _txDma->setTransferSize(16);
     _txDma->attachCallback(dmaCb, this);
     _txDma->doMemoryToPeripheralTransferNoLock(nbWord, (const uint32_t *)data, (const uint32_t *)&(_spi->DR), repeat);
     _txDma->beginTransfer();
@@ -818,6 +844,7 @@ bool rpSPI::nextWrite16(uint32_t nbWord, const uint16_t *data, lnSpiCallback *cb
 {
     this->_callback = cb;
     this->_callbackCookie = cookie;
+    setTransferSize(16);
     return _txDma->continueMemoryToPeripheralTransferNoLock(nbWord, (const uint32_t *)data);
 }
 

@@ -47,10 +47,14 @@ class rpSPI : public lnSPIBidir
     // async next
     // finish
     // end()
-    virtual bool asyncWrite8(uint32_t nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat = false);
-    virtual bool nextWrite8(uint32_t nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie, bool repeat = false);
-    virtual bool asyncWrite16(uint32_t nbWords, const uint16_t *data, lnSpiCallback *cb, void *cookie, bool repeat = false);
-    virtual bool nextWrite16(uint32_t nbWords, const uint16_t *data, lnSpiCallback *cb, void *cookie, bool repeat = false);
+    virtual bool asyncWrite8(uint32_t nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie,
+                             bool repeat = false);
+    virtual bool nextWrite8(uint32_t nbBytes, const uint8_t *data, lnSpiCallback *cb, void *cookie,
+                            bool repeat = false);
+    virtual bool asyncWrite16(uint32_t nbWords, const uint16_t *data, lnSpiCallback *cb, void *cookie,
+                              bool repeat = false);
+    virtual bool nextWrite16(uint32_t nbWords, const uint16_t *data, lnSpiCallback *cb, void *cookie,
+                             bool repeat = false);
     virtual bool finishAsyncDma();
     virtual bool waitForAsync();
 
@@ -81,10 +85,9 @@ class rpSPI : public lnSPIBidir
     //--- lnSPIBidir interface ---
     virtual bool transfer(uint32_t nbBytes, const uint8_t *dataOut, uint8_t *dataIn);
     virtual bool read(uint32_t nbBytes, uint8_t *dataIn);
-    virtual bool asyncTransfer(uint32_t nbBytes, const uint8_t *dataOut, uint8_t *dataIn,
-                               lnSpiCallback *cb, void *cookie);
-    virtual bool asyncRead(uint32_t nbBytes, uint8_t *dataIn,
-                           lnSpiCallback *cb, void *cookie);
+    virtual bool asyncTransfer(uint32_t nbBytes, const uint8_t *dataOut, uint8_t *dataIn, lnSpiCallback *cb,
+                               void *cookie);
+    virtual bool asyncRead(uint32_t nbBytes, uint8_t *dataIn, lnSpiCallback *cb, void *cookie);
     virtual bool finishAsyncDmaBidir();
 
     //-
@@ -98,9 +101,13 @@ class rpSPI : public lnSPIBidir
     bool blockWrite_all(uint32_t wordSize, uint32_t nbExchange, const uint32_t *data, bool repeat);
     bool transferPolling(uint32_t nbBytes, const uint8_t *dataOut, uint8_t *dataIn);
     bool readPolling(uint32_t nbBytes, uint8_t *dataIn);
+    void setTransferSize(int bits); // synchronises SPI frame size + DMA element size
+    bool clearStallRx();            // In case we do TX only, some stray rx will accumulate and cause problems
+                                    //
     uint32_t _cr0, _cr1, _prescaler;
     uint32_t _instance;
-    int _wordSize; // 8 or 16
+    int _wordSize;             // 8 or 16
+    int _currentWordWidth = 0; // 0 = uninitialised, then 8 or 16
     lnPin _cs;
     LN_RP_SPI *_spi;
 
