@@ -1,4 +1,3 @@
-
 /**
  * @file ln_rp_spi.cpp
  * @author mean00
@@ -15,6 +14,7 @@
 #include "esprit.h"
 #include "lnGPIO.h"
 #include "lnSPI.h"
+#include "lnSPIBidir.h"
 #include "ln_rp_clocks.h"
 #include "ln_rp_dma.h"
 #include "ln_rp_memory_map.h"
@@ -30,11 +30,12 @@ typedef struct
     LN_RP_SPI *spi;
     LnIRQ irq;
     lnRpDMA::LN_RP_DMA_DREQ txDma;
+    lnRpDMA::LN_RP_DMA_DREQ rxDma;
 } SPI_DESC;
 
 const SPI_DESC spis[2] = {
-    {(LN_RP_SPI *)LN_RP_SPI0, (LnIRQ)18, lnRpDMA::LN_DMA_DREQ_SPI0_TX},
-    {(LN_RP_SPI *)LN_RP_SPI1, (LnIRQ)19, lnRpDMA::LN_DMA_DREQ_SPI1_TX},
+    {(LN_RP_SPI *)LN_RP_SPI0, (LnIRQ)18, lnRpDMA::LN_DMA_DREQ_SPI0_TX, lnRpDMA::LN_DMA_DREQ_SPI0_RX},
+    {(LN_RP_SPI *)LN_RP_SPI1, (LnIRQ)19, lnRpDMA::LN_DMA_DREQ_SPI1_TX, lnRpDMA::LN_DMA_DREQ_SPI1_RX},
 };
 
 typedef void lnSpiCallback(void *cookie);
@@ -51,6 +52,11 @@ static void dmaCb(void *cookie)
     rpSPI *spi = (rpSPI *)cookie;
     spi->dmaHandler();
 }
+static void dmaRxCb(void *cookie)
+{
+    rpSPI *spi = (rpSPI *)cookie;
+    spi->dmaRxHandler();
+}
 static void spiHandler0()
 {
     spiHandler(0);
@@ -66,7 +72,7 @@ static void spiHandler1()
  * @param instance
  * @param pinCs
  */
-rpSPI::rpSPI(uint32_t instance, int pinCs) : lnSPI(instance, pinCs)
+rpSPI::rpSPI(uint32_t instance, int pinCs) : lnSPIBidir(instance, pinCs)
 {
     xAssert(!instances[instance]);
     instances[instance] = this;
@@ -77,9 +83,12 @@ rpSPI::rpSPI(uint32_t instance, int pinCs) : lnSPI(instance, pinCs)
     _cr1 = 0;
     _prescaler = 250;
     _wordSize = 8;
+    _dummyFF = 0xFFFFFFFF;
 
     _txDma = new lnRpDMA(lnRpDMA::DMA_MEMORY_TO_PERIPH, spis[_instance].txDma, _wordSize);
     _txDma->attachCallback(dmaCb, this);
+    _rxDma = new lnRpDMA(lnRpDMA::DMA_PERIPH_TO_MEMORY, spis[_instance].rxDma, _wordSize);
+    _rxDma->attachCallback(dmaRxCb, this);
     if (!_instance)
         lnSetInterruptHandler(spis[_instance].irq, spiHandler0);
     else
@@ -95,6 +104,8 @@ rpSPI::~rpSPI()
     end();
     delete _txDma;
     _txDma = NULL;
+    delete _rxDma;
+    _rxDma = NULL;
     instances[_instance] = NULL;
 }
 /**
@@ -111,9 +122,11 @@ void rpSPI::begin(uint32_t wordsize)
     {
     case 8:
         _cr0 |= LN_RP_SPI_CR0_8_BITS;
+        _dummyFF = 0xFF;
         break;
     case 16:
         _cr0 |= LN_RP_SPI_CR0_16_BITS;
+        _dummyFF = 0xFFFF;
         break;
     default:
         xAssert(0);
@@ -203,9 +216,11 @@ void rpSPI::setDataSize(uint32_t dataSize)
     {
     case 8:
         _cr0 |= LN_RP_SPI_CR0_8_BITS;
+        _dummyFF = 0xFF;
         break;
     case 16:
         _cr0 |= LN_RP_SPI_CR0_16_BITS;
+        _dummyFF = 0xFFFF;
         break;
     default:
         xAssert(0);
@@ -384,6 +399,23 @@ void rpSPI::dmaHandler()
 }
 
 /**
+ * @brief RX DMA completion handler
+ *
+ */
+void rpSPI::dmaRxHandler()
+{
+    if (_callback)
+    {
+        _callback(_callbackCookie);
+    }
+    else
+    {
+        _rxDma->endTransfer();
+        _rxDone.give();
+    }
+}
+
+/**
  * @brief
  *
  * @param settings
@@ -405,12 +437,238 @@ lnSPI *lnSPI::create(uint32_t instance, int pinCs)
 {
     return new rpSPI(instance, pinCs);
 }
-//--- not implemented ---
+
+/**
+ * @brief
+ *
+ * @param instance
+ * @param pinCs
+ * @return lnSPIBidir*
+ */
+lnSPIBidir *lnSPIBidir::createBiDir(uint32_t instance, int pinCs)
+{
+    return new rpSPI(instance, pinCs);
+}
+
+//--- not implemented (old non-const transfer) ---
 bool rpSPI::transfer(uint32_t nbBytes, uint8_t *dataOut, uint8_t *dataIn)
 {
-    xAssert(0);
-    return false;
+    return transfer(nbBytes, (const uint8_t *)dataOut, dataIn);
 }
+
+//=============================================================================
+// lnSPIBidir interface implementation
+//=============================================================================
+
+/**
+ * @brief Polling fallback for small transfers
+ *
+ */
+bool rpSPI::transferPolling(uint32_t nbBytes, const uint8_t *dataOut, uint8_t *dataIn)
+{
+    for (uint32_t i = 0; i < nbBytes; i++)
+    {
+        _spi->DR = dataOut[i];
+        while (!(_spi->SR & LN_RP_SPI_SR_RNE))
+        {
+            __asm__("nop");
+        }
+        dataIn[i] = (uint8_t)_spi->DR;
+    }
+    waitForCompletion();
+    return true;
+}
+
+/**
+ * @brief Polling fallback for small reads
+ *
+ */
+bool rpSPI::readPolling(uint32_t nbBytes, uint8_t *dataIn)
+{
+    for (uint32_t i = 0; i < nbBytes; i++)
+    {
+        _spi->DR = _dummyFF;
+        while (!(_spi->SR & LN_RP_SPI_SR_RNE))
+        {
+            __asm__("nop");
+        }
+        dataIn[i] = (uint8_t)_spi->DR;
+    }
+    waitForCompletion();
+    return true;
+}
+
+/**
+ * @brief Blocking full-duplex transfer
+ *
+ * Uses DMA for transfers >= RP_SPI_MIN_DMA, polling fallback for smaller ones.
+ *
+ * @param nbBytes Number of bytes to exchange
+ * @param dataOut Data to send (TX)
+ * @param dataIn  Buffer for received data (RX)
+ * @return true on success
+ */
+bool rpSPI::transfer(uint32_t nbBytes, const uint8_t *dataOut, uint8_t *dataIn)
+{
+    if (nbBytes < RP_SPI_MIN_DMA)
+    {
+        return transferPolling(nbBytes, dataOut, dataIn);
+    }
+
+    _callback = nullptr;
+    _txDone.tryTake();
+    _rxDone.tryTake();
+
+    _spi->DMACR = LN_RP_SPI_DMACR_RX | LN_RP_SPI_DMACR_TX;
+    _spi->IMSC |= LN_RP_SPI_INT_TX;
+
+    _txDma->setTransferSize(_wordSize);
+    _rxDma->setTransferSize(_wordSize);
+
+    _txDma->doMemoryToPeripheralTransferNoLock(nbBytes, (const uint32_t *)dataOut, (const uint32_t *)&(_spi->DR),
+                                               false);
+    _rxDma->doPeripheralToMemoryTransferNoLock(nbBytes, (const uint32_t *)&(_spi->DR), (uint32_t *)dataIn, false);
+
+    _txDma->beginTransfer();
+    _rxDma->beginTransfer();
+
+    _txDone.take();
+    _rxDone.take();
+    waitForCompletion();
+    return true;
+}
+
+/**
+ * @brief Blocking receive-only (sends 0xFF/0xFFFF dummy bytes on MOSI)
+ *
+ * Uses DMA for transfers >= RP_SPI_MIN_DMA, polling fallback for smaller ones.
+ *
+ * @param nbBytes Number of bytes to receive
+ * @param dataIn  Buffer for received data
+ * @return true on success
+ */
+bool rpSPI::read(uint32_t nbBytes, uint8_t *dataIn)
+{
+    if (nbBytes < RP_SPI_MIN_DMA)
+    {
+        //_txDone.take();
+        bool r = readPolling(nbBytes, dataIn);
+        //_txDone.give();
+        return r;
+    }
+
+    _callback = nullptr;
+    _txDone.tryTake();
+    _rxDone.tryTake();
+
+    _spi->DMACR = LN_RP_SPI_DMACR_RX | LN_RP_SPI_DMACR_TX;
+    _spi->IMSC |= LN_RP_SPI_INT_TX;
+
+    _txDma->setTransferSize(_wordSize);
+    _rxDma->setTransferSize(_wordSize);
+
+    // TX: repeat-send dummy byte to generate clocks
+    _txDma->doMemoryToPeripheralTransferNoLock(nbBytes, (const uint32_t *)&_dummyFF, (const uint32_t *)&(_spi->DR),
+                                               true);
+    // RX: capture incoming data
+    _rxDma->doPeripheralToMemoryTransferNoLock(nbBytes, (const uint32_t *)&(_spi->DR), (uint32_t *)dataIn, false);
+
+    _txDma->beginTransfer();
+    _rxDma->beginTransfer();
+
+    _txDone.take();
+    _rxDone.take();
+    waitForCompletion();
+    return true;
+}
+
+/**
+ * @brief Async full-duplex transfer
+ *
+ * @param nbBytes Number of bytes to exchange
+ * @param dataOut Data to send (TX)
+ * @param dataIn  Buffer for received data (RX)
+ * @param cb      Callback on completion
+ * @param cookie  User cookie for callback
+ * @return true if started successfully
+ */
+bool rpSPI::asyncTransfer(uint32_t nbBytes, const uint8_t *dataOut, uint8_t *dataIn, lnSpiCallback *cb, void *cookie)
+{
+    this->_callback = cb;
+    this->_callbackCookie = cookie;
+
+    _txDone.tryTake();
+    _rxDone.tryTake();
+
+    _spi->DMACR = LN_RP_SPI_DMACR_RX | LN_RP_SPI_DMACR_TX;
+    _spi->IMSC |= LN_RP_SPI_INT_TX;
+
+    _txDma->setTransferSize(_wordSize);
+    _rxDma->setTransferSize(_wordSize);
+
+    _txDma->attachCallback(dmaCb, this);
+    _rxDma->attachCallback(dmaRxCb, this);
+
+    _txDma->doMemoryToPeripheralTransferNoLock(nbBytes, (const uint32_t *)dataOut, (const uint32_t *)&(_spi->DR),
+                                               false);
+    _rxDma->doPeripheralToMemoryTransferNoLock(nbBytes, (const uint32_t *)&(_spi->DR), (uint32_t *)dataIn, false);
+
+    _txDma->beginTransfer();
+    _rxDma->beginTransfer();
+    return true;
+}
+
+/**
+ * @brief Async receive-only (sends 0xFF/0xFFFF dummy bytes on MOSI)
+ *
+ * @param nbBytes Number of bytes to receive
+ * @param dataIn  Buffer for received data
+ * @param cb      Callback on completion
+ * @param cookie  User cookie for callback
+ * @return true if started successfully
+ */
+bool rpSPI::asyncRead(uint32_t nbBytes, uint8_t *dataIn, lnSpiCallback *cb, void *cookie)
+{
+    this->_callback = cb;
+    this->_callbackCookie = cookie;
+
+    _txDone.tryTake();
+    _rxDone.tryTake();
+
+    _spi->DMACR = LN_RP_SPI_DMACR_RX | LN_RP_SPI_DMACR_TX;
+    _spi->IMSC |= LN_RP_SPI_INT_TX;
+
+    _txDma->setTransferSize(_wordSize);
+    _rxDma->setTransferSize(_wordSize);
+
+    _txDma->attachCallback(dmaCb, this);
+    _rxDma->attachCallback(dmaRxCb, this);
+
+    // TX: repeat-send dummy byte to generate clocks
+    _txDma->doMemoryToPeripheralTransferNoLock(nbBytes, (const uint32_t *)&_dummyFF, (const uint32_t *)&(_spi->DR),
+                                               true);
+    // RX: capture incoming data
+    _rxDma->doPeripheralToMemoryTransferNoLock(nbBytes, (const uint32_t *)&(_spi->DR), (uint32_t *)dataIn, false);
+
+    _txDma->beginTransfer();
+    _rxDma->beginTransfer();
+    return true;
+}
+
+/**
+ * @brief Clean up both TX and RX DMAs after async bidir operation
+ *
+ * @return true on success
+ */
+bool rpSPI::finishAsyncDmaBidir()
+{
+    _txDma->endTransfer();
+    _rxDma->endTransfer();
+    _txDone.give();
+    _rxDone.give();
+    return true;
+}
+
 /**
  * @brief
  *
