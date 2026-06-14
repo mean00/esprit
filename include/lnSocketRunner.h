@@ -23,6 +23,7 @@ class socketRunner
         DataAvailable = BBITS(2),
         CanWrite = BBITS(3),
         Error = BBITS(4),
+        CustomEvent = BBITS(5),
         Mask = (0x1F),
     };
     /**
@@ -130,10 +131,7 @@ class socketRunner
     {
         _eventGroup.readEvents(CanWrite << _shift);
     }
-    void waitForWrite()
-    {
-        _eventGroup.waitEvents(CanWrite << _shift, 100);
-    }
+    virtual void waitForWrite();
 
     /**
      * @brief [TODO:description]

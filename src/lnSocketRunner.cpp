@@ -3,6 +3,7 @@
 #include "lnLWIP.h"
 //
 #include "lnSocketRunner.h"
+#include "modules/socket_w5500.h"
 
 //
 #undef DEBUGME
@@ -52,6 +53,9 @@ void socketRunner::socketEvent(lnSocketEvent evt)
     case SocketError:
         sendEvent(Error);
         break;
+    case SocketCustom:
+        sendEvent(CustomEvent);
+        break;
     default:
         xAssert(0);
     }
@@ -72,11 +76,14 @@ void socketRunner::socketEvent(lnSocketEvent evt)
 void socketRunner::process_events(uint32_t events)
 {
     hook_poll();
+    events &= ~CustomEvent; // managed before
     // link up
     uint32_t local_event;
     //--
     BEGIN_EVENT(Up)
-    Logger("Got link up event\n");
+    Logger(">>>>>>>>>>>>>>Got link up event\n");
+    Logger(">>>>>>>>>>>>>>Got link up event\n");
+    Logger(">>>>>>>>>>>>>>Got link up event\n");
     cleanup();
     _current_connection = lnSocket::create(_port, socketCb_c, this);
     _current_connection->asyncMode();
@@ -92,6 +99,7 @@ void socketRunner::process_events(uint32_t events)
     //--
     BEGIN_EVENT(Disconnected)
     Logger("Got disconnect \n");
+    _connected = false;
     hook_disconnected();
     disconnectClient();
     END_EVENT()
@@ -103,12 +111,20 @@ void socketRunner::process_events(uint32_t events)
     END_EVENT()
     //--
     BEGIN_EVENT(DataAvailable)
-    process_incoming_data();
+    if (_connected)
+    {
+        process_incoming_data();
+    }
+    else
+    {
+        Logger("Warning: DataAvailable while not connected, discarding\n");
+    }
     END_EVENT()
+    //--
     if (!_connected && events != 0)
     {
         Logger("Warning: not connected and got event 0x%x\n", events);
-        xAssert(0);
+        // we may get some leftovers can write or data available events
     }
 }
 /**
@@ -172,10 +188,15 @@ bool socketRunner::writeData(uint32_t n, const uint8_t *data)
         _writeBufferIndex += n;
         return true;
     }
-    DEBUGME("Flushing before writing\n");
-    flushWrite();
+    if (_writeBufferIndex != 0)
+    {
+        DEBUGME("Flushing before writing\n");
+        flushWrite();
+    }
     DEBUGME("Actually writing %d bytes\n", n);
-    return _forcedWrite(n, data);
+    bool r = _forcedWrite(n, data);
+    DEBUGME("Write done\n");
+    return r;
 }
 /**
  * @brief [TODO:description]
@@ -218,6 +239,17 @@ uint32_t socketRunner::writeBufferAvailable()
     return 0;
 }
 /**
+ * @brief Wait for the socket to become writable (default implementation).
+ *
+ * Simply waits for the CanWrite event.  Subclasses that need to process
+ * pending interrupts inline (e.g. W5500 SEND_OK) should override this.
+ */
+void socketRunner::waitForWrite()
+{
+    _eventGroup.waitEvents(CanWrite << _shift, 100);
+}
+
+/**
  * @brief [TODO:description]
  *
  * @param n [TODO:parameter]
@@ -227,11 +259,11 @@ uint32_t socketRunner::writeBufferAvailable()
 bool socketRunner::_forcedWrite(uint32_t n, const uint8_t *data)
 {
     uint32_t done;
-    DEBUGME("  Forcing  write %d byte\n", n);
+    DEBUGME("_forcedWrite %d byte\n", n);
     while (n > 0)
     {
         done = 0;
-        clearWrite();
+        DEBUGME("  WR!!\n");
         lnSocket::status s = _current_connection->write(n, data, done);
         if (lnSocket::Ok != s)
         {
@@ -242,8 +274,9 @@ bool socketRunner::_forcedWrite(uint32_t n, const uint8_t *data)
         {
             DEBUGME("Waiting for Wr\n");
             waitForWrite();
-            DEBUGME("Wr OK\n");
+            DEBUGME("Got canwrite \n");
         }
+        DEBUGME("Wr OK\n");
         n -= done;
         data += done;
     }

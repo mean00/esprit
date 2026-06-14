@@ -25,11 +25,13 @@ class lnLWIP
 };
 enum lnSocketEvent
 {
-    SocketConnected, // listening socket connection notification ,you should accept
+    SocketIgnore = 0, // listening socket connection notification ,you should accept
+    SocketConnected,  // listening socket connection notification ,you should accept
     SocketDisconnect,
     SocketDataAvailable,
     SocketWriteAvailable,
     SocketError,
+    SocketCustom, // W5500: socket has pending HW interrupt to process
 };
 typedef void (*lnSocketCb)(lnSocketEvent evt, void *arg);
 /**
