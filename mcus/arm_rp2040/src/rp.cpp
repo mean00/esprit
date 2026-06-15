@@ -15,6 +15,7 @@ extern void loop();
 
 uint8_t ucHeap[configTOTAL_HEAP_SIZE];
 extern void lnRpDmaSysInit();
+extern void lnExtiSysInit();
 /**
  * @brief
  *
@@ -69,6 +70,7 @@ int main()
     lnPinMode(GPIO17, lnUART);
     lnPinMode(GPIO16, lnUART);
     lnRpDmaSysInit();
+    lnExtiSysInit();
 
     lnSetInterruptHandler(LN_IRQ_SYSTICK, X_SYSTICK);
     lnSetInterruptHandler(LN_IRQ_PENDSV, X_PENDSV);

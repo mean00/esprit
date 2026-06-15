@@ -42,7 +42,7 @@ else()
 endif()
 
 set(RP_LN_SOURCES ${RP_COMMON_FOLDER}/ln_rp_gpio.cpp ${RP_COMMON_FOLDER}/ln_rp_dma.cpp ${RP_COMMON_FOLDER}/ln_rp_spi.cpp ln_rp_adc.cpp
-                  ${RP_COMMON_FOLDER}/ln_rp_pio.cpp ${RP_COMMON_FOLDER}/lnStubs.cpp)
+                  ${RP_COMMON_FOLDER}/ln_rp_pio.cpp ${RP_COMMON_FOLDER}/ln_rp_exti.cpp ${RP_COMMON_FOLDER}/lnStubs.cpp)
 set(BASE_SOURCES
     ${PICO_SDK_PATH}/src/rp2_common/hardware_timer/timer.c
     ${PICO_SDK_PATH}/src/rp2_common/hardware_uart/uart.c
