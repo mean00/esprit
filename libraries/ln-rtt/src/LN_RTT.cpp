@@ -4,10 +4,10 @@
 #include "ln-rtt_priv.h"
 #include "string.h"
 
-#define RTT_BUFFER_SIZE (256)
+#define RTT_BUFFER_SIZE (1024)
 
 //
-uint32_t buffer[RTT_BUFFER_SIZE >> 2];
+uint32_t rtt_buffer[RTT_BUFFER_SIZE >> 2];
 // #define my_rtt _SEGGER_RTT
 //
 static const char channel_name[] = "Logger";
@@ -21,7 +21,7 @@ extern MY_RTT_DESC my_rtt;
 void LN_RTT_Init(void)
 {
     my_rtt.channel.name_addr = (uint32_t)channel_name;
-    my_rtt.channel.buffer_addr = (uint32_t)buffer;
+    my_rtt.channel.buffer_addr = (uint32_t)rtt_buffer;
     my_rtt.channel.buffer_size = (uint32_t)RTT_BUFFER_SIZE;
     my_rtt.channel.read_offset = 0;
     my_rtt.channel.write_offset = 0;

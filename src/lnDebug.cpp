@@ -62,30 +62,30 @@ void Logger(const char *fmt...)
     if (fmt[0] == 0)
         return;
 
+    loggerMutex->lock();
     va_list va;
     va_start(va, fmt);
     vsnprintf(buffer, 127, fmt, va);
 
     buffer[127] = 0;
     va_end(va);
-    loggerMutex->lock();
     Logger_chars(strlen(buffer), buffer);
     loggerMutex->unlock();
 }
 /**
- * 
+ *
  */
 void LoggerInitMutex()
 {
-   loggerMutex = new lnMutex;
+    loggerMutex = new lnMutex;
 }
 /**
- * 
+ *
  */
 void LoggerInit()
 {
     LoggerInitMutex();
-    
+
     int debugUart = 0;
 #ifdef LN_DEBUG_UART
     debugUart = LN_DEBUG_UART;
@@ -94,7 +94,7 @@ void LoggerInit()
 #ifdef LOGGER_USE_DMA
     dma = true;
 #endif
-    
+
     bool buffered = true;
     serial0 = createLnSerialTxOnly(debugUart, dma, buffered);
     serial0->init();
