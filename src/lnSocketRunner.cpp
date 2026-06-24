@@ -3,7 +3,6 @@
 #include "lnLWIP.h"
 //
 #include "lnSocketRunner.h"
-#include "modules/socket_w5500.h"
 
 //
 #undef DEBUGME

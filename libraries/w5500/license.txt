@@ -1,0 +1,8 @@
+This is derived from the ioLibrary_Driver from wiznet
+(https://github.com/Wiznet/ioLibrary_Driver.git MIT LICENSE)
+
+It has been redesigned to used for SPI+DMA for esprit, in particular for the RP2040.
+
+This is also under MIT License
+
+Nb: Cline + deepskeep assisted it if that matters to you
