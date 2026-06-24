@@ -111,7 +111,16 @@ set(RP_LN_SRCS
     ${RP_COMMON_FOLDER}/rp_serial.cpp ${RP_COMMON_FOLDER}/rp_rcu.cpp
     # ${CMAKE_CURRENT_SOURCE_DIR}/minimum_arm_image_def_block.s
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_irq.cpp)
-add_library(esprit_lib OBJECT rp.cpp ${SDK_SRCS} ${RP_LN_SOURCES} ${RP_LN_SRCS})
+add_library(esprit_lib OBJECT rp.cpp ${SDK_SRCS} ${RP_LN_SOURCES} ${RP_LN_SRCS}
+                  ln_rp_adc.cpp
+                  ${RP_COMMON_FOLDER}/ln_rp_gpio.cpp
+                  ${RP_COMMON_FOLDER}/ln_rp_dma.cpp
+                  ${RP_COMMON_FOLDER}/ln_rp_spi.cpp
+                  ${RP_COMMON_FOLDER}/ln_rp_pio.cpp
+                  ${RP_COMMON_FOLDER}/ln_rp_exti.cpp
+                  ${RP_COMMON_FOLDER}/lnStubs.cpp
+)
+
 
 #
 add_rp_incdir(
