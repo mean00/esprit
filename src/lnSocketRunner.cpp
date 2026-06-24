@@ -246,7 +246,7 @@ uint32_t socketRunner::writeBufferAvailable()
  */
 void socketRunner::waitForWrite()
 {
-    _eventGroup.waitEvents(CanWrite << _shift, 100);
+    _eventGroup.waitEvents(CanWrite << _shift, 10);
 }
 
 /**
