@@ -31,7 +31,7 @@ pub extern "C" fn rnLoop() {
     let mut adc = AdcTiming::<AdcStruct>::new(0);
     adc.set_source(3, 3, 10000, &pins);
     loop {
-        adc.multi_read(SAMPLE_SIZE as i32, &mut output);
+        adc.multi_read(SAMPLE_SIZE as u32, &mut output);
         for i in 0..SAMPLE_SIZE {
             logger!(" {} : {}\n", i, output[i]);
         }
