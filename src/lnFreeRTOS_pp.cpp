@@ -296,9 +296,11 @@ void lnFastEventGroup::setEvents(uint32_t events)
 {
     if (underInterrupt)
     {
-        // #warning : Could we have a race here between different interrupts ? probably
+        UBaseType_t uxSavedInterruptStatus = taskENTER_CRITICAL_FROM_ISR();
         _value = _value | events;
         bool w = _value & _mask;
+        taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus);
+
         if (!w || _waitingTask == INVALID_TASK) // no need to wake up task
         {
             return;
