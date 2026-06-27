@@ -13,6 +13,8 @@
     {                                                                                                                  \
     }
 #endif
+extern void ln_set_connected_state(bool state);
+
 /**
 
 */
@@ -83,6 +85,7 @@ void socketRunner::process_events(uint32_t events)
     Logger(">>>>>>>>>>>>>>Got link up event\n");
     Logger(">>>>>>>>>>>>>>Got link up event\n");
     Logger(">>>>>>>>>>>>>>Got link up event\n");
+    ln_set_connected_state(true);
     cleanup();
     _current_connection = lnSocket::create(_port, socketCb_c, this);
     _current_connection->asyncMode();
@@ -92,6 +95,7 @@ void socketRunner::process_events(uint32_t events)
     // link down
     BEGIN_EVENT(Down)
     Logger("Got link down event\n");
+    ln_set_connected_state(0);
     cleanup();
     return;
     END_EVENT()
