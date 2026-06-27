@@ -98,3 +98,9 @@ int lnCpuID::clockSpeed()
 {
     return SystemCoreClock;
 }
+/**
+ */
+uint32_t lnCpuID::getSerialID()
+{
+    return 0x12345678;
+}

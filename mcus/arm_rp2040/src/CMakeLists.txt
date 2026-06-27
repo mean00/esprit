@@ -42,7 +42,8 @@ else()
 endif()
 
 set(RP_LN_SOURCES ${RP_COMMON_FOLDER}/ln_rp_gpio.cpp ${RP_COMMON_FOLDER}/ln_rp_dma.cpp ${RP_COMMON_FOLDER}/ln_rp_spi.cpp ln_rp_adc.cpp
-                  ${RP_COMMON_FOLDER}/ln_rp_pio.cpp ${RP_COMMON_FOLDER}/ln_rp_exti.cpp ${RP_COMMON_FOLDER}/lnStubs.cpp)
+                  ${RP_COMMON_FOLDER}/ln_rp_pio.cpp ${RP_COMMON_FOLDER}/ln_rp_exti.cpp ${RP_COMMON_FOLDER}/lnStubs.cpp
+                  ${RP_COMMON_FOLDER}/rp_uniqid.cpp)
 set(BASE_SOURCES
     ${PICO_SDK_PATH}/src/rp2_common/hardware_timer/timer.c
     ${PICO_SDK_PATH}/src/rp2_common/hardware_uart/uart.c
@@ -51,7 +52,8 @@ set(BASE_SOURCES
     ${PICO_SDK_PATH}/src/rp2_common/hardware_vreg/vreg.c
     ${PICO_SDK_PATH}/src/rp2_common/hardware_xosc/xosc.c
     ${PICO_SDK_PATH}/src/rp2_common/hardware_irq/irq_handler_chain.S
-    ${PICO_SDK_PATH}/src/rp2_common/hardware_pio/pio.c)
+    ${PICO_SDK_PATH}/src/rp2_common/hardware_pio/pio.c
+    ${PICO_SDK_PATH}/src/rp2_common/hardware_flash/flash.c)
 
 set(RP_SDK_SOURCES
     ${BASE_SOURCES}
@@ -96,7 +98,10 @@ add_rp_incdir(
   pico_printf
   pico_runtime
   pico_stdio
-  pico_stdio_uart)
+  pico_stdio_uart
+  pico_unique_id
+  hardware_flash
+  hardware_xip_cache)
 
 target_include_directories(
   esprit_dev

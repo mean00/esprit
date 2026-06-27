@@ -3,6 +3,7 @@
  *  See license file
  */
 #pragma once
+#include <cstdint>
 /**
  */
 class lnCpuID
@@ -36,4 +37,5 @@ class lnCpuID
 
     static const char *idAsString();
     static int clockSpeed();
+    static uint32_t getSerialID();
 };
