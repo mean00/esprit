@@ -10,7 +10,7 @@ target_sources(w5500 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/network_w5500.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dhcp_w5500.cpp
 )
-target_include_directories(w5500 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(w5500 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(w5500 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/W5500)
 
 #target_compile_options(w5500 PRIVATE -D_DHCP_DEBUG_=1)

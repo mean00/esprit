@@ -45,6 +45,7 @@ set(RP_LN_SOURCES ${RP_COMMON_FOLDER}/ln_rp_gpio.cpp ${RP_COMMON_FOLDER}/ln_rp_d
                   ${RP_COMMON_FOLDER}/ln_rp_pio.cpp ${RP_COMMON_FOLDER}/ln_rp_exti.cpp ${RP_COMMON_FOLDER}/lnStubs.cpp
                   ${RP_COMMON_FOLDER}/rp_uniqid.cpp)
 set(BASE_SOURCES
+    ${PICO_SDK_PATH}/src/rp2_common/pico_unique_id/unique_id.c
     ${PICO_SDK_PATH}/src/rp2_common/hardware_timer/timer.c
     ${PICO_SDK_PATH}/src/rp2_common/hardware_uart/uart.c
     ${PICO_SDK_PATH}/src/rp2_common/hardware_clocks/clocks.c

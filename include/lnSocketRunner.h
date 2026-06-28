@@ -1,3 +1,4 @@
+#pragma once
 #include "esprit.h"
 //
 #include "lnLWIP.h"
