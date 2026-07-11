@@ -181,8 +181,8 @@ beginning of the interrupt function */
 
 	xread  x1, 0 				/* MEPC Note for starting the scheduler the exception return address is used as the function return address. */
 	xread  x5, 1 				/* MSTATUS Initial mstatus into x5 (t0) */
-	andi   x5, x5, 0x08			/* Set MIE bit so the first task starts with interrupts enabled - required as returns with ret not eret. */
-	csrrw  x0, mstatus, x5		/* Interrupts enabled from here! */
+	ori   x5, x5, 0x08			/* Set MIE bit so the first task starts with interrupts enabled - required as returns with ret not eret. */
+	csrrw  x0, mstatus, x5		/* Interrupts enabled from here! , dont touch the other bits*/
 
 	addi sp, sp, portHEADER_SIZE	
 
