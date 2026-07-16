@@ -11,12 +11,8 @@
 uint32_t now(uint32_t startAt)
 {
     uint32_t tick = lnGetMs();
-    if (tick >= startAt)
-        return tick - startAt;
-    uint32_t wrap = 0xFFFFFFFFUL;
-    uint32_t val = wrap - startAt;
-    val += tick;
-    return val;
+    // Unsigned 32-bit arithmetic naturally handles wrap around via modulo 2^32.
+    return tick - startAt;
 }
 
 /**
