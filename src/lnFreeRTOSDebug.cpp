@@ -58,11 +58,17 @@ __attribute__((section(".rodata.freertos_debug"))) const lnFreeRTOSDebug freeRTO
     offsetof(xLIST, pxIndex),         // OFFSET_LIST_INDEX;
 
     configMAX_PRIORITIES, // NB_OF_PRIORITIES;
-#ifdef __arm__
+#if defined(__arm__)
 #if defined(__thumb2__) && defined(__SOFTFP__) && (__ARM_ARCH == 7 || __ARM_ARCH == 6)
-    0, // M0 or M3
+    LAYOUT_ARM_NOFPU,
 #else
-    1, // M4
+    LAYOUT_ARM_FPU,
+#endif
+#elif defined(__riscv)
+#if defined(ARCH_FPU) && (ARCH_FPU == 1)
+    LAYOUT_CH32_FPU,
+#else
+    LAYOUT_CH32,
 #endif
 #else
     0,
