@@ -49,20 +49,11 @@ extern "C"
  */
 
 /* Type definitions. */
-#if __riscv_xlen == 64
-#define portSTACK_TYPE uint64_t
-#define portBASE_TYPE int64_t
-#define portUBASE_TYPE uint64_t
-#define portMAX_DELAY (TickType_t)0xffffffffffffffffUL
-#define portPOINTER_SIZE_TYPE uint64_t
-#elif __riscv_xlen == 32
 #define portSTACK_TYPE uint32_t
 #define portBASE_TYPE int32_t
 #define portUBASE_TYPE uint32_t
 #define portMAX_DELAY (TickType_t)0xffffffffUL
-#else
-#error Assembler did not define __riscv_xlen
-#endif
+#define portPOINTER_SIZE_TYPE uint32_t
 
     typedef portSTACK_TYPE StackType_t;
     typedef portBASE_TYPE BaseType_t;
@@ -84,12 +75,7 @@ not need to be guarded with a critical section. */
 /* Architecture specifics. */
 #define portSTACK_GROWTH (-1)
 #define portTICK_PERIOD_MS ((TickType_t)1000 / configTICK_RATE_HZ)
-#ifdef __riscv64
-#error This is the RV32 port that has not yet been adapted for 64.
 #define portBYTE_ALIGNMENT 16
-#else
-#define portBYTE_ALIGNMENT 16
-#endif
     /*-----------------------------------------------------------*/
 
     /* Scheduler utilities. */
@@ -121,8 +107,11 @@ not need to be guarded with a critical section. */
 
     /* switch interrupt sp, sp is saved at first task switch. */
 
-#define GET_INT_SP() __asm volatile("csrrw sp,mscratch,sp")
-#define FREE_INT_SP() __asm volatile("csrrw sp,mscratch,sp")
+/* Switch between the task stack and the hardware interrupt stack via
+ * mscratch.  Each call atomically swaps SP with mscratch; calling
+ * ENTER_ISR_STACK then EXIT_ISR_STACK returns to the original task stack. */
+#define ENTER_ISR_STACK() __asm volatile("csrrw sp,mscratch,sp")
+#define EXIT_ISR_STACK() __asm volatile("csrrw sp,mscratch,sp")
 /*-------------------------------------------------------------*/
 
 /* Architecture specific optimisations. */
@@ -167,27 +156,7 @@ not necessary for to use this port.  They are defined so the common demo files
 #endif
 
 #define portMEMORY_BARRIER() __asm volatile("" ::: "memory")
-/*-----------------------------------------------------------*/
-
-/* configCLINT_BASE_ADDRESS is a legacy definition that was replaced by the
-configMTIME_BASE_ADDRESS and configMTIMECMP_BASE_ADDRESS definitions.  For
-backward compatibility derive the newer definitions from the old if the old
-definition is found. */
-#if defined(configCLINT_BASE_ADDRESS) && !defined(configMTIME_BASE_ADDRESS) && (configCLINT_BASE_ADDRESS == 0)
-/* Legacy case where configCLINT_BASE_ADDRESS was defined as 0 to indicate
-there was no CLINT.  Equivalent now is to set the MTIME and MTIMECMP
-addresses to 0. */
-#define configMTIME_BASE_ADDRESS (0)
-#define configMTIMECMP_BASE_ADDRESS (0)
-#elif defined(configCLINT_BASE_ADDRESS) && !defined(configMTIME_BASE_ADDRESS)
-/* Legacy case where configCLINT_BASE_ADDRESS was set to the base address of
-the CLINT.  Equivalent now is to derive the MTIME and MTIMECMP addresses
-from the CLINT address. */
-#define configMTIME_BASE_ADDRESS ((configCLINT_BASE_ADDRESS) + 0xBFF8UL)
-#define configMTIMECMP_BASE_ADDRESS ((configCLINT_BASE_ADDRESS) + 0x4000UL)
-#elif !defined(configMTIME_BASE_ADDRESS) || !defined(configMTIMECMP_BASE_ADDRESS)
-#error configMTIME_BASE_ADDRESS and configMTIMECMP_BASE_ADDRESS must be defined in FreeRTOSConfig.h.  Set them to zero if there is no MTIME (machine time) clock.  See https://www.FreeRTOS.org/Using-FreeRTOS-on-RISC-V.html
-#endif
+    /*-----------------------------------------------------------*/
 
 #ifdef __cplusplus
 }

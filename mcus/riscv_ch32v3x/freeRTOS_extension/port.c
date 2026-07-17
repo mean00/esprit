@@ -26,6 +26,25 @@
  *
  */
 
+/**
+ * @file    port.c
+ * @brief   FreeRTOS port layer implementation for RISC-V RV32 (CH32V3x series).
+ * @details Implements the functions declared in portable.h for the RISC-V RV32
+ *          port, tailored for WCH CH32V3x MCUs.  Provides the hardware-specific
+ *          scheduler start/stop, critical sections, interrupt masking, SysTick
+ *          timer setup, task stack initialisation and the SysTick interrupt
+ *          handler.
+ *
+ *          The port uses a hardware-managed (mscratch-based) interrupt stack
+ *          when @c USE_CH32v3x_HW_IRQ_STACK is defined; otherwise the standard
+ *          @c __attribute__((interrupt)) attribute is applied to the SysTick
+ *          handler.
+ *
+ *          FreeRTOS Kernel V10.4.6
+ *          Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ *          SPDX-License-Identifier: MIT
+ */
+
 /*-----------------------------------------------------------
  * Implementation of functions defined in portable.h for the RISC-V RV32 port.
  *----------------------------------------------------------*/
@@ -35,146 +54,148 @@
 #include "portmacro.h"
 #include "task.h"
 /* Standard includes. */
-#include "port_define.h"
+#include "port_common.h"
 #include "string.h"
-// MEANX
+
+/**
+ * @defgroup port_internal_macros Internal Macros
+ * @{
+ */
+
+/**
+ * @brief   Select interrupt attribute for SysTick_Handler.
+ * @details When @c USE_CH32v3x_HW_IRQ_STACK is defined the handler does *not*
+ *          use the compiler's interrupt prologue/epilogue (the hardware stack
+ *          switch via @c mscratch handles it).  Otherwise the standard
+ *          @c __attribute__((interrupt)) is applied.
+ */
 #ifdef USE_CH32v3x_HW_IRQ_STACK
 #define LN_IRQ_FOS
 #else
 #define LN_IRQ_FOS __attribute__((interrupt))
 #endif
 
-#ifdef configCLINT_BASE_ADDRESS
-#warning The configCLINT_BASE_ADDRESS constant has been deprecated.  configMTIME_BASE_ADDRESS and configMTIMECMP_BASE_ADDRESS are currently being derived from the (possibly 0) configCLINT_BASE_ADDRESS setting.  Please update to define configMTIME_BASE_ADDRESS and configMTIMECMP_BASE_ADDRESS dirctly in place of configCLINT_BASE_ADDRESS.  See https://www.FreeRTOS.org/Using-FreeRTOS-on-RISC-V.html
-#endif
+/* SysTick Control Register Bits (WCH CH32V3x specific) */
+#define SYSTICK_CTLR_STE (1 << 0)   /**< System counter enable.             */
+#define SYSTICK_CTLR_STIE (1 << 1)  /**< Counter interrupt enable.          */
+#define SYSTICK_CTLR_STCLK (1 << 2) /**< System clock source (HCLK).        */
+#define SYSTICK_CTLR_STRE (1 << 3)  /**< Auto-reload count enable.          */
 
-#ifndef configMTIME_BASE_ADDRESS
-#warning configMTIME_BASE_ADDRESS must be defined in FreeRTOSConfig.h.  If the target chip includes a memory-mapped mtime register then set configMTIME_BASE_ADDRESS to the mapped address.  Otherwise set configMTIME_BASE_ADDRESS to 0.  See https://www.FreeRTOS.org/Using-FreeRTOS-on-RISC-V.html
-#endif
+/** RISC-V mstatus MIE (Machine Interrupt Enable) bit. */
+#define RISCV_MIE (1 << 3)
+/** RISC-V mstatus MPIE (Machine Previous Interrupt Enable) bit. */
+#define RISCV_MPIE (1 << 7)
+/**
+ * @brief   mstatus MPP field value for Machine mode on the Bumblebee core.
+ * @details The WCH Bumblebee core (CH32V3x) encodes Machine mode as MPP = 0b10
+ *          (bits [12:11]), unlike the standard RISC-V encoding which uses 0b11.
+ *          This value is written into the task's initial stack frame so that
+ *          the first @c mret restores the task to Machine privilege level.
+ */
+#define RISCV_MPP_MACHINE (2 << 11)
 
-#ifndef configMTIMECMP_BASE_ADDRESS
-#warning configMTIMECMP_BASE_ADDRESS must be defined in FreeRTOSConfig.h.  If the target chip includes a memory-mapped mtimecmp register then set configMTIMECMP_BASE_ADDRESS to the mapped address.  Otherwise set configMTIMECMP_BASE_ADDRESS to 0.  See https://www.FreeRTOS.org/Using-FreeRTOS-on-RISC-V.html
-#endif
+/**
+ * @brief   Check ISR stack integrity (empty on this port).
+ * @details Placeholder macro; no ISR stack overflow detection is implemented.
+ */
+#define portCHECK_ISR_STACK()                                                                                          \
+    {                                                                                                                  \
+    }
 
-/* Let the user override the pre-loading of the initial LR with the address of
-prvTaskExitError() in case it messes up unwinding of the stack in the
-debugger. */
-#ifdef configTASK_RETURN_ADDRESS
-#define portTASK_RETURN_ADDRESS configTASK_RETURN_ADDRESS
-#else
-#define portTASK_RETURN_ADDRESS prvTaskExitError
-#endif
+/** @} */ /* end of port_internal_macros */
 
-/* The stack used by interrupt service routines.  Set configISR_STACK_SIZE_WORDS
-to use a statically allocated array as the interrupt stack.  Alternative leave
-configISR_STACK_SIZE_WORDS undefined and update the linker script so that a
-linker variable names __freertos_irq_stack_top has the same value as the top
-of the stack used by main.  Using the linker script method will repurpose the
-stack that was used by main before the scheduler was started for use as the
-interrupt stack after the scheduler has started. */
+/**
+ * @defgroup port_isr_stack ISR Stack Configuration
+ * @{
+ *
+ * The stack used by interrupt service routines.  Set
+ * @c configISR_STACK_SIZE_WORDS to use a statically allocated array as the
+ * interrupt stack.  Alternatively leave @c configISR_STACK_SIZE_WORDS undefined
+ * and update the linker script so that the linker variable
+ * @c __freertos_irq_stack_top has the same value as the top of the stack used
+ * by @c main().  Using the linker script method will repurpose the stack that
+ * was used by @c main() before the scheduler was started for use as the
+ * interrupt stack after the scheduler has started.
+ */
 #ifdef configISR_STACK_SIZE_WORDS
 #define ISR_ALIGN 16
 static __attribute__((aligned(ISR_ALIGN))) StackType_t xISRStack[configISR_STACK_SIZE_WORDS] = {0};
 const StackType_t xISRStackTop = (StackType_t) & (xISRStack[configISR_STACK_SIZE_WORDS & ~(ISR_ALIGN - 1)]);
 
-/* Don't use 0xa5 as the stack fill bytes as that is used by the kernerl for
-the task stacks, and so will legitimately appear in many positions within
-the ISR stack. */
+/**
+ * @brief   Fill byte used to initialise the ISR stack.
+ * @note    Do not use 0xa5 as that is used by the kernel for task stacks, and
+ *          so will legitimately appear in many positions within the ISR stack.
+ */
 #define portISR_STACK_FILL_BYTE 0xee
 #else
-/* __freertos_irq_stack_top define by .ld file */
+/* __freertos_irq_stack_top defined by the linker script (.ld file). */
 extern const uint32_t __freertos_irq_stack_top[];
 const StackType_t xISRStackTop = (StackType_t)__freertos_irq_stack_top;
 #endif
 
-static UBaseType_t uxCriticalNesting = 0xaaaaaaaa;
-/*
- * Setup the timer to generate the tick interrupts.  The implementation in this
- * file is weak to allow application writers to change the timer used to
- * generate the tick interrupt.
+/** @} */ /* end of port_isr_stack */
+
+/**
+ * @brief   Critical section nesting counter.
+ * @details Initialised to 0xaaaaaaaa as a canary value to help detect
+ *          corruption before the scheduler starts.
  */
-void vPortSetupTimerInterrupt(void) __attribute__((weak));
+static UBaseType_t uxCriticalNesting = 0xaaaaaaaa;
 
-/*-----------------------------------------------------------*/
-#if (configMTIME_BASE_ADDRESS != 0) && (configMTIMECMP_BASE_ADDRESS != 0)
-/* Used to program the machine timer compare register. */
-uint64_t ullNextTime = 0ULL;
-const uint64_t *pullNextTime = &ullNextTime;
-const uint64_t uxTimerIncrementsForOneTick =
-    (uint64_t)((configCPU_CLOCK_HZ) / (configTICK_RATE_HZ)); /* Assumes increment won't go over 32-bits. */
-uint64_t const ullMachineTimerCompareRegisterBase = configMTIMECMP_BASE_ADDRESS;
-volatile uint64_t *pullMachineTimerCompareRegister = NULL;
-#endif
-
-/* Set configCHECK_FOR_STACK_OVERFLOW to 3 to add ISR stack checking to task
-stack checking.  A problem in the ISR stack will trigger an assert, not call the
-stack overflow hook function (because the stack overflow hook is specific to a
-task stack, not the ISR stack). */
-#if defined(configISR_STACK_SIZE_WORDS) && (configCHECK_FOR_STACK_OVERFLOW > 2)
-#warning This path not tested, or even compiled yet.
-
-static const uint8_t ucExpectedStackBytes[] = {
-    portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE,
-    portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE,
-    portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE,
-    portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE,
-    portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE, portISR_STACK_FILL_BYTE};
-
-#define portCHECK_ISR_STACK()                                                                                          \
-    configASSERT((memcmp((void *)xISRStack, (void *)ucExpectedStackBytes, sizeof(ucExpectedStackBytes)) == 0))
-#else
-/* Define the function away. */
-#define portCHECK_ISR_STACK()
-#endif /* configCHECK_FOR_STACK_OVERFLOW > 2 */
+/**
+ * @brief   Forward declaration: set up the timer that generates the tick
+ *          interrupts.
+ * @details The implementation in this file targets the WCH CH32V3x SysTick
+ *          peripheral and is deliberately not weak so that single-source
+ *          builds are unambiguous.  Application writers who wish to use a
+ *          different timer should replace this function.
+ */
+void vPortSetupTimerInterrupt(void);
 
 /*-----------------------------------------------------------*/
 
-#if (configMTIME_BASE_ADDRESS != 0) && (configMTIMECMP_BASE_ADDRESS != 0)
-
-void vPortSetupTimerInterrupt(void)
-{
-    uint32_t ulCurrentTimeHigh, ulCurrentTimeLow;
-    volatile uint32_t *const pulTimeHigh =
-        (volatile uint32_t *const)((configMTIME_BASE_ADDRESS) +
-                                   4UL); /* 8-byte typer so high 32-bit word is 4 bytes up. */
-    volatile uint32_t *const pulTimeLow = (volatile uint32_t *const)(configMTIME_BASE_ADDRESS);
-    volatile uint32_t ulHartId;
-
-    __asm volatile("csrr %0, mhartid" : "=r"(ulHartId));
-    pullMachineTimerCompareRegister =
-        (volatile uint64_t *)(ullMachineTimerCompareRegisterBase + (ulHartId * sizeof(uint64_t)));
-
-    do
-    {
-        ulCurrentTimeHigh = *pulTimeHigh;
-        ulCurrentTimeLow = *pulTimeLow;
-    } while (ulCurrentTimeHigh != *pulTimeHigh);
-
-    ullNextTime = (uint64_t)ulCurrentTimeHigh;
-    ullNextTime <<= 32ULL; /* High 4-byte word is 32-bits up. */
-    ullNextTime |= (uint64_t)ulCurrentTimeLow;
-    ullNextTime += (uint64_t)uxTimerIncrementsForOneTick;
-    *pullMachineTimerCompareRegister = ullNextTime;
-
-    /* Prepare the time to use after the next tick interrupt. */
-    ullNextTime += (uint64_t)uxTimerIncrementsForOneTick;
-}
-
-#else
-
-/* just for wch's systick,don't have mtime */
+/**
+ * @brief   Configure the WCH CH32V3x SysTick timer for the FreeRTOS tick
+ *          interrupt.
+ * @details This implementation does not use the RISC-V standard CLINT/MTIME;
+ *          instead it programs the chip-specific SysTick peripheral with the
+ *          compare value derived from @c configCPU_CLOCK_HZ and
+ *          @c configTICK_RATE_HZ, and enables the counter, interrupt and
+ *          auto-reload.
+ */
 void vPortSetupTimerInterrupt(void)
 {
     SysTick->CTLR = 0;
     SysTick->SR = 0;
     SysTick->CNT = 0;
     SysTick->CMP = configCPU_CLOCK_HZ / configTICK_RATE_HZ;
-    SysTick->CTLR = 0xf;
+    SysTick->CTLR = SYSTICK_CTLR_STE | SYSTICK_CTLR_STIE | SYSTICK_CTLR_STCLK | SYSTICK_CTLR_STRE;
 }
 
-#endif /* ( configMTIME_BASE_ADDRESS != 0 ) && ( configMTIME_BASE_ADDRESS != 0 ) */
 /*-----------------------------------------------------------*/
 
+/**
+ * @brief   Start the FreeRTOS scheduler.
+ * @details Performs the following steps:
+ *          -# If @c configASSERT_DEFINED is 1, validates that:
+ *             - The @c mtvec register has its low two bits set to @c 0b11
+ *               (vectored mode).
+ *             - The ISR stack top is aligned to @c portBYTE_ALIGNMENT.
+ *             - If @c configISR_STACK_SIZE_WORDS is defined, fills the ISR
+ *               stack array with a known canary byte.
+ *          -# Calls @c vPortSetupTimerInterrupt() to initialise the SysTick
+ *             timer.
+ *          -# Enables the SysTick and software-interrupt IRQ lines in the
+ *             NVIC/PLIC.
+ *          -# Resets the critical nesting count to 0.
+ *          -# Calls @c xPortStartFirstTask() (assembly) which restores the
+ *             context of the highest-priority task and starts executing it
+ *             with interrupts enabled.
+ * @return This function never returns on success.  If it does return, it
+ *         returns @c pdFAIL to indicate that the scheduler could not be
+ *         started.
+ */
 BaseType_t xPortStartScheduler(void)
 {
     extern void xPortStartFirstTask(void);
@@ -219,6 +240,13 @@ BaseType_t xPortStartScheduler(void)
 }
 /*-----------------------------------------------------------*/
 
+/**
+ * @brief   Stop the FreeRTOS scheduler.
+ * @details This port does not implement scheduler stopping.  If called, the
+ *          function enters an infinite loop.
+ * @note    The standard FreeRTOS API expects this function to exist, but it
+ *          is not normally used in resource-constrained embedded systems.
+ */
 void vPortEndScheduler(void)
 {
     /* Not implemented. */
@@ -226,21 +254,37 @@ void vPortEndScheduler(void)
         ;
 }
 /*-----------------------------------------------------------*/
+/**
+ * @brief   Handle the SysTick interrupt (FreeRTOS tick).
+ * @details Switches to the ISR stack via @c ENTER_ISR_STACK(), clears the SysTick
+ *          status register, calls @c xTaskIncrementTick() to update the
+ *          kernel tick count, and yields if a context switch is required.
+ *          The interrupt stack is released via @c EXIT_ISR_STACK() before return.
+ * @note    The function is declared with @c LN_IRQ_FOS which selects between
+ *          hardware stack switching (@c USE_CH32v3x_HW_IRQ_STACK) and the
+ *          compiler's @c __attribute__((interrupt)) prologue/epilogue.
+ */
 void SysTick_Handler(void) __attribute__((used)) LN_IRQ_FOS;
 void SysTick_Handler(void)
 {
-    GET_INT_SP();
+    ENTER_ISR_STACK();
     portDISABLE_INTERRUPTS();
-    SysTick->SR = 0;
+    SysTick->SR = 0; /* Clear the CNTIF flag (Bumblebee SysTick does not auto-acknowledge). */
     if (xTaskIncrementTick() != pdFALSE)
     {
         portYIELD();
     }
     portENABLE_INTERRUPTS();
-    FREE_INT_SP();
+    EXIT_ISR_STACK();
 }
 
 /*-----------------------------------------------------------*/
+/**
+ * @brief   Enter a critical section by disabling interrupts.
+ * @details Disables interrupts via @c portDISABLE_INTERRUPTS() and
+ *          increments the nesting counter @c uxCriticalNesting.
+ *          Critical sections may be nested safely.
+ */
 void vPortEnterCritical(void)
 {
     portDISABLE_INTERRUPTS();
@@ -248,6 +292,13 @@ void vPortEnterCritical(void)
 }
 
 /*-----------------------------------------------------------*/
+/**
+ * @brief   Exit a critical section, re-enabling interrupts when the nesting
+ *          count reaches zero.
+ * @details Decrements @c uxCriticalNesting.  When the count reaches zero
+ *          interrupts are re-enabled via @c portENABLE_INTERRUPTS().
+ * @note    Asserts that the nesting count is non-zero before decrementing.
+ */
 void vPortExitCritical(void)
 {
     configASSERT(uxCriticalNesting);
@@ -259,15 +310,29 @@ void vPortExitCritical(void)
     }
 }
 /*-----------------------------------------------------------*/
+/**
+ * @brief   Mask all interrupts by clearing the MIE and MPIE bits in @c mstatus.
+ * @details Atomically reads the current @c mstatus, clears bits 0x88 (MIE=bit 3
+ *          and MPIE=bit 7), and returns the original value so it can be restored
+ *          later via @c vPortClearInterruptMask().  Uses the RISC-V @c csrrc
+ *          instruction to perform the read-modify-write in a single atomic step.
+ * @return The original @c mstatus value before interrupts were masked.
+ */
 portUBASE_TYPE xPortSetInterruptMask(void)
 {
-    portUBASE_TYPE uvalue = 0;
-    __asm volatile("csrr %0, mstatus" : "=r"(uvalue));
-    __asm volatile("csrc mstatus, %0" ::"r"(0x88));
+    portUBASE_TYPE uvalue;
+    __asm volatile("csrrc %0, mstatus, %1" : "=r"(uvalue) : "r"(0x88));
     return uvalue;
 }
 
 /*-----------------------------------------------------------*/
+/**
+ * @brief   Restore a previously saved interrupt mask.
+ * @details Writes the supplied value back to the @c mstatus CSR, restoring
+ *          the previous interrupt enable state.
+ * @param   uvalue  The @c mstatus value to restore (previously returned by
+ *                  @c xPortSetInterruptMask()).
+ */
 void vPortClearInterruptMask(portUBASE_TYPE uvalue)
 {
     __asm volatile("csrw  mstatus, %0" ::"r"(uvalue));
@@ -275,30 +340,40 @@ void vPortClearInterruptMask(portUBASE_TYPE uvalue)
 
 /*----*/
 
-/*
+/**
+ * @brief   Initialise the stack frame of a new task.
+ * @details Builds the full context save frame that will be restored by the
+ *          assembly context-switch code.  The frame layout is:
+ *          @code
+ *          (high address)  pxCode   (MEPC)     -- header 0
+ *                          mstatus  (MSTATUS)  -- header 1
+ *                          (FPU regs)           -- if ARCH_FPU == 1
+ *                          x1..x31  (GPRs)     -- 28 words
+ *          (low address)  <- SP
+ *          @endcode
  *
- * As per the standard RISC-V ABI pxTopcOfStack is passed in in a0, pxCode in
- * a1, and pvParameters in a2.  The new top of stack is passed out in a0.
+ *          Only the exception-return address (pxCode) and machine status
+ *          (mstatus with MPIE set and MPP=2 for machine mode) are written in
+ *          the header area.  Among the GPR slots, only @c x10/a0 is set to
+ *          @c pvParameters (the task parameter).  The FPU state is set to
+ *          "initial" so that the first context switch lazily saves nothing.
  *
- *  The stack layout is (MEPC/MSTATUS) (FPU) (GPR)
- *  In that task we start with a clean FPU so no need to save the FPU registers
+ * @param   pxTopOfStack   The top of the allocated stack (highest address).
+ * @param   pxCode         The task entry function.
+ * @param   pvParameters   The void* parameter to pass to the task function.
+ * @return  A pointer to the new stack top (after the frame has been reserved).
  */
-#define RISCV_MIE (1 << 3)
-#define RISCV_MPIE (1 << 7)
 StackType_t *pxPortInitialiseStack(StackType_t *pxTopOfStack, TaskFunction_t pxCode, void *pvParameters)
 {
     uint32_t mstatus = 0;
 
-    mstatus |= RISCV_MPIE;
-    mstatus |= (2 << 11); // MPP=2
+    mstatus |= RISCV_MPIE;        // Interrupt enabled
+    mstatus |= RISCV_MPP_MACHINE; // restore in machine mode
 
 #if ARCH_FPU == 1
     mstatus |= CH32_FPU_STATE(CH32_FPU_INITIAL); // Set FS bits to "initial"
 #endif
-    int stack_usage = portCONTEXT_COUNT + portHEADER_COUNT;
-
-    // mstatus=0x3880; //
-    pxTopOfStack -= (stack_usage);
+    pxTopOfStack -= (portCONTEXT_COUNT + portHEADER_COUNT);
     StackType_t *newStack = pxTopOfStack;
     pxTopOfStack[0] = (StackType_t)pxCode; // fill in headers
     pxTopOfStack[1] = mstatus;

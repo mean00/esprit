@@ -1,19 +1,7 @@
-
 #include "esprit.h"
 #include "lnPeripheral_priv.h"
 #include "lnSystemTimer_priv.h"
 
-typedef struct
-{
-    uint32_t CTLR;
-    uint32_t SR;
-    uint32_t CTNTL;
-    uint32_t CTNTH;
-} lnStkx;
-
-typedef volatile lnStkx lnStk;
-
-lnStk *stk = (lnStk *)LN_STK_ADR;
 static uint64_t tickPerUs16 = 1;
 
 /**
@@ -28,27 +16,24 @@ void lnSystemTimerInit()
  */
 uint32_t lnGetCycle32()
 {
-    return stk->CTNTL;
+    uint32_t low;
+    __asm volatile("csrr %0, mcycle\n" : "=r"(low));
+    return low;
 }
 /**
  */
 uint64_t lnGetCycle64()
 {
-    volatile uint32_t high, low;
-    while (1)
-    {
-        high = stk->CTNTH;
-        low = stk->CTNTL;
-        volatile uint32_t high2 = stk->CTNTH;
-        if (high == high2)
-        {
-            break;
-        }
-    }
-    uint64_t r = high;
-    r <<= 32;
-    r += low;
-    return r;
+    uint32_t high, low, high2;
+    __asm volatile(
+        "1:\n"
+        "csrr %0, mcycleh\n"
+        "csrr %1, mcycle\n"
+        "csrr %2, mcycleh\n"
+        "bne  %0, %2, 1b\n"
+        : "=r"(high), "=r"(low), "=r"(high2)
+    );
+    return ((uint64_t)high << 32) | low;
 }
 
 /**
@@ -60,7 +45,6 @@ uint64_t lnGetUs64()
     uint64_t tick = lnGetCycle64();
     // convert tick to us
     tick = (tick * 16) / tickPerUs16;
-    tick = tick + 1000 * lnGetMs();
     return tick;
 }
 /**

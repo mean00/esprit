@@ -14,8 +14,8 @@
 	.extern start_c
 _start:
 	j	handle_reset
-	.word   0x1234; /* base +4 */
-	.word   0x5678  /* base +8 */
+	.word   0x1234; /* Notify the bootloader not to verify the signature but there is an app here */
+	.word   0x5678  /* Notify the bootloader not to verify the signature but there is an app here */
 
 	.align  1
 _vector_base:
@@ -28,12 +28,9 @@ handle_reset:
 	la gp, __global_pointer$
 .option	pop 
 1:
-	la sp, _bss_end 
-2:
-	
-2:
+	la sp, _bss_end
 	li t0, 0x1f
-	csrw 0xbc0, t0
+	csrw 0xbc0, t0 /* Bumblebee-core CSR 0xbc0 (MINTSTATUS): enable all 5 interrupt lines (SW, timer, external). */
 	J start_c
 	mret
 

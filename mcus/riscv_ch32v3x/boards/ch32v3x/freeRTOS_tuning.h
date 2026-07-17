@@ -1,4 +1,4 @@
-// This is GD32/RISCV specific
+// This is CH32V3x specific
 
 #define configMTIME_BASE_ADDRESS TIMER_CTRL_ADDR
 #define configMTIMECMP_BASE_ADDRESS (TIMER_CTRL_ADDR + 8)

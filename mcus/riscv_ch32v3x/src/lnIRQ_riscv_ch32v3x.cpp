@@ -186,7 +186,8 @@ ISR_CODE void lnIrqSysInit()
     uint32_t mstatus = LN_RISCV_FPU_MODE(ARCH_FPU) + LN_RISCV_MPP(0); // enable FPU if ARCH_FPU=1
 
     asm volatile("mv t0, %1\n"      // load syscr
-                 "csrw 0x804, t0\n" // INTSYSCR : hw stack etc...
+                 "csrw 0x804, t0\n" /* INTSYSCR: Interrupt System Control Register (Bumblebee core, CSR 0x804) --
+                                       configure hardware stack, nesting, preemption. */
 
                  "mv t0, %2\n"
                  "csrw mstatus, t0\n" // Enable floating point and disable interrupts

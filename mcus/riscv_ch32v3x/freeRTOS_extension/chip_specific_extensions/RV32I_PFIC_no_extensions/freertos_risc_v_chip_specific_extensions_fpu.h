@@ -56,11 +56,11 @@
 .altmacro
 
 .macro fread rg offset
-    	flw \rg, \offset * portWORD_SIZE( sp )
+    	flw \rg, \offset * 4( sp )
 .endm
 
 .macro fstore rg offset
-    	fsw \rg, \offset * portWORD_SIZE( sp )
+    	fsw \rg, \offset * 4( sp )
 .endm
 
 

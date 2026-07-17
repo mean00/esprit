@@ -27,36 +27,16 @@
  */
 
 /*
- * The FreeRTOS kernel's RISC-V port is split between the the code that is
- * common across all currently supported RISC-V chips (implementations of the
- * RISC-V ISA), and code which tailors the port to a specific RISC-V chip:
+ * CH32V3x FreeRTOS context-switch assembly.
  *
- * + The code that is common to all RISC-V chips is implemented in
- *   FreeRTOS\Source\portable\GCC\RISC-V-RV32\portASM.S.  There is only one
- *   portASM.S file because the same file is used no matter which RISC-V chip is
- *   in use.
+ * SW_Handler performs the full context save/restore using the Bumblebee
+ * core's native GPR/FPU stack frame layout.  xPortStartFirstTask loads
+ * the first task's initial stack and starts it with interrupts enabled.
  *
- * + The code that tailors the kernel's RISC-V port to a specific RISC-V
- *   chip is implemented in freertos_risc_v_chip_specific_extensions.h.  There
- *   is one freertos_risc_v_chip_specific_extensions.h that can be used with any
- *   RISC-V chip that both includes a standard CLINT and does not add to the
- *   base set of RISC-V registers.  There are additional
- *   freertos_risc_v_chip_specific_extensions.h files for RISC-V implementations
- *   that do not include a standard CLINT or do add to the base set of RISC-V
- *   registers.
- *
- * CARE MUST BE TAKEN TO INCLDUE THE CORRECT
- * freertos_risc_v_chip_specific_extensions.h HEADER FILE FOR THE CHIP
- * IN USE.  To include the correct freertos_risc_v_chip_specific_extensions.h
- * header file ensure the path to the correct header file is in the assembler's
- * include path.
- *
- * This freertos_risc_v_chip_specific_extensions.h is for use on RISC-V chips
- * that include a standard CLINT and do not add to the base set of RISC-V
- * registers.
- *
+ * FPU support (if enabled via ARCH_FPU) is delegated to the
+ * freertos_risc_v_chip_specific_extensions_fpu.h header.
  */
-#include "port_define.h"
+#include "port_common.h"
 /* we define float registers at specific_extensions.h, V30x support hardware floating point unit
 can be enable by defined ARCH_FPU*/
 #if ARCH_FPU
@@ -79,11 +59,11 @@ can be enable by defined ARCH_FPU*/
 // xread
 //------------------------
 .macro xread rg offset
-    	load_x \rg, \offset * portWORD_SIZE( sp )
+    lw \rg, \offset * 4( sp )
 .endm
 //------------------------
 .macro xstore rg offset
-    	store_x \rg, \offset * portWORD_SIZE( sp )
+    sw \rg, \offset * 4( sp )
 .endm
 //------------------------
 .macro CH32_GPR_STACK action
@@ -127,8 +107,8 @@ SW_Handler:
 	portasmSAVE_ADDITIONAL_REGISTERS	// FPU if used
 
 	addi sp, sp, -portHEADER_SIZE 		// MEPC + MSTATUS
-	load_x  t0, pxCurrentTCB			/* Load pxCurrentTCB. */
-	store_x  sp, 0( t0 )				/* Write sp to first TCB member. */
+	lw  t0, pxCurrentTCB			/* Load pxCurrentTCB. */
+	sw  sp, 0( t0 )				/* Write sp to first TCB member. */
 
 	csrr   a1, mepc
 	xstore a1,  0 						/* Save updated exception return address. */
@@ -137,14 +117,14 @@ SW_Handler:
 	xstore t0,  1 
 
 	addi a1, x0, 0x20  					// Disable HW stack 
-	csrs 0x804, a1
+	csrs 0x804, a1 /* INTSYSCR: Interrupt System Control Register (Bumblebee core, CSR 0x804) -- disable hardware stack while switching context. */
 
-	load_x sp, xISRStackTop				/* Switch to ISR stack before function call. */
+	lw sp, xISRStackTop				/* Switch to ISR stack before function call. */
 	jal vTaskSwitchContext
 
 processed_source:
-	load_x  t1, pxCurrentTCB			/* Load pxCurrentTCB. */
-	load_x  sp, 0( t1 )				 	/* Read sp from first TCB member. */
+	lw  t1, pxCurrentTCB			/* Load pxCurrentTCB. */
+	lw  sp, 0( t1 )				 	/* Read sp from first TCB member. */
 
 	/* Load mret with the address of the next instruction in the task to run next. */
 	xread t0, 0
@@ -165,19 +145,23 @@ processed_source:
 
 xPortStartFirstTask:
 
-/* if it is an assembly entry code, the SP offset value is determined by the assembly code,
-but the C code is determined by the compiler, so we subtract 512 here as a reservation.
-When entering the interrupt function of C code, the compiler automatically presses the stack
-into the task stack. We can only change the SP value used by the calling function after switching
-the interrupt stack.This problem can be solved by modifying the interrupt to the assembly entry,
-and there is no need to reserve 512 bytes. You only need to switch the interrupt stack at the
-beginning of the interrupt function */
-	lw t0, xISRStackTop /* MEANX : The systick interrupt handler will switch to the SP pointed by mscratch */
+/*
+ * Assembly entry code computes SP offsets at assembly-time; C code leaves them
+ * to the compiler, so we reserve 512 bytes here as a safety margin.
+ *
+ * When a C interrupt function is entered, the compiler automatically pushes
+ * registers onto the task stack.  We can only change the SP value used by the
+ * calling function *after* switching to the interrupt stack.  Using an assembly
+ * entry point (as we do for SW_Handler) avoids this problem entirely -- no 512
+ * byte reservation is needed, and the interrupt stack switch happens at the
+ * very beginning of the handler.
+ */
+	lw t0, xISRStackTop /* The SysTick handler will switch SP to the value held in mscratch. */
 	addi t0, t0, -512
 	csrw mscratch,t0
 
-	load_x  sp, pxCurrentTCB	/* Load pxCurrentTCB. */
-	load_x  sp, 0( sp )		 	/* Read sp from first TCB member. */
+	lw  sp, pxCurrentTCB	/* Load pxCurrentTCB. */
+	lw  sp, 0( sp )		 	/* Read sp from first TCB member. */
 
 	xread  x1, 0 				/* MEPC Note for starting the scheduler the exception return address is used as the function return address. */
 	xread  x5, 1 				/* MSTATUS Initial mstatus into x5 (t0) */
