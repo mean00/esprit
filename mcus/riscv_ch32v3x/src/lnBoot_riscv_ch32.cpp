@@ -47,73 +47,85 @@ extern "C"
      */
     ISR_CODE void __attribute__((noreturn)) start_c()
     {
+        // Build symbol addresses via %%hi()/%%lo() assembler relocations.
+        // No input operands needed — the asm constructs addresses directly.
+        // BSS begin/end are reloaded AFTER the data burst, so they can't be corrupted.
+        __asm volatile("lui  t0, %%hi(_data_lma)            \n"
+                       "addi t0, t0, %%lo(_data_lma)        \n" // t0 = src
+                       "lui  t1, %%hi(_data_begin)          \n"
+                       "addi t1, t1, %%lo(_data_begin)      \n" // t1 = dst
+                       "lui  t2, %%hi(_data_end)            \n"
+                       "addi t2, t2, %%lo(_data_end)        \n" // t2 = end
+                       "  beq t1, t2, 4f \n"                    // skip if zero-length
+                       "  li t4, 32 \n"                         // burst size constant
+                       "  sub t3, t2, t1 \n"                    // remaining bytes
+                       "  blt t3, t4, 2f \n"                    // skip main loop if <32 bytes remain
+                       "1: \n"                                  // main loop: copy 32 bytes via a0..a7
+                       "  lw a0, 0(t0) \n"
+                       "  lw a1, 4(t0) \n"
+                       "  lw a2, 8(t0) \n"
+                       "  lw a3, 12(t0) \n"
+                       "  lw a4, 16(t0) \n"
+                       "  lw a5, 20(t0) \n"
+                       "  lw a6, 24(t0) \n"
+                       "  lw a7, 28(t0) \n"
+                       "  sw a0, 0(t1) \n"
+                       "  sw a1, 4(t1) \n"
+                       "  sw a2, 8(t1) \n"
+                       "  sw a3, 12(t1) \n"
+                       "  sw a4, 16(t1) \n"
+                       "  sw a5, 20(t1) \n"
+                       "  sw a6, 24(t1) \n"
+                       "  sw a7, 28(t1) \n"
+                       "  addi t0, t0, 32 \n"
+                       "  addi t1, t1, 32 \n"
+                       "  sub t3, t2, t1 \n" // recompute remaining
+                       "  bge t3, t4, 1b \n" // loop while remaining >= 32
+                       "2: \n"               // tail: copy 1-7 words one at a time
+                       "  beq t1, t2, 4f \n"
+                       "3: \n"
+                       "  lw t3, 0(t0) \n"
+                       "  sw t3, 0(t1) \n"
+                       "  addi t0, t0, 4 \n"
+                       "  addi t1, t1, 4 \n"
+                       "  blt t1, t2, 3b \n" // while dst < end
+                       "4: \n"
 
-        __asm volatile(
-            // ---- DATA COPY from flash to RAM: 8 words (32 B) per iteration ----
-            "  mv t0, %0 \n"     // src
-            "  mv t1, %1 \n"     // dst
-            "  mv t2, %2 \n"     // end
-            "  beq t1, t2, 2f\n" // skip if zero-length
-            "1:\n"
-            "  lw a0, 0(t0)\n"
-            "  lw a1, 4(t0)\n"
-            "  lw a2, 8(t0)\n"
-            "  lw a3, 12(t0)\n"
-            "  lw a4, 16(t0)\n"
-            "  lw a5, 20(t0)\n"
-            "  lw a6, 24(t0)\n"
-            "  lw a7, 28(t0)\n"
-            "  sw a0, 0(t1)\n"
-            "  sw a1, 4(t1)\n"
-            "  sw a2, 8(t1)\n"
-            "  sw a3, 12(t1)\n"
-            "  sw a4, 16(t1)\n"
-            "  sw a5, 20(t1)\n"
-            "  sw a6, 24(t1)\n"
-            "  sw a7, 28(t1)\n"
-            "  addi t0, t0, 32\n"
-            "  addi t1, t1, 32\n"
-            "  bgt t2, t1, 1b\n"
-            "2:\n" // tail: remaining words (1-7)
-            "  beq t1, t2, 4f\n"
-            "3:\n"
-            "  lw t3, 0(t0)\n"
-            "  sw t3, 0(t1)\n"
-            "  addi t0, t0, 4\n"
-            "  addi t1, t1, 4\n"
-            "  bgt t2, t1, 3b\n"
-            "4:\n"
+                       // ---- BSS ZERO: 8 words (32 B) per iteration ----
+                       // Reload addresses here — a0..a7 were trashed by the burst copy above.
+                       "lui  t0, %%hi(_bss_begin)          \n"
+                       "addi t0, t0, %%lo(_bss_begin)      \n" // t0 = begin
+                       "lui  t1, %%hi(_bss_end)            \n"
+                       "addi t1, t1, %%lo(_bss_end)        \n" // t1 = end
+                       "  beq t0, t1, 8f \n"                   // skip if zero-length
+                       "  li t4, 32 \n"                        // burst size constant
+                       "  sub t2, t1, t0 \n"                   // remaining bytes
+                       "  blt t2, t4, 6f \n"                   // skip main loop if <32 bytes remain
+                       "5: \n"                                 // main loop: zero 32 bytes
+                       "  sw x0, 0(t0) \n"
+                       "  sw x0, 4(t0) \n"
+                       "  sw x0, 8(t0) \n"
+                       "  sw x0, 12(t0) \n"
+                       "  sw x0, 16(t0) \n"
+                       "  sw x0, 20(t0) \n"
+                       "  sw x0, 24(t0) \n"
+                       "  sw x0, 28(t0) \n"
+                       "  addi t0, t0, 32 \n"
+                       "  sub t2, t1, t0 \n" // recompute remaining
+                       "  bge t2, t4, 5b \n" // loop while remaining >= 32
+                       "6: \n"               // tail: zero 1-7 words
+                       "  beq t0, t1, 8f \n"
+                       "7: \n"
+                       "  sw x0, 0(t0) \n"
+                       "  addi t0, t0, 4 \n"
+                       "  blt t0, t1, 7b \n" // while cur < end
+                       "8: \n"
 
-            // ---- BSS ZERO: 8 words (32 B) per iteration ----
-            "  mv t0, %3 \n"     // begin
-            "  mv t1, %4 \n"     // end
-            "  beq t0, t1, 6f\n" // skip if zero-length
-            "5:\n"
-            "  sw x0, 0(t0)\n"
-            "  sw x0, 4(t0)\n"
-            "  sw x0, 8(t0)\n"
-            "  sw x0, 12(t0)\n"
-            "  sw x0, 16(t0)\n"
-            "  sw x0, 20(t0)\n"
-            "  sw x0, 24(t0)\n"
-            "  sw x0, 28(t0)\n"
-            "  addi t0, t0, 32\n"
-            "  bgt t1, t0, 5b\n"
-            "6:\n" // tail: remaining words (1-7)
-            "  beq t0, t1, 8f\n"
-            "7:\n"
-            "  sw x0, 0(t0)\n"
-            "  addi t0, t0, 4\n"
-            "  bgt t1, t0, 7b\n"
-            "8:\n"
-
-            ::"r"((uint32_t *)&_data_lma), // 0 src
-            "r"((uint32_t *)&_data_begin), // 1 data
-            "r"((uint32_t *)&_data_end),   // 2 end
-            "r"((uint32_t *)&_bss_begin),  // 3 zstart
-            "r"((uint32_t *)&_bss_end));   // 4 zend
-
-        __libc_init_array(); // call ctor before jumping in the code
+                       :
+                       :                                                                              /* no inputs */
+                       : "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "t0", "t1", "t2", "t3", "t4" // clobbers
+        );
+        __libc_init_array();
         main();
         xAssert(0);
     }
