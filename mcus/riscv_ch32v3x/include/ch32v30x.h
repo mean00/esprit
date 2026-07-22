@@ -40,7 +40,7 @@ extern "C"
         volatile uint64_t CNT;
         volatile uint64_t CMP;
     } SysTick_Type;
-#define SysTick ((SysTick_Type *)0xE000F000)
+    extern volatile SysTick_Type *WCH_SysTick;
 
     extern void NVIC_EnableIRQ(IRQn_Type IRQn);
 

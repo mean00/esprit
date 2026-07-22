@@ -166,11 +166,11 @@ void vPortSetupTimerInterrupt(void);
  */
 void vPortSetupTimerInterrupt(void)
 {
-    SysTick->CTLR = 0;
-    SysTick->SR = 0;
-    SysTick->CNT = 0;
-    SysTick->CMP = configCPU_CLOCK_HZ / configTICK_RATE_HZ;
-    SysTick->CTLR = SYSTICK_CTLR_STE | SYSTICK_CTLR_STIE | SYSTICK_CTLR_STCLK | SYSTICK_CTLR_STRE;
+    WCH_SysTick->CTLR = 0;
+    WCH_SysTick->SR = 0;
+    WCH_SysTick->CNT = 0;
+    WCH_SysTick->CMP = configCPU_CLOCK_HZ / configTICK_RATE_HZ;
+    WCH_SysTick->CTLR = SYSTICK_CTLR_STE | SYSTICK_CTLR_STIE | SYSTICK_CTLR_STCLK | SYSTICK_CTLR_STRE;
 }
 
 /*-----------------------------------------------------------*/
@@ -269,7 +269,7 @@ void SysTick_Handler(void)
 {
     ENTER_ISR_STACK();
     portDISABLE_INTERRUPTS();
-    SysTick->SR = 0; /* Clear the CNTIF flag (Bumblebee SysTick does not auto-acknowledge). */
+    WCH_SysTick->SR = 0; /* Clear the CNTIF flag (Bumblebee SysTick does not auto-acknowledge). */
     if (xTaskIncrementTick() != pdFALSE)
     {
         portYIELD();

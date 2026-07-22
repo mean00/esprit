@@ -82,6 +82,10 @@ uint32_t lnGetMs()
 {
     return myTick;
 }
+extern "C" uint32_t lnGetMs_c()
+{
+    return myTick;
+}
 
 void lnDelay(uint32_t a);
 /**
