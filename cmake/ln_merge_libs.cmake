@@ -1,12 +1,14 @@
 macro(LN_MERGE_LIBS)
   # ---
+  # Never let the latch persist from a previous configure: the stale cache entry
+  # (set with CACHE in older versions) would skip recreating esprit_single_lib on
+  # every reconfigure, breaking an existing build directory.
+  unset(LN_ALREADY_MERGED CACHE)
   if(NOT "${LN_ALREADY_MERGED}" STREQUAL "DONE")
     set(merged_name esprit_single_lib)
     set(libs_to_merge "${USED_LIBS}")
     message(STATUS "Preparing single lib ==> ${merged_name}")
-    set(LN_ALREADY_MERGED
-        "DONE"
-        CACHE INTERNAL "")
+    set(LN_ALREADY_MERGED "DONE")
     list(APPEND libs_to_merge ${ARGN})
     set(libs_to_keep esprit_lib)
     list(APPEND libs_to_merge ln_utils embeddedPrintf esprit_lib ${USED_LIBS})
