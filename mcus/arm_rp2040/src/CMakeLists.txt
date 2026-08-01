@@ -12,6 +12,7 @@ endmacro()
 if(EXISTS "${PICO_SDK_PATH}/src/common/pico_base_headers/include/pico/version.h.in")
   message(STATUS "Detected SDK v2.x")
   set(RP_SDK_VERSION 2)
+  set(PICO_SDK_VERSION_MAJOR ${RP_SDK_VERSION})
   set(RP_SUFFIX_INCLUDE "_headers")
   set(VERSION_FILE "${PICO_SDK_PATH}/src/common/pico_base_headers/include/pico/version.h.in")
   set(RP_PLATFORM_INCLUDE
@@ -54,7 +55,12 @@ set(BASE_SOURCES
     ${PICO_SDK_PATH}/src/rp2_common/hardware_xosc/xosc.c
     ${PICO_SDK_PATH}/src/rp2_common/hardware_irq/irq_handler_chain.S
     ${PICO_SDK_PATH}/src/rp2_common/hardware_pio/pio.c
-    ${PICO_SDK_PATH}/src/rp2_common/hardware_flash/flash.c)
+    ${PICO_SDK_PATH}/src/rp2_common/hardware_exception/exception.c
+    ${PICO_SDK_PATH}/src/rp2_common/pico_multicore/multicore.c
+    ${PICO_SDK_PATH}/src/rp2_common/hardware_flash/flash.c
+    ${PICO_SDK_PATH}/src/rp2_common/hardware_sync/sync.c)
+
+
 
 set(RP_SDK_SOURCES
     ${BASE_SOURCES}
@@ -75,6 +81,7 @@ add_rp_incdir(
   hardware_claim
   hardware_clocks
   hardware_divider
+  hardware_exception
   hardware_gpio
   hardware_irq
   hardware_pll
@@ -102,6 +109,7 @@ add_rp_incdir(
   pico_stdio_uart
   pico_unique_id
   hardware_flash
+  pico_multicore
   hardware_xip_cache)
 
 target_include_directories(
@@ -127,4 +135,8 @@ target_include_directories(esprit_dev INTERFACE ${RP_COMMON_FOLDER}/../include)
 target_include_directories(esprit_dev INTERFACE ${RP_COMMON_FOLDER}/../private_include)
 target_compile_definitions(esprit_dev INTERFACE PICO_${RP_CHIP2}=1)
 target_compile_definitions(esprit_dev INTERFACE RP_SDK_VERSION=${RP_SDK_VERSION})
+if (ESPRIT_MULTICORE)
+  target_compile_definitions(esprit_dev INTERFACE LIB_PICO_MULTICORE=1)
+endif()
+target_compile_options(esprit_dev INTERFACE -include fix_sev.h)
 target_link_libraries(esprit_lib PRIVATE esprit_dev)

@@ -5,6 +5,9 @@
 #include "ln_rp.h" 
 #include "hardware/gpio.h"
 #include "ln_rp_memory_map.h"
+#ifdef ESPRIT_MULTICORE
+#include "pico/multicore.h"
+#endif
 // clang-format on
 #ifdef __clang__
 FILE *const stdout = NULL;
@@ -50,16 +53,32 @@ void initTask(void *)
     }
 }
 
+/**
+ * Called by the FreeRTOS timer/daemon task once the scheduler is running.
+ * configTASK_DEFAULT_CORE_AFFINITY pins every task (user tasks, timer task
+ * and both idle tasks) to core 0 - so re-pin the passive idle task (IDLE1)
+ * back to core 1, otherwise core 1 has no task eligible to run.
+ */
+#if ( configUSE_DAEMON_TASK_STARTUP_HOOK == 1 )
+void vApplicationDaemonTaskStartupHook( void )
+{
+    vTaskCoreAffinitySet( xTaskGetIdleTaskHandleForCore( 1 ), ( 1U << 1 ) );
+}
+#endif
+
 #define LN_INITIAL_STACK_SIZE 8 * 1024
 #define LN_INITIAL_TASK_PRIORITY 2
 uint32_t SystemCoreClock = 125000000;
 
+#ifndef ESPRIT_MULTICORE
 extern "C"
 {
     void X_SYSTICK(void);
     void X_PENDSV(void);
     void X_SVHANDLER(void);
 }
+#endif
+
 /**
  * @brief
  *
@@ -72,11 +91,17 @@ int main()
     lnRpDmaSysInit();
     lnExtiSysInit();
 
+#ifndef ESPRIT_MULTICORE
     lnSetInterruptHandler(LN_IRQ_SYSTICK, X_SYSTICK);
     lnSetInterruptHandler(LN_IRQ_PENDSV, X_PENDSV);
     lnSetInterruptHandler(LN_IRQ_SVCALL, X_SVHANDLER);
+#endif
+
 
     lnCreateTask(initTask, "entryTask", LN_INITIAL_STACK_SIZE, NULL, LN_INITIAL_TASK_PRIORITY);
+#ifdef ESPRIT_MULTICORE
+    multicore_reset_core1();
+#endif
     vTaskStartScheduler();
     // lnGetFreeRTOSDebug();
     deadEnd(25);

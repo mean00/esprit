@@ -8,6 +8,8 @@ endif()
 
 option(LN_EXTERNAL_FREERTOS "Deactivate internal freertos (esp)")
 option(LN_EXTERNAL_MALLOC "Deactivate internal malloc (esp)")
+option(ESPRIT_MULTICORE "Enable FreeRTOS SMP multicore" OFF)
+
 if(True) # NOT ESPRIT_ROOT)
   if(NOT ESPRIT_ROOT)
     set(ESPRIT_ROOT
@@ -82,6 +84,9 @@ if(True) # NOT ESPRIT_ROOT)
   else()
     include(lnFreeRTOS)
     target_include_directories(esprit_dev INTERFACE FreeRTOS)
+  endif()
+  if (ESPRIT_MULTICORE)
+    target_compile_definitions(esprit_dev INTERFACE ESPRIT_MULTICORE=1)
   endif()
   include(lnEmbeddedPrint)
 

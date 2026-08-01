@@ -395,8 +395,31 @@ bool lnCreateTask(
     uint32_t stackSizeInBytes, // in bytes  !, // in bytes!
     void *const pvParameters, UBaseType_t uxPriority)
 {
-    if (pdPASS == xTaskCreate(pxTaskCode, pcName, adjustStackSize(stackSizeInBytes), pvParameters, uxPriority, NULL))
+    TaskHandle_t handle;
+    if (pdPASS == xTaskCreate(pxTaskCode, pcName, adjustStackSize(stackSizeInBytes), pvParameters, uxPriority, &handle))
+    {
+#if (configNUMBER_OF_CORES > 1)
+        vTaskCoreAffinitySet(handle, (1 << 0));
+#endif
         return true;
+    }
+    xAssert(0);
+}
+
+bool lnCreateTask_core2(
+    TaskFunction_t pxTaskCode,
+    const char *const pcName, 
+    uint32_t stackSizeInBytes, 
+    void *const pvParameters, UBaseType_t uxPriority)
+{
+    TaskHandle_t handle;
+    if (pdPASS == xTaskCreate(pxTaskCode, pcName, adjustStackSize(stackSizeInBytes), pvParameters, uxPriority, &handle))
+    {
+#if (configNUMBER_OF_CORES > 1)
+        vTaskCoreAffinitySet(handle, (1 << 1));
+#endif
+        return true;
+    }
     xAssert(0);
 }
 /**

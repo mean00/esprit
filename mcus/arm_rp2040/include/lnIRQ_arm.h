@@ -8,7 +8,7 @@
 
 #define LN_IRQ_OFFSET 0
 #define LN_INTERRUPT_TYPE __attribute__((used)) __attribute__((interrupt("IRQ")))
-#define underInterrupt xPortIsInsideInterrupt()
+#define underInterrupt ( { uint32_t ulIPSR; __asm volatile ( "mrs %0, IPSR" : "=r" ( ulIPSR )::); ( ( uint8_t ) ulIPSR ) > 0; } )
 
 enum LnIRQ : int
 {
