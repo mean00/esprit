@@ -46,6 +46,19 @@ void initTask(void *)
     }
 }
 
+/**
+ * Called by the FreeRTOS timer/daemon task once the scheduler is running.
+ * configTASK_DEFAULT_CORE_AFFINITY pins every task (user tasks, timer task
+ * and both idle tasks) to core 0 - so re-pin the passive idle task (IDLE1)
+ * back to core 1, otherwise core 1 has no task eligible to run.
+ */
+#if ( configUSE_DAEMON_TASK_STARTUP_HOOK == 1 )
+void vApplicationDaemonTaskStartupHook( void )
+{
+    vTaskCoreAffinitySet( xTaskGetIdleTaskHandleForCore( 1 ), ( 1U << 1 ) );
+}
+#endif
+
 #define LN_INITIAL_STACK_SIZE 8 * 1024
 #define LN_INITIAL_TASK_PRIORITY 2
 uint32_t SystemCoreClock = 150 * 1000 * 1000;

@@ -39,6 +39,8 @@ __vectors:
 // default values by seeing if they point to somewhere between __defaults_isrs_start and __default_isrs_end
 .global __default_isrs_start
 __default_isrs_start:
+.global __default_isrs_end
+__default_isrs_end:
 
 // ----------------------------------------------------------------------------
 

@@ -43,6 +43,11 @@ extern "C"
                                                     characters only. */
                       uint32_t stackSizeInBytes, // in bytes  !
                       void *const pvParameters, UBaseType_t uxPriority);
+
+    bool lnCreateTask_core2(TaskFunction_t pxTaskCode,
+                            const char *const pcName, 
+                            uint32_t stackSizeInBytes, 
+                            void *const pvParameters, UBaseType_t uxPriority);
 #ifdef __cplusplus
 }
 #endif

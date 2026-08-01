@@ -80,3 +80,4 @@ void runtime_init(void)
         (*p)();
     }
 }
+void runtime_run_per_core_initializers(void) {}

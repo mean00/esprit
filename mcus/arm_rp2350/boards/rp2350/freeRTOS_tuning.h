@@ -4,8 +4,12 @@
 #define configUSE_DYNAMIC_EXCEPTION_HANDLERS 0
 
 #define configRUN_FREERTOS_SECURE_ONLY 1
-#define configNUMBER_OF_CORES 1
 
+#ifdef ESPRIT_MULTICORE
+    #if __has_include("rp2040_config.h")
+        #include "rp2040_config.h"
+    #endif
+#endif
 #define configPRIO_BITS (4UL)
 
 #define configLIBRARY_LOWEST_INTERRUPT_PRIORITY 0xf

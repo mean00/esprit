@@ -38,6 +38,22 @@ extern void do_assert(const char *a);
         do_assert("");                                                                                                 \
     }
 
+#ifdef ESPRIT_MULTICORE
+#define configNUMBER_OF_CORES 2
+#define configUSE_CORE_AFFINITY 1
+#define configRUN_MULTIPLE_PRIORITIES 1
+#define configUSE_PASSIVE_IDLE_HOOK 0
+// Pin all tasks to core 0 by default (user tasks, timer/daemon task).
+// NB: also applies to the kernel-created idle tasks -> IDLE1 is re-pinned
+// to core 1 in vApplicationDaemonTaskStartupHook() (rp.cpp).
+#define configTASK_DEFAULT_CORE_AFFINITY       ( 1U << 0 )
+#define configTIMER_SERVICE_TASK_CORE_AFFINITY ( 1U << 0 )
+#define INCLUDE_xTaskGetIdleTaskHandle 1
+#define configUSE_DAEMON_TASK_STARTUP_HOOK 1
+#else
+#define configNUMBER_OF_CORES 1
+#endif
+
 #include "freeRTOS_tuning.h"
 
 /*-----------------------------------------------------------
@@ -55,7 +71,6 @@ extern void do_assert(const char *a);
 #define configTICK_RATE_HZ ((TickType_t)1000)
 #define configSUPPORT_DYNAMIC_ALLOCATION 1
 #define configSUPPORT_STATIC_ALLOCATION 0
-#define configUSE_DAEMON_TASK_STARTUP_HOOK 0
 #define configUSE_PREEMPTION 1
 #define configUSE_IDLE_HOOK 0
 #define configUSE_TICK_HOOK 1 // MEANX
@@ -74,7 +89,10 @@ extern void do_assert(const char *a);
 #define configUSE_TIMERS 1
 #define configTIMER_TASK_STACK_DEPTH 400
 #define configTIMER_QUEUE_LENGTH 5
+// RP2040 SMP needs this
+#ifndef INCLUDE_xTimerPendFunctionCall
 #define INCLUDE_xTimerPendFunctionCall 0
+#endif
 /* Co-routine definitions. */
 #define configUSE_CO_ROUTINES 0
 #define configMAX_CO_ROUTINE_PRIORITIES (2)

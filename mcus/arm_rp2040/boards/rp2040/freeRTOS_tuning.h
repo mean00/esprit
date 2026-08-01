@@ -13,3 +13,12 @@
 #define configTOTAL_HEAP_SIZE ((size_t)((LN_FREERTOS_HEAP_SIZE * 1024)))
 
 #define configENABLE_MPU (0UL)
+
+#ifdef ESPRIT_MULTICORE
+#define configSUPPORT_PICO_SYNC_INTEROP 1
+#undef INCLUDE_xTimerPendFunctionCall
+#define INCLUDE_xTimerPendFunctionCall 1
+#if __has_include("rp2040_config.h")
+#include "rp2040_config.h"
+#endif
+#endif
