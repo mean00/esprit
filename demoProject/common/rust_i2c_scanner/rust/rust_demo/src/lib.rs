@@ -1,16 +1,9 @@
 #![no_std]
-//use rnarduino::rn_os_helper;
-use rust_esprit::I2cBus;
+use rust_esprit::I2c;
 use rust_esprit::delay_ms;
-//use rust_esprit::{GpioMode::lnOUTPUT, digital_write, pin_mode};
 use rust_esprit::{logger, logger_init};
 
 logger_init!();
-////#[cfg(feature = "rp2040")]
-//const PIN: rust_esprit::pin = rust_esprit::pin::GPIO10;
-//
-//#[cfg(not(feature = "rp2040"))]
-//const PIN: rust_esprit::pin = rust_esprit::pin::PB6;
 
 /**
  *
@@ -19,7 +12,7 @@ logger_init!();
 #[unsafe(no_mangle)]
 extern "C" fn user_init() {
     logger!("I2C Scanner !\n");
-    let mut i2c = I2cBus::new(0, 200000);
+    let mut i2c = I2c::new(0, 200000);
     loop {
         for i in 0..127u8 {
             let dex = i as u8;

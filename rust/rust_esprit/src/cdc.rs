@@ -5,8 +5,6 @@ use crate::rn_cdc_c;
 use core::ffi::c_void;
 use core::fmt;
 
-pub use rn_cdc_c::lncdc_c;
-
 /// CDC‑ACM (virtual serial port) events.
 ///
 /// Must match the C++ `lnUsbCDC::lnUsbCDCEvents` enum in `lnUsbCDC.h`:
@@ -63,7 +61,7 @@ pub trait CdcEventHandler {
 
 /// Handle to a CDC‑ACM (virtual COM port) instance.
 ///
-/// Created via `CdcAcm::new(instance, handler)`.
+/// Created via `Cdc::new(instance, handler)`.
 ///
 /// # Lifetime
 ///
@@ -72,12 +70,15 @@ pub trait CdcEventHandler {
 /// remain alive for as long as TinyUSB may deliver events.  Drop this handle
 /// only after the USB connection has been torn down, or leak it intentionally
 /// (e.g. store it in a `static`).
-pub struct CdcAcm {
-    raw: *mut rn_cdc_c::lncdc_c,
+pub struct Cdc {
+    raw: *mut crate::raw::lncdc_c,
 }
 
+/// Legacy name for [`Cdc`].
+#[deprecated(note = "use `Cdc` instead")]
+pub type CdcAcm = Cdc;
 
-impl CdcAcm {
+impl Cdc {
     /// Create a new CDC instance on `instance` and attach `handler`.
     pub fn new(instance: u32, handler: Box<dyn CdcEventHandler>) -> Self {
         let raw = unsafe { rn_cdc_c::lncdc_create(instance) };
@@ -94,7 +95,7 @@ impl CdcAcm {
 
     /// Returns a pointer to the raw C object.  Advanced use only.
     #[inline]
-    pub fn raw(&self) -> *mut rn_cdc_c::lncdc_c {
+    pub fn raw(&self) -> *mut crate::raw::lncdc_c {
         self.raw
     }
 
@@ -141,7 +142,7 @@ impl CdcAcm {
 
 /// Convenience `write_fmt` using `write`.
 
-impl fmt::Write for CdcAcm {
+impl fmt::Write for Cdc {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let bytes = s.as_bytes();
         let _ = self.write(bytes);

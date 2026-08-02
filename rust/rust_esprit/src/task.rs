@@ -94,12 +94,12 @@ impl TaskHandle {
     ///
     /// # Safety
     /// `raw` must be a valid, non‑null task handle.
-    pub unsafe fn from_raw(raw: rn_freertos_c::TaskHandle_t) -> Self {
+    pub unsafe fn from_raw(raw: crate::raw::TaskHandle_t) -> Self {
         Self { raw }
     }
 
     /// Return the raw C handle.
-    pub fn raw(&self) -> rn_freertos_c::TaskHandle_t {
+    pub fn raw(&self) -> crate::raw::TaskHandle_t {
         self.raw
     }
 
@@ -349,7 +349,7 @@ pub fn spawn_raw(
 // ---------------------------------------------------------------------------
 
 /// A measurement of a monotonically‑non‑decreasing clock, modelled after
-/// [`std::time::Instant`].
+/// `std::time::Instant`.
 ///
 /// The underlying resolution is microseconds (provided by the hardware
 /// timer via `lnGetUs64`).

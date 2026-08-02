@@ -32,11 +32,11 @@ impl uWrite for LoggerWriter {
 macro_rules! logger {
 
     ($x:expr) => {
-        uwrite!(&mut LoggerWriter, "{}", $x).unwrap()
+        ::ufmt::uwrite!(&mut $crate::LoggerWriter, "{}", $x).unwrap()
     };
 
     ($x:expr, $($y:expr),+) => {
-        uwrite!(&mut LoggerWriter, $x, $($y),+).unwrap()
+        ::ufmt::uwrite!(&mut $crate::LoggerWriter, $x, $($y),+).unwrap()
     };
 }
 
@@ -49,8 +49,8 @@ macro_rules! logger {
 #[macro_export]
 macro_rules! logger_init {
     () => {
-        use rust_esprit::logger::LoggerWriter;
-        use ufmt::uwrite;
+        use $crate::LoggerWriter;
+        use ::ufmt::uwrite;
     };
 }
 

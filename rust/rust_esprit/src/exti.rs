@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::gpio::lnPin;
+use crate::gpio::{lnPin, Pin};
 use crate::rn_exti_c;
 
 /// Edge trigger configuration for external interrupts.
@@ -31,7 +31,7 @@ impl From<Edge> for rn_exti_c::lnEdge {
 /// For handlers that need mutable state, implement on whichever
 /// type you like—the trampoline will cast your cookie back to `&mut T`.
 pub trait PinCallback {
-    fn on_interrupt(&mut self, pin: lnPin);
+    fn on_interrupt(&mut self, pin: Pin);
 }
 
 // ---------- trampoline ----------
@@ -49,7 +49,7 @@ extern "C" fn generic_trampoline<T: PinCallback>(pin: lnPin, cookie: *mut cty::c
 ///
 /// `handler` is borrowed until `detach_interrupt` is called.
 /// The C callback fires with the cookie pointing to `handler`.
-pub fn attach_interrupt<T: PinCallback>(pin: lnPin, edge: Edge, handler: &T) {
+pub fn attach_interrupt<T: PinCallback>(pin: Pin, edge: Edge, handler: &T) {
     unsafe {
         rn_exti_c::lnExtiAttachInterrupt_c(
             pin,
@@ -61,23 +61,55 @@ pub fn attach_interrupt<T: PinCallback>(pin: lnPin, edge: Edge, handler: &T) {
 }
 
 /// Detach an external interrupt from a pin.
-pub fn detach_interrupt(pin: lnPin) {
+pub fn detach_interrupt(pin: Pin) {
     unsafe {
         rn_exti_c::lnExtiDetachInterrupt_c(pin);
     }
 }
 
 /// Enable the external interrupt for a pin (after attaching).
-pub fn enable_interrupt(pin: lnPin) {
+pub fn enable_interrupt(pin: Pin) {
     unsafe {
         rn_exti_c::lnExtiEnableInterrupt_c(pin);
     }
 }
 
 /// Disable the external interrupt for a pin.
-pub fn disable_interrupt(pin: lnPin) {
+pub fn disable_interrupt(pin: Pin) {
     unsafe {
         rn_exti_c::lnExtiDisableInterrupt_c(pin);
     }
+}
+
+// ---------------------------------------------------------------------------
+//  Deprecated legacy names
+// ---------------------------------------------------------------------------
+
+/// Legacy edge type name.
+#[deprecated(note = "use `Edge` instead")]
+pub type pin_edge = Edge;
+
+/// Legacy name for [`attach_interrupt`].
+#[deprecated(note = "use `attach_interrupt` instead")]
+pub fn exti_attach_interrupt<T: PinCallback>(pin: Pin, edge: Edge, handler: &T) {
+    attach_interrupt(pin, edge, handler)
+}
+
+/// Legacy name for [`attach_interrupt`].
+#[deprecated(note = "use `attach_interrupt` instead")]
+pub fn exti_attach_interrupt_typed<T: PinCallback>(pin: Pin, edge: Edge, handler: &T) {
+    attach_interrupt(pin, edge, handler)
+}
+
+/// Legacy name for [`detach_interrupt`].
+#[deprecated(note = "use `detach_interrupt` instead")]
+pub fn exti_detach_interrupt(pin: Pin) {
+    detach_interrupt(pin)
+}
+
+/// Legacy name for [`enable_interrupt`].
+#[deprecated(note = "use `enable_interrupt` instead")]
+pub fn exti_enable_interrupt(pin: Pin) {
+    enable_interrupt(pin)
 }
 

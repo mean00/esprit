@@ -199,7 +199,7 @@ impl<T> Queue<T> {
     }
 
     /// Return the raw handle (advanced).
-    pub fn handle(&self) -> rn_freertos_c::QueueHandle_t {
+    pub fn handle(&self) -> crate::raw::QueueHandle_t {
         self.handle
     }
 }

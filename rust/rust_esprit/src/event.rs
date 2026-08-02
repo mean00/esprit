@@ -12,12 +12,11 @@
 use crate::prelude::*;
 use crate::rn_fast_event_c;
 use crate::sync::Arc;
-pub use rn_fast_event_c::lnfast_event_group_c;
 
 // ── Internal ref-counted handle ──────────────────────────────────────
 
 struct EventGroupInner {
-    raw: *mut rn_fast_event_c::lnfast_event_group_c,
+    raw: *mut crate::raw::lnfast_event_group_c,
 }
 
 impl EventGroupInner {
@@ -27,7 +26,7 @@ impl EventGroupInner {
         Self { raw }
     }
 
-    fn raw(&self) -> *mut rn_fast_event_c::lnfast_event_group_c {
+    fn raw(&self) -> *mut crate::raw::lnfast_event_group_c {
         self.raw
     }
 }
@@ -76,7 +75,8 @@ impl EventGroup {
 
     /// Returns a pointer to the raw C object.  Advanced use only.
     #[inline]
-    pub fn raw(&self) -> *mut rn_fast_event_c::lnfast_event_group_c {
+    /// Return the raw C handle.  Advanced use only.
+    pub fn raw(&self) -> *mut crate::raw::lnfast_event_group_c {
         self.inner.raw()
     }
 

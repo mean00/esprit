@@ -1,8 +1,79 @@
-// When neither fake_std nor external_std is active → no_std bare-metal mode.
-// fake_std:  esprit provides its own std-compatible shim (FreeRTOS-backed).
-//            The crate itself is still no_std (runs on embedded target),
-//            but it exposes a `std` namespace for user code.
-// external_std: esprit is used inside an existing std-enabled framework.
+//! # rust_esprit
+//!
+//! Rust bindings for the **Esprit** HAL — the bare‑metal framework for
+//! GD32, RP2040/RP2350 and ESP32 microcontrollers (FreeRTOS‑based).
+//!
+//! ## Public API
+//!
+//! The entire public API is re‑exported **flat at the crate root**.  The
+//! implementation lives in private modules, so there are only three
+//! namespaces to know about:
+//!
+//! | Namespace              | Contents                                     |
+//! |------------------------|----------------------------------------------|
+//! | `rust_esprit`          | safe, idiomatic API (everything below)       |
+//! | `rust_esprit::raw`     | low‑level C FFI (`#[doc(hidden)]`, advanced) |
+//! | `rust_esprit::std`     | `fake_std` shim (only with the `fake_std` feature) |
+//!
+//! ## GPIO
+//!
+//! * [`Pin`] — canonical pin identifier for the current target
+//!   (`Pin::PA5`, `Pin::PB6`, `Pin::GPIO10`, …).
+//! * [`GpioPin`] — owned pin value with a rich method set
+//!   (`set_mode`, `set_high`, `write`, `toggle`, `is_high`, …).
+//! * [`GpioMode`] — pin mode configuration (`GpioMode::Output`,
+//!   `GpioMode::InputPullUp`, …).
+//!
+//! ## Time, tasks and delay
+//!
+//! [`delay_ms`], [`delay_us`], [`sleep`], [`sleep_ms`], [`time_ms`],
+//! [`time_us`], [`time_us64`], [`tick_count`], [`spawn`], [`spawn_raw`],
+//! [`current`], [`yield_now`], [`TaskHandle`], [`TaskEntry`], [`Instant`],
+//! [`Duration`].
+//!
+//! ## Synchronisation
+//!
+//! [`Mutex`], [`MutexGuard`], [`RecursiveMutex`], [`RwLock`], [`OnceLock`],
+//! [`LazyLock`], [`Arc`], [`BinarySemaphore`], [`CountingSemaphore`],
+//! [`Queue`], [`EventGroup`].
+//!
+//! ## Buses and peripherals
+//!
+//! [`I2c`], [`Spi`], [`Serial`], [`SerialTx`], [`Timer`], [`MultiPulse`],
+//! [`AdcTiming`], [`AdcBuffer`], `Usb`, `Cdc`, plus the event enums
+//! (`CdcEvent`, `UsbEvent`, [`SerialEvent`]) and their handler traits.
+//!
+//! (`Usb`/`Cdc` and their events are only available with the `cdc` feature.)
+//!
+//! ## External interrupts
+//!
+//! [`attach_interrupt`], [`detach_interrupt`], [`enable_interrupt`],
+//! [`disable_interrupt`], [`Edge`], [`PinCallback`].
+//!
+//! ## Logging
+//!
+//! [`LoggerWriter`] plus the [`logger!`] and [`logger_init!`] macros.
+//!
+//! ## Feature flags
+//!
+//! * `rp2040` — RP2040 / RP2350 pin bindings (`Pin::GPIO10`, …).
+//! * `esp32` — ESP32 pin bindings.
+//! * `cdc` — USB and CDC‑ACM bindings.
+//! * `embedded-hal` — `embedded-hal` v1.0 trait implementations (`Delay`).
+//! * `fake_std` — FreeRTOS‑backed `std`‑compatible namespace
+//!   (`rust_esprit::std`).
+//! * `external_std` — run inside an existing `std` framework.
+//!
+//! [logger!]: macro@logger
+//! [logger_init!]: macro@logger_init
+//!
+//! # Runtime modes
+//!
+//! * **bare‑metal** (default): `no_std`, FreeRTOS‑backed.
+//! * **`fake_std`**: the crate itself is still `no_std`, but a `std`
+//!   namespace is provided for user code (`use rust_esprit::std::sync::Mutex`).
+//! * **`external_std`**: the crate is used inside an existing `std`‑enabled
+//!   framework that provides the real `std`.
 #![cfg_attr(not(feature = "external_std"), no_std)]
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
@@ -68,14 +139,14 @@ mod prelude {
     pub use std::vec::Vec;
 }
 
-pub type size_t = cty::c_uint;
+// `size_t` moved into `raw` (see the `raw` module below).
 
 // ---------------------------------------------------------------------------
 //  C‑bindgen modules (raw FFI) – kept for backward compatibility
 // ---------------------------------------------------------------------------
-/// Canonical `lnPin` type shared across all FFI binding modules.
-/// Re‑exports the platform‑specific `lnPin` from the GPIO bindings.
-pub mod pin_types;
+/// Canonical `lnPin` type shared across all FFI binding modules
+/// (private — re-exported via `raw` and `gpio::Pin`).
+mod pin_types;
 
 /// Raw C bindings – moved to a subfolder for clarity.
 /// Re-exported below for backward compatibility.
@@ -107,139 +178,174 @@ pub(crate) use c_api::rn_multi_pulse_c;
 pub(crate) use c_api::rn_usb_c;
 
 // ---------------------------------------------------------------------------
-//  Idiomatic Rust wrappers (public API)
+//  Private implementation modules
+//
+//  The public API is re-exported flat at the crate root; these modules are
+//  implementation details and must not be used directly.
 // ---------------------------------------------------------------------------
 
-/// Platform‑abstracted GPIO FFI facade + `lnPin` / `GpioMode` / `Pin`.
-pub mod gpio;
-
-/// External interrupts with trait‑based callbacks.
-pub mod exti;
-
-/// SPI bus wrapper with Drop.
-pub mod spi;
-
-/// I²C bus wrapper with Drop.
-pub mod i2c;
-
-/// Fast event group (FreeRTOS‑compatible).
-pub mod event;
-
-/// Timing‑driven multi‑channel ADC.
-pub mod adc;
-
-/// USB peripheral stack wrapper with Drop.
+mod gpio;
+mod exti;
+mod spi;
+mod i2c;
+mod event;
+mod adc;
 #[cfg(feature = "cdc")]
-pub mod usb;
-
-/// CDC‑ACM (virtual COM port) wrapper with Drop.
+mod usb;
 #[cfg(feature = "cdc")]
-pub mod cdc;
-
-/// Time, delay, and task spawning functions.
-pub mod task;
-
-/// Synchronisation primitives wrapping FreeRTOS mutexes and semaphores.
-pub mod sync;
-
-/// FreeRTOS-backed fixed-capacity message queue.
-pub mod queue;
-
-/// Timer wrapper with single‑shot pulse generation.
-pub mod timer;
-
-/// DMA-based multi-pulse generator.
-pub mod multi_pulse;
-
-/// UART serial communication (Tx‑only and bidirectional).
-pub mod serial;
-
-/// `ufmt`‑based logging macros (`logger!`, `logger_init!`).
-pub mod logger;
-
-
-/// Optional `embedded-hal` trait implementations.
+mod cdc;
+mod task;
+mod sync;
+mod queue;
+mod timer;
+mod multi_pulse;
+mod serial;
+mod logger;
 #[cfg(feature = "embedded-hal")]
-pub mod hal;
+mod hal;
 
 // ---------------------------------------------------------------------------
-//  Convenience re‑exports — use these so you don't need to remember
-//  which module owns which symbol.
+//  Raw C FFI namespace — advanced, low-level use only
 // ---------------------------------------------------------------------------
-pub use adc::AdcTiming;
-#[cfg(feature = "cdc")]
-pub use cdc::{CdcAcm, CdcEvent, CdcEventHandler};
+#[doc(hidden)]
+pub mod raw {
+    //! Raw C FFI layer (hidden from the main docs).
+    //!
+    //! The safe API at the crate root wraps these types and functions; most
+    //! users never need to touch them.  This module exists for advanced
+    //! callers that need to hand raw handles to C code or use the low‑level
+    //! GPIO/register functions directly.
+
+    /// `usize`-sized unsigned integer used by the C HAL.
+    pub use cty::c_uint as size_t;
+
+    // ---- GPIO ----
+    /// Canonical pin enum (the same type as the crate-root `Pin`).
+    pub use crate::pin_types::lnPin;
+    #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+    pub use crate::rn_gpio_bp_c::{
+        lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
+        lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
+        lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
+    };
+    #[cfg(feature = "rp2040")]
+    pub use crate::rn_gpio_rp2040_c::{
+        lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
+        lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
+        lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
+    };
+    #[cfg(feature = "esp32")]
+    pub use crate::rn_gpio_esp32_c::{
+        lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
+        lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
+        lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
+    };
+
+    // ---- FreeRTOS core types ----
+    pub use crate::rn_freertos_c::{
+        BaseType_t, QueueHandle_t, SemaphoreHandle_t, TaskHandle_t, TickType_t,
+        configTICK_RATE_HZ_RUST,
+    };
+
+    // ---- Peripherals ----
+    pub use crate::rn_i2c_c::ln_i2c_c;
+    pub use crate::rn_spi_c::{
+        lnSpiCallback, lnSPISettings, ln_spi_c, spiBitOrder, spiBitOrder_SPI_LSBFIRST,
+        spiBitOrder_SPI_MSBFIRST, spiDataMode, spiDataMode_SPI_MODE0, spiDataMode_SPI_MODE1,
+        spiDataMode_SPI_MODE2, spiDataMode_SPI_MODE3,
+    };
+    pub use crate::rn_fast_event_c::lnfast_event_group_c;
+    pub use crate::rn_timer_c::ln_timer_c;
+    pub use crate::rn_multi_pulse_c::ln_multi_pulse_c;
+    pub use crate::rn_timing_adc_c::ln_timing_adc_c;
+    pub use crate::rn_serial_c::{ln_serial_event_cb, ln_serial_rx_c, ln_serial_tx_c};
+    pub use crate::rn_exti_c::lnEdge;
+    #[cfg(feature = "cdc")]
+    pub use crate::rn_cdc_c::lncdc_c;
+    #[cfg(feature = "cdc")]
+    pub use crate::rn_usb_c::{lnUsbStackEventHandler, lnusb_c};
+}
+
+// ---------------------------------------------------------------------------
+//  Public API — flat, idiomatic re-exports at the crate root
+// ---------------------------------------------------------------------------
+pub use adc::{AdcBuffer, AdcTiming};
 pub use event::EventGroup;
 pub use exti::{
     Edge, PinCallback, attach_interrupt, detach_interrupt, disable_interrupt, enable_interrupt,
 };
-pub use gpio::{GpioMode, Pin, lnPin, pin_to_lnpin};
-pub use i2c::I2cBus;
-pub use spi::SpiBus;
-
-// -- Time and task types --
-pub use task::{
-    delay_ms, delay_us, spawn, spawn_raw, time_ms, time_us, time_us64, tick_count, current,
-    yield_now, TaskHandle, TaskEntry, Instant, Duration,
-};
-
-// -- Synchronisation primitives --
-pub use sync::{
-    Arc,
-    Mutex, MutexGuard,
-    RecursiveMutex, RecursiveMutexGuard,
-    RwLock, RwLockReadGuard, RwLockWriteGuard,
-    OnceLock,
-    LazyLock,
-    BinarySemaphore, CountingSemaphore, SemaphoreGuard,
-};
-
-// -- Message queues --
+pub use gpio::{GpioMode, GpioPin, Pin};
+pub use i2c::I2c;
+pub use logger::LoggerWriter;
+pub use multi_pulse::MultiPulse;
 pub use queue::Queue;
-
+pub use serial::{Serial, SerialEvent, SerialEventHandler, SerialTx};
+pub use spi::{BitOrder, Spi, SpiMode};
+pub use sync::{
+    Arc, BinarySemaphore, CountingSemaphore, LazyLock, Mutex, MutexGuard, OnceLock,
+    RecursiveMutex, RecursiveMutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
+    SemaphoreGuard,
+};
+pub use task::{
+    current, delay_ms, delay_us, sleep, sleep_ms, spawn, spawn_raw, tick_count, time_ms, time_us,
+    time_us64, yield_now, Duration, Instant, TaskEntry, TaskHandle,
+};
+pub use timer::Timer;
 #[cfg(feature = "cdc")]
-pub use usb::{UsbBus, UsbEvent, UsbEventHandler};
-
+pub use cdc::{Cdc, CdcEvent, CdcEventHandler};
+#[cfg(feature = "cdc")]
+pub use usb::{Usb, UsbEvent, UsbEventHandler};
+#[cfg(feature = "embedded-hal")]
+pub use hal::Delay;
 
 // ---------------------------------------------------------------------------
-//  Legacy re‑exports (exist so that existing demo projects compile unchanged)
-// ---------------------------------------------------------------------------
-
-// `rust_esprit::pin` is how demo projects refer to the raw pin enum.
-pub use gpio::lnPin as pin;
-
-// `rust_esprit::i2c` is the struct demo projects use.
-// (Module already exists as `pub mod i2c;`, no need for extra alias)
-
-// `rust_esprit::pin_edge` (rnEdge equivalent).
-pub use exti::Edge as pin_edge;
-
-// `rust_esprit::pin_edge::LN_EDGE_BOTH`, etc.
-//pub use exti::Edge as rnEdge;
-
-// `rust_esprit::exti_attach_interrupt_typed` is the typed variant from old rn_exti.
-pub use exti::attach_interrupt as exti_attach_interrupt;
-pub use exti::attach_interrupt as exti_attach_interrupt_typed;
-pub use exti::detach_interrupt as exti_detach_interrupt;
-pub use exti::enable_interrupt as exti_enable_interrupt;
-
-// Free functions (the demo projects call these directly)
-pub use gpio::digital_read;
-pub use gpio::digital_toggle;
-pub use gpio::digital_write;
-pub use gpio::pin_mode;
+//  Deprecated legacy aliases
 //
+//  Kept so existing projects keep compiling.  They are thin wrappers / type
+//  aliases for the idiomatic names above and are marked `#[deprecated]`; new
+//  code should use the idiomatic names.
+// ---------------------------------------------------------------------------
 
-// Re-export the raw C-functions namespace so fn pointers work.
-// Demo projects sometimes import `lnLogger` / `lnLogger_init` as macros.
-// Those are exported as `#[macro_export]` from logger.rs / rn_logger.rs,
-// so they are already in scope globally (no need to re-export).
+// Legacy pin-enum name (`rust_esprit::pin::GPIO10`, `const P: pin = pin::PB6`).
+#[allow(deprecated)]
+pub use gpio::pin;
+// Legacy GPIO free functions.
+#[allow(deprecated)]
+pub use gpio::{digital_read, digital_toggle, digital_write, pin_mode, pin_mode_speed};
+// Legacy pin-conversion helper.
+#[allow(deprecated)]
+pub use gpio::pin_to_lnpin;
+// Legacy external-interrupt function names.
+#[allow(deprecated)]
+pub use exti::{
+    exti_attach_interrupt, exti_attach_interrupt_typed, exti_detach_interrupt,
+    exti_enable_interrupt,
+};
+// Legacy edge name.
+#[allow(deprecated)]
+pub use exti::pin_edge;
+// Legacy time functions.
+#[allow(deprecated)]
+pub use task::{get_time_ms, get_time_us};
+// Legacy bus names.
+#[allow(deprecated)]
+pub use i2c::I2cBus;
+#[allow(deprecated)]
+pub use spi::SpiBus;
+#[allow(deprecated)]
+pub use serial::{SerialRxTx, SerialTxOnly};
+#[cfg(feature = "cdc")]
+#[allow(deprecated)]
+pub use cdc::CdcAcm;
+#[cfg(feature = "cdc")]
+#[allow(deprecated)]
+pub use usb::UsbBus;
 
 // ---------------------------------------------------------------------------
 //  Interrupt control
 // ---------------------------------------------------------------------------
 unsafe extern "C" {
-    pub fn deadEnd(code: cty::c_int);
+    pub(crate) fn deadEnd(code: cty::c_int);
     fn lnInterrupts();
     fn lnNoInterrupt();
 }
@@ -272,8 +378,8 @@ cfg_if! {
         static GLOBAL: FreeRtosAllocator = FreeRtosAllocator;
 
         unsafe extern "C" {
-            pub fn pvPortMalloc(xSize: size_t) -> *mut cty::c_void;
-            pub fn vPortFree(pv: *mut cty::c_void);
+            pub(crate) fn pvPortMalloc(xSize: crate::raw::size_t) -> *mut cty::c_void;
+            pub(crate) fn vPortFree(pv: *mut cty::c_void);
         }
 
         // Critical section helper

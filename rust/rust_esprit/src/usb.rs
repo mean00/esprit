@@ -5,8 +5,6 @@ use crate::rn_usb_c;
 use core::ffi::c_void;
 use cty;
 
-pub use rn_usb_c::{lnusb_c, lnUsbStackEventHandler};
-
 /// USB bus events.
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 #[repr(u32)]
@@ -47,13 +45,17 @@ pub trait UsbEventHandler {
 
 /// Owned handle to a USB peripheral stack.
 ///
-/// Created via `UsbBus::new(instance, handler)`.
+/// Created via `Usb::new(instance, handler)`.
 /// The underlying C object is destroyed on drop.
-pub struct UsbBus {
-    raw: *mut rn_usb_c::lnusb_c,
+pub struct Usb {
+    raw: *mut crate::raw::lnusb_c,
 }
 
-impl UsbBus {
+/// Legacy name for [`Usb`].
+#[deprecated(note = "use `Usb` instead")]
+pub type UsbBus = Usb;
+
+impl Usb {
     /// Create a new USB stack on hardware `instance`, attaching `handler` for events.
     ///
     /// `handler` is stored as a `Box<dyn UsbEventHandler>` — the C callback
@@ -73,7 +75,7 @@ impl UsbBus {
 
     /// Returns a pointer to the raw C object.  Advanced use only.
     #[inline]
-    pub fn raw(&self) -> *mut rn_usb_c::lnusb_c {
+    pub fn raw(&self) -> *mut crate::raw::lnusb_c {
         self.raw
     }
 
@@ -118,7 +120,7 @@ impl UsbBus {
     }
 }
 
-impl Drop for UsbBus {
+impl Drop for Usb {
     fn drop(&mut self) {
         // Recover and drop the handler
         // Note: We can't easily recover the cookie here without storing it.

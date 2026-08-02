@@ -5,26 +5,26 @@
 //! Enable with `features = ["embedded-hal"]` when you need to use
 //! drivers from the `embedded-hal` ecosystem.
 
-use crate::gpio::{lnPin, Pin};
+use crate::gpio::GpioPin;
 use crate::task;
 
 // ---- GPIO pins ----
 
-impl embedded_hal::digital::ErrorType for Pin {
+impl embedded_hal::digital::ErrorType for GpioPin {
     type Error = core::convert::Infallible;
 }
 
-impl embedded_hal::digital::InputPin for Pin {
+impl embedded_hal::digital::InputPin for GpioPin {
     fn is_high(&mut self) -> Result<bool, Self::Error> {
-        Ok(self.is_high())
+        Ok(GpioPin::is_high(self))
     }
 
     fn is_low(&mut self) -> Result<bool, Self::Error> {
-        Ok(self.is_low())
+        Ok(GpioPin::is_low(self))
     }
 }
 
-impl embedded_hal::digital::OutputPin for Pin {
+impl embedded_hal::digital::OutputPin for GpioPin {
     fn set_high(&mut self) -> Result<(), Self::Error> {
         self.set_high();
         Ok(())
@@ -36,20 +36,13 @@ impl embedded_hal::digital::OutputPin for Pin {
     }
 }
 
-impl embedded_hal::digital::StatefulOutputPin for Pin {
+impl embedded_hal::digital::StatefulOutputPin for GpioPin {
     fn is_set_high(&mut self) -> Result<bool, Self::Error> {
-        Ok(self.is_high())
+        Ok(GpioPin::is_high(self))
     }
 
     fn is_set_low(&mut self) -> Result<bool, Self::Error> {
-        Ok(self.is_low())
-    }
-}
-
-impl embedded_hal::digital::ToggleableOutputPin for Pin {
-    fn toggle(&mut self) -> Result<(), Self::Error> {
-        self.toggle();
-        Ok(())
+        Ok(GpioPin::is_low(self))
     }
 }
 
