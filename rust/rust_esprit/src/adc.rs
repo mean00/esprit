@@ -8,7 +8,7 @@
 //! `&mut T` parameter to [`async_read`](AdcTiming::async_read), and
 //! the buffer is obtained via the [`AdcBuffer`] trait.
 
-use crate::lnPin;
+use crate::Pin;
 use crate::rn_timing_adc_c;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -83,7 +83,7 @@ impl<P> AdcTiming<P> {
     }
 
     /// Configure the ADC source: timer, channel, frequency, and pins.
-    pub fn set_source(&mut self, timer: u32, channel: u32, fq: u32, pins: &[lnPin]) -> bool {
+    pub fn set_source(&mut self, timer: u32, channel: u32, fq: u32, pins: &[Pin]) -> bool {
         unsafe {
             rn_timing_adc_c::ln_timing_adc_set_source(
                 *self.handle.get(),

@@ -4,8 +4,6 @@ use crate::rn_serial_c;
 use core::ffi::c_void;
 use core::ptr;
 
-pub use rn_serial_c::{ln_serial_event_cb, ln_serial_rx_c, ln_serial_tx_c};
-
 //  Serial events (mirrors lnSerialCore::Event)
 
 /// Events that can be delivered by the serial peripheral.
@@ -40,16 +38,20 @@ pub trait SerialEventHandler {
     fn handle(&self, event: SerialEvent);
 }
 
-//  SerialTxOnly — transmit‑only serial port
+//  SerialTx — transmit‑only serial port
 
 /// Owned handle to a transmit‑only UART.
-/// Created via `SerialTxOnly::new(instance, dma, buffered)`.
-/// The underlying C++ object is destroyed when `SerialTxOnly` is dropped.
-pub struct SerialTxOnly {
-    raw: *mut rn_serial_c::ln_serial_tx_c,
+/// Created via `SerialTx::new(instance, dma, buffered)`.
+/// The underlying C++ object is destroyed when `SerialTx` is dropped.
+pub struct SerialTx {
+    raw: *mut crate::raw::ln_serial_tx_c,
 }
 
-impl SerialTxOnly {
+/// Legacy name for [`SerialTx`].
+#[deprecated(note = "use `SerialTx` instead")]
+pub type SerialTxOnly = SerialTx;
+
+impl SerialTx {
     /// Open a transmit‑only serial port on hardware UART `instance`.
     /// * `instance` — UART peripheral index (0, 1, 2, …).
     /// * `dma` — use DMA for transmission if `true`.
@@ -63,7 +65,7 @@ impl SerialTxOnly {
 
     /// Returns a pointer to the raw C object.  Advanced use only.
     #[inline]
-    pub fn raw(&self) -> *mut rn_serial_c::ln_serial_tx_c {
+    pub fn raw(&self) -> *mut crate::raw::ln_serial_tx_c {
         self.raw
     }
 
@@ -88,27 +90,31 @@ impl SerialTxOnly {
     }
 }
 
-impl Drop for SerialTxOnly {
+impl Drop for SerialTx {
     fn drop(&mut self) {
         unsafe { rn_serial_c::lnserial_tx_delete(self.raw); }
     }
 }
 
-//  SerialRxTx — bidirectional serial port
+//  Serial — bidirectional serial port
 
 /// Owned handle to a bidirectional UART (Rx + Tx).
-/// Created via `SerialRxTx::new(instance, rx_buffer_size, dma)`.
-/// The underlying C++ object is destroyed when `SerialRxTx` is dropped.
+/// Created via `Serial::new(instance, rx_buffer_size, dma)`.
+/// The underlying C++ object is destroyed when `Serial` is dropped.
 ///
 /// # Callback safety
 /// The callback fires from **interrupt ctx**.  The trampoline recovers
 /// the `Box<dyn SerialEventHandler>` from the cookie, calls `handle()`, and
 /// re‑boxes it.  Your handler **must not** panic or perform long operations.
-pub struct SerialRxTx {
-    raw: *mut rn_serial_c::ln_serial_rx_c,
+pub struct Serial {
+    raw: *mut crate::raw::ln_serial_rx_c,
 }
 
-impl SerialRxTx {
+/// Legacy name for [`Serial`].
+#[deprecated(note = "use `Serial` instead")]
+pub type SerialRxTx = Serial;
+
+impl Serial {
     /// Open a bidirectional serial port on hardware UART `instance`.
     /// * `instance` — UART peripheral index (0, 1, 2, …).
     /// * `rx_buffer_size` — size of the receive ring buffer in bytes.
@@ -139,7 +145,7 @@ impl SerialRxTx {
     }
 
     /// Returns a pointer to the raw C object.  Advanced use only.
-    pub fn raw(&self) -> *mut rn_serial_c::ln_serial_rx_c {
+    pub fn raw(&self) -> *mut crate::raw::ln_serial_rx_c {
         self.raw
     }
 
@@ -220,7 +226,7 @@ impl SerialRxTx {
     }
 }
 
-impl Drop for SerialRxTx {
+impl Drop for Serial {
     fn drop(&mut self) {
         unsafe { rn_serial_c::lnserial_rx_delete(self.raw); }
     }
@@ -228,14 +234,14 @@ impl Drop for SerialRxTx {
 
 //  Convenience impl: write_fmt via core::fmt::Write
 
-impl core::fmt::Write for SerialTxOnly {
+impl core::fmt::Write for SerialTx {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         self.transmit(s.as_bytes());
         Ok(())
     }
 }
 
-impl core::fmt::Write for SerialRxTx {
+impl core::fmt::Write for Serial {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         self.transmit(s.as_bytes());
         Ok(())

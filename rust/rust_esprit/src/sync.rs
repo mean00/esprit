@@ -281,7 +281,7 @@ impl<T: ?Sized> Drop for RecursiveMutexGuard<'_, T> {
 /// A FreeRTOS‑backed reader‑writer lock.
 ///
 /// Allows any number of readers or a single writer.  Modelled after
-/// [`std::sync::RwLock`].
+/// `std::sync::RwLock`.
 ///
 /// # Implementation
 ///
@@ -454,7 +454,7 @@ impl<T: ?Sized> Drop for RwLockWriteGuard<'_, T> {
 
 /// A synchronisation primitive that can be written to **once**.
 ///
-/// Modelled after [`std::sync::OnceLock`].  Useful for lazy global
+/// Modelled after `std::sync::OnceLock`.  Useful for lazy global
 /// singletons.
 ///
 /// # Example
@@ -602,7 +602,7 @@ impl<T> Default for OnceLock<T> {
 // ===========================================================================
 
 /// A value that is lazily initialised on first access, modelled after
-/// [`std::sync::LazyLock`].
+/// `std::sync::LazyLock`.
 ///
 /// Unlike [`OnceLock`], this type stores the initialiser closure and
 /// runs it automatically on first dereference.
@@ -803,7 +803,7 @@ impl Drop for CountingSemaphore {
 // ===========================================================================
 
 /// A thread‑safe reference‑counting pointer, modelled after
-/// [`std::sync::Arc`].
+/// `std::sync::Arc`.
 ///
 /// `Arc` stands for "Atomically Reference Counted".  The reference count
 /// is manipulated using safe atomic operations, so `Arc` can be sent

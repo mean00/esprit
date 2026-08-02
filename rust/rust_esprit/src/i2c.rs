@@ -1,16 +1,19 @@
 #![allow(dead_code)]
 use crate::rn_i2c_c;
 use crate::rn_i2c_c::lni2c_multi_write_to;
-pub use rn_i2c_c::ln_i2c_c;
 
 /// Owned, non‑copy handle to an I²C peripheral.
-/// Created via `I2cBus::new(instance, speed_hz)`.
-/// The underlying C object is destroyed when `I2cBus` is dropped.
-pub struct I2cBus {
+/// Created via `I2c::new(instance, speed_hz)`.
+/// The underlying C object is destroyed when `I2c` is dropped.
+pub struct I2c {
     raw: *mut rn_i2c_c::ln_i2c_c,
 }
 
-impl I2cBus {
+/// Legacy name for [`I2c`].
+#[deprecated(note = "use `I2c` instead")]
+pub type I2cBus = I2c;
+
+impl I2c {
     /// Create a new I²C bus on hardware instance `instance` at `speed_hz` Hz.
     pub fn new(instance: u32, speed_hz: u32) -> Self {
         let raw = unsafe { rn_i2c_c::lni2c_create(instance, speed_hz) };
@@ -20,7 +23,7 @@ impl I2cBus {
 
     /// Returns a pointer to the raw C object.  Advanced use only.
     #[inline]
-    pub fn raw(&self) -> *mut rn_i2c_c::ln_i2c_c {
+    pub fn raw(&self) -> *mut crate::raw::ln_i2c_c {
         self.raw
     }
 
@@ -114,7 +117,7 @@ impl I2cBus {
     }
 }
 
-impl Drop for I2cBus {
+impl Drop for I2c {
     fn drop(&mut self) {
         unsafe {
             rn_i2c_c::lni2c_delete(self.raw);

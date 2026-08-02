@@ -10,10 +10,11 @@ cty = "0.2.2"
 ufmt = { version = "0.2.0", default-features = false }
 heapless = { version = "0.7.17", features = ["ufmt-impl"] }
 cfg-if = "1.0"
+embedded-hal = { version = "1.0", optional = true }
 
 [features]
 cdc = []
-embedded-hal = []
+embedded-hal = ["dep:embedded-hal"]
 rp2040 = []
 esp32 = []
 default = []

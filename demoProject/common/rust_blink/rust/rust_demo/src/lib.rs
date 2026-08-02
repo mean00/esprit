@@ -1,15 +1,15 @@
 #![no_std]
-//use rnarduino::rn_os_helper;
 use rust_esprit::delay_ms;
-use rust_esprit::{GpioMode::lnOUTPUT, digital_write, pin_mode};
+use rust_esprit::{GpioMode, GpioPin, Pin};
 use rust_esprit::{logger, logger_init};
 
 logger_init!();
+
 #[cfg(feature = "rp2040")]
-const PIN: rust_esprit::pin = rust_esprit::pin::GPIO10;
+const PIN: Pin = Pin::GPIO10;
 
 #[cfg(not(feature = "rp2040"))]
-const PIN: rust_esprit::pin = rust_esprit::pin::PB6;
+const PIN: Pin = Pin::PB6;
 
 /**
  *
@@ -19,11 +19,12 @@ const PIN: rust_esprit::pin = rust_esprit::pin::PB6;
 extern "C" fn user_init() {
     logger!("Hello there !\n");
 
-    pin_mode(PIN, lnOUTPUT);
+    let mut led = GpioPin::new(PIN);
+    led.set_mode(GpioMode::Output);
 
     let mut on: bool = false;
     for _i in 0..5 {
-        digital_write(PIN, on);
+        led.write(on);
         on = !on;
         delay_ms(1000);
     }

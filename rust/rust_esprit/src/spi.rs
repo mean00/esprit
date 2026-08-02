@@ -1,15 +1,10 @@
 #![allow(dead_code)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
-use crate::gpio::lnPin;
+use crate::gpio::Pin;
 use crate::rn_spi_c;
 
-// Re-export the raw C types so advanced users can bypass the wrapper
-pub use rn_spi_c::{
-    lnSpiCallback, lnSPISettings, ln_spi_c, spiBitOrder, spiDataMode,
-    spiBitOrder_SPI_LSBFIRST, spiBitOrder_SPI_MSBFIRST,
-    spiDataMode_SPI_MODE0, spiDataMode_SPI_MODE1,
-    spiDataMode_SPI_MODE2, spiDataMode_SPI_MODE3,
-};
+// The raw C types (`ln_spi_c`, `lnSPISettings`, `lnSpiCallback`, `spiBitOrder`,
+// `spiDataMode`, …) are re-exported under `rust_esprit::raw` for advanced users.
 
 /// SPI data mode (CPOL/CPHA combination).
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -47,19 +42,23 @@ impl From<BitOrder> for rn_spi_c::spiBitOrder {
     }
 }
 
-// ---------- the SpiBus wrapper ----------
+// ---------- the Spi wrapper ----------
 
 /// Owned, non‑copy handle to an SPI peripheral.
-/// Created via `SpiBus::new(instance, cs_pin)`.
-/// The underlying C object is destroyed when `SpiBus` is dropped.
-pub struct SpiBus {
+/// Created via `Spi::new(instance, cs_pin)`.
+/// The underlying C object is destroyed when `Spi` is dropped.
+pub struct Spi {
     raw: *mut rn_spi_c::ln_spi_c,
 }
 
-impl SpiBus {
+/// Legacy name for [`Spi`].
+#[deprecated(note = "use `Spi` instead")]
+pub type SpiBus = Spi;
+
+impl Spi {
     /// Create a new SPI bus on hardware instance `instance` with chip-select `cs_pin`.
-    /// `cs_pin` is the C `lnPin` enum val.  Use `lnPin::PA4` etc.
-    pub fn new(instance: u32, cs_pin: lnPin) -> Self {
+    /// `cs_pin` is the C `Pin` enum value (e.g. `Pin::PA4`).
+    pub fn new(instance: u32, cs_pin: Pin) -> Self {
         let raw = unsafe { rn_spi_c::lnspi_create(instance, cs_pin as i32) };
         assert!(!raw.is_null(), "lnspi_create returned NULL");
         Self { raw }
@@ -67,7 +66,7 @@ impl SpiBus {
 
     /// Returns a pointer to the raw C object.  Advanced use only.
     #[inline]
-    pub fn raw(&self) -> *mut rn_spi_c::ln_spi_c {
+    pub fn raw(&self) -> *mut crate::raw::ln_spi_c {
         self.raw
     }
 
@@ -93,12 +92,12 @@ impl SpiBus {
         unsafe { rn_spi_c::lnspi_set_speed(self.raw, speed_hz); }
     }
 
-    pub fn set_ssel(&mut self, ssel: lnPin) {
+    pub fn set_ssel(&mut self, ssel: Pin) {
         unsafe { rn_spi_c::lnspi_set_ssel(self.raw, ssel as i32); }
     }
 
     /// Apply a full `lnSPISettings` struct (expert).
-    pub fn apply_settings(&mut self, settings: &rn_spi_c::lnSPISettings) {
+    pub fn apply_settings(&mut self, settings: &crate::raw::lnSPISettings) {
         unsafe { rn_spi_c::lnspi_set(self.raw, settings); }
     }
 
@@ -158,7 +157,7 @@ impl SpiBus {
     pub fn async_write8(
         &mut self,
         data: &[u8],
-        cb: rn_spi_c::lnSpiCallback,
+        cb: crate::raw::lnSpiCallback,
         cookie: *mut cty::c_void,
         repeat: bool,
     ) -> bool {
@@ -178,7 +177,7 @@ impl SpiBus {
     pub fn next_write8(
         &mut self,
         data: &[u8],
-        cb: rn_spi_c::lnSpiCallback,
+        cb: crate::raw::lnSpiCallback,
         cookie: *mut cty::c_void,
         repeat: bool,
     ) -> bool {
@@ -198,7 +197,7 @@ impl SpiBus {
     pub fn async_write16(
         &mut self,
         data: &[u16],
-        cb: rn_spi_c::lnSpiCallback,
+        cb: crate::raw::lnSpiCallback,
         cookie: *mut cty::c_void,
         repeat: bool,
     ) -> bool {
@@ -218,7 +217,7 @@ impl SpiBus {
     pub fn next_write16(
         &mut self,
         data: &[u16],
-        cb: rn_spi_c::lnSpiCallback,
+        cb: crate::raw::lnSpiCallback,
         cookie: *mut cty::c_void,
         repeat: bool,
     ) -> bool {
@@ -245,7 +244,7 @@ impl SpiBus {
     }
 }
 
-impl Drop for SpiBus {
+impl Drop for Spi {
     fn drop(&mut self) {
         unsafe { rn_spi_c::lnspi_delete(self.raw); }
     }
