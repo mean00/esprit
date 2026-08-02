@@ -288,13 +288,12 @@ where
     }
 }
 
-/// Legacy task entry function pointer type (used by `rn_os_helper`).
+/// Legacy task entry function pointer type.
 pub type TaskEntry = fn(param: *mut core::ffi::c_void);
 
 /// Spawn a task from a raw C‑compatible function pointer.
 ///
-/// This is the low‑level building block that [`spawn`] and
-/// [`rn_os_helper::rn_create_task`] use internally.
+/// This is the low‑level building block that [`spawn`] uses internally.
 ///
 /// # Arguments
 /// * `name`     – task name (up to 31 chars).
@@ -463,8 +462,8 @@ pub fn get_time_us() -> u32 {
 //  Internal helpers
 // ---------------------------------------------------------------------------
 
-/// Default tick rate – adjust if your FreeRTOS config uses a different value.
-const TICK_RATE_HZ: u32 = 1000;
+/// Kernel tick rate in Hz, taken from `FreeRTOSConfig.h` (`configTICK_RATE_HZ`).
+const TICK_RATE_HZ: u32 = crate::rn_freertos_c::configTICK_RATE_HZ_RUST;
 
 /// Convert milliseconds to FreeRTOS ticks.
 /// `u32::MAX` is interpreted as "infinite wait" (portMAX_DELAY).

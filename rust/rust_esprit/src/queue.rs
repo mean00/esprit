@@ -77,11 +77,7 @@ impl<T> Queue<T> {
 
     /// Send with a timeout in milliseconds.
     pub fn send_timeout(&self, item: T, timeout_ms: u32) -> Result<(), T> {
-        let ticks = if timeout_ms == u32::MAX {
-            u32::MAX
-        } else {
-            (timeout_ms as u64 * 1000 / 1000) as u32
-        };
+        let ticks = crate::task::ms_to_ticks(timeout_ms);
         let val_ref = &item as *const T as *const c_void;
         let ret = unsafe { rn_freertos_c::xQueueGenericSend(self.handle, val_ref, ticks, 0) };
         if ret != 0 {
@@ -145,11 +141,7 @@ impl<T> Queue<T> {
 
     /// Receive with a timeout in milliseconds.
     pub fn receive_timeout(&self, timeout_ms: u32) -> Option<T> {
-        let ticks = if timeout_ms == u32::MAX {
-            u32::MAX
-        } else {
-            (timeout_ms as u64 * 1000 / 1000) as u32
-        };
+        let ticks = crate::task::ms_to_ticks(timeout_ms);
         let mut val: core::mem::MaybeUninit<T> = core::mem::MaybeUninit::uninit();
         let ret = unsafe {
             rn_freertos_c::xQueueReceive(self.handle, val.as_mut_ptr() as *mut c_void, ticks)

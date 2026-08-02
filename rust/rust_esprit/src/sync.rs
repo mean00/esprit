@@ -21,20 +21,9 @@ use core::convert::From;
 
 // ---------------------------------------------------------------------------
 //  Helper – convert ms to FreeRTOS ticks (or 0 / portMAX_DELAY)
+//  Single source of truth: `crate::task::ms_to_ticks` (uses the real
+//  `configTICK_RATE_HZ` from FreeRTOSConfig.h).
 // ---------------------------------------------------------------------------
-const TICK_RATE_HZ: u32 = 1000; // typical; adjust if your config differs
-
-fn ms_to_ticks(ms: u32) -> rn_freertos_c::TickType_t {
-    if ms == u32::MAX {
-        // Infinite wait – FreeRTOS portMAX_DELAY
-        u32::MAX
-    } else if ms == 0 {
-        0
-    } else {
-        (ms as u64 * TICK_RATE_HZ as u64 / 1000) as u32
-    }
-}
-
 // ===========================================================================
 //  Mutex<T>
 // ===========================================================================
@@ -107,7 +96,7 @@ impl<T: ?Sized> Mutex<T> {
     ///
     /// Returns `Some(guard)` if acquired within the timeout, `None` on timeout.
     pub fn lock_timeout(&self, timeout_ms: u32) -> Option<MutexGuard<'_, T>> {
-        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.handle, ms_to_ticks(timeout_ms)) };
+        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.handle, crate::task::ms_to_ticks(timeout_ms)) };
         if ret != 0 {
             Some(MutexGuard {
                 mutex: self,
@@ -238,7 +227,7 @@ impl<T: ?Sized> RecursiveMutex<T> {
     /// Lock with a timeout.
     pub fn lock_timeout(&self, timeout_ms: u32) -> Option<RecursiveMutexGuard<'_, T>> {
         let ret =
-            unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.handle, ms_to_ticks(timeout_ms)) };
+            unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.handle, crate::task::ms_to_ticks(timeout_ms)) };
         if ret != 0 {
             Some(RecursiveMutexGuard {
                 mutex: self,
@@ -496,15 +485,20 @@ impl<T> OnceLock<T> {
     }
 
     /// Lazily create the gate semaphore on first use.
+    ///
+    /// The check-and-create is guarded by a FreeRTOS critical section so that
+    /// two tasks racing to initialise cannot both create a gate (which would
+    /// leak one mutex and leave the other's pointer dangling).
     fn init_gate(&self) {
-        // SAFETY: we only read the current value; if it's null we write a new one.
-        let current = unsafe { *self.gate.get() };
-        if current.is_null() {
-            let g = unsafe { rn_freertos_c::xQueueCreateMutex(0) };
-            assert!(!g.is_null(), "OnceLock: xQueueCreateMutex returned NULL");
-            unsafe {
+        unsafe {
+            rn_freertos_c::vPortEnterCritical();
+            let current = *self.gate.get();
+            if current.is_null() {
+                let g = rn_freertos_c::xQueueCreateMutex(0);
+                assert!(!g.is_null(), "OnceLock: xQueueCreateMutex returned NULL");
                 *self.gate.get() = g;
             }
+            rn_freertos_c::vPortExitCritical();
         }
     }
 
@@ -734,7 +728,7 @@ impl BinarySemaphore {
 
     /// Take with a timeout.
     pub fn take_timeout(&self, timeout_ms: u32) -> bool {
-        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.handle, ms_to_ticks(timeout_ms)) != 0 }
+        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.handle, crate::task::ms_to_ticks(timeout_ms)) != 0 }
     }
 }
 
@@ -794,7 +788,7 @@ impl CountingSemaphore {
 
     /// Take with a timeout.
     pub fn take_timeout(&self, timeout_ms: u32) -> bool {
-        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.handle, ms_to_ticks(timeout_ms)) != 0 }
+        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.handle, crate::task::ms_to_ticks(timeout_ms)) != 0 }
     }
 }
 
@@ -917,13 +911,69 @@ impl<T: ?Sized> Arc<T> {
     }
 }
 
+// ---------------------------------------------------------------------------
+//  Arc refcount helpers
+//
+//  On targets with atomic read-modify-write instructions
+//  (`target_has_atomic = "ptr"`, e.g. ARMv7-M/thumbv7m, RV32IMAC) we use the
+//  lock-free `fetch_add`/`fetch_sub`.
+//
+//  On targets that only expose atomic loads/stores (Cortex-M0+ such as the
+//  dual-core RP2040, and RV32IMC) a plain load/store update is NOT atomic, so
+//  the refcount update is guarded with a FreeRTOS critical section.  This is
+//  cross-core safe on SMP FreeRTOS ports (the RP2040 SMP port takes a spinlock
+//  inside `vPortEnterCritical`) and prevents a lost refcount update when both
+//  cores clone/drop the same `Arc` concurrently.
+//
+//  NOTE: like the rest of the sync API, these helpers must not be used from
+//  ISR context (task-level FreeRTOS critical sections only).
+// ---------------------------------------------------------------------------
+
+/// Atomically `count += 1`, returning the previous value.
+#[inline]
+fn refcount_fetch_add(count: &AtomicUsize) -> usize {
+    #[cfg(target_has_atomic = "ptr")]
+    {
+        count.fetch_add(1, Ordering::Relaxed)
+    }
+
+    #[cfg(not(target_has_atomic = "ptr"))]
+    {
+        unsafe {
+            rn_freertos_c::vPortEnterCritical();
+            let old = count.load(Ordering::Relaxed);
+            count.store(old.wrapping_add(1), Ordering::Relaxed);
+            rn_freertos_c::vPortExitCritical();
+            old
+        }
+    }
+}
+
+/// Atomically `count -= 1`, returning the previous value.
+#[inline]
+fn refcount_fetch_sub(count: &AtomicUsize) -> usize {
+    #[cfg(target_has_atomic = "ptr")]
+    {
+        count.fetch_sub(1, Ordering::Release)
+    }
+
+    #[cfg(not(target_has_atomic = "ptr"))]
+    {
+        unsafe {
+            rn_freertos_c::vPortEnterCritical();
+            let old = count.load(Ordering::Relaxed);
+            count.store(old.wrapping_sub(1), Ordering::Relaxed);
+            rn_freertos_c::vPortExitCritical();
+            old
+        }
+    }
+}
+
 impl<T: ?Sized> Clone for Arc<T> {
     fn clone(&self) -> Self {
         // SAFETY: the reference count is at least 1, so incrementing is safe.
-        // Use load/store instead of fetch_add for targets without atomic CAS (e.g. Cortex-M0+).
-        let old = self.inner().count.load(Ordering::Relaxed);
+        let old = refcount_fetch_add(&self.inner().count);
         assert!(old < usize::MAX, "Arc::clone: reference count overflow");
-        self.inner().count.store(old + 1, Ordering::Relaxed);
         Self {
             ptr: self.ptr,
             _phantom: PhantomData,
@@ -941,17 +991,15 @@ impl<T: ?Sized> Deref for Arc<T> {
 impl<T: ?Sized> Drop for Arc<T> {
     fn drop(&mut self) {
         // If we were the last reference, deallocate.
-        // Use load/store instead of fetch_sub for targets without atomic CAS (e.g. Cortex-M0+).
-        let old = self.inner().count.load(Ordering::Acquire);
-        if old <= 1 {
-            // We are the last reference.
+        if refcount_fetch_sub(&self.inner().count) == 1 {
+            // We are the last reference.  Make sure every write made before
+            // the last clone was released is visible before we free the
+            // allocation (paired with the `Release` in refcount_fetch_sub).
             core::sync::atomic::fence(Ordering::Acquire);
             // SAFETY: we are the sole owner now.
             unsafe {
                 let _ = Box::from_raw(self.ptr.as_ptr());
             }
-        } else {
-            self.inner().count.store(old - 1, Ordering::Release);
         }
     }
 }

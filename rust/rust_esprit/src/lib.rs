@@ -30,59 +30,42 @@ use crate::prelude::*;
 // can cause trait resolution issues with Box::from_raw casts.
 // Import it explicitly as `use core::ffi::c_void;` where needed.
 
-#[cfg(not(any(feature = "fake_std", feature = "external_std")))]
 mod prelude {
-    pub use core::alloc::{GlobalAlloc, Layout};
+    // Items available in every mode (they are the same types whether they
+    // come from `core`, `alloc` or `std`).
+    pub use core::cell::UnsafeCell;
+    pub use core::convert::Infallible;
+    pub use core::marker::PhantomData;
     pub use core::mem;
+    pub use core::ops::{Deref, DerefMut};
     pub use core::ptr;
     pub use core::slice;
     pub use core::str;
-    pub use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
-    pub use core::cell::UnsafeCell;
-    pub use core::marker::PhantomData;
-    pub use core::ops::{Deref, DerefMut};
-    pub use core::convert::Infallible;
     pub use core::time::Duration;
-    pub use alloc::boxed::Box;
-    pub use alloc::vec::Vec;
-    pub use alloc::string::String;
-}
 
-#[cfg(feature = "fake_std")]
-mod prelude {
-    // fake_std runs on an embedded target – no real std, use core + alloc.
+    // bare-metal + fake_std run on an embedded target: core + alloc.
+    #[cfg(not(feature = "external_std"))]
     pub use core::alloc::{GlobalAlloc, Layout};
-    pub use core::mem;
-    pub use core::ptr;
-    pub use core::slice;
-    pub use core::str;
+    #[cfg(not(feature = "external_std"))]
     pub use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
-    pub use core::cell::UnsafeCell;
-    pub use core::marker::PhantomData;
-    pub use core::ops::{Deref, DerefMut};
-    pub use core::convert::Infallible;
-    pub use core::time::Duration;
+    #[cfg(not(feature = "external_std"))]
     pub use alloc::boxed::Box;
-    pub use alloc::vec::Vec;
+    #[cfg(not(feature = "external_std"))]
     pub use alloc::string::String;
-}
+    #[cfg(not(feature = "external_std"))]
+    pub use alloc::vec::Vec;
 
-#[cfg(feature = "external_std")]
-mod prelude {
+    // external_std: a real `std` is provided by the embedding framework.
+    #[cfg(feature = "external_std")]
     pub use std::alloc::{GlobalAlloc, Layout};
-    pub use std::mem;
-    pub use std::ptr;
-    pub use std::slice;
-    pub use std::str;
-    pub use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
-    pub use std::cell::UnsafeCell;
-    pub use std::marker::PhantomData;
-    pub use std::ops::{Deref, DerefMut};
-    pub use std::convert::Infallible;
-    pub use std::time::Duration;
+    #[cfg(feature = "external_std")]
     pub use std::boxed::Box;
-    pub use std::vec::Vec;
+    #[cfg(feature = "external_std")]
     pub use std::string::String;
+    #[cfg(feature = "external_std")]
+    pub use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+    #[cfg(feature = "external_std")]
+    pub use std::vec::Vec;
 }
 
 pub type size_t = cty::c_uint;
@@ -98,14 +81,6 @@ pub mod pin_types;
 /// Re-exported below for backward compatibility.
 /// This module is **internal** – not part of the public API.
 pub(crate) mod c_api;
-
-// The fast-GPIO modules are not *c files and stay at the crate root.
-#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
-pub mod rn_fast_gpio_bp;
-#[cfg(feature = "esp32")]
-pub mod rn_fast_gpio_esp32c3;
-#[cfg(feature = "rp2040")]
-pub mod rn_fast_gpio_rp2040;
 
 // Re-export the C‑FFI modules internally so that existing code (e.g.
 // `crate::rn_freertos_c::xQueueCreateMutex(...)`) continues to work.
@@ -130,22 +105,6 @@ pub(crate) use c_api::rn_timing_adc_c;
 pub(crate) use c_api::rn_multi_pulse_c;
 #[cfg(feature = "cdc")]
 pub(crate) use c_api::rn_usb_c;
-
-// ---------------------------------------------------------------------------
-//  Legacy wrapper modules (kept for backward compat)
-// ---------------------------------------------------------------------------
-//OBSOLETE pub mod rn_exti;
-//OBSOLETE pub mod rn_fast_event_group;
-//OBSOLETE pub mod rn_i2c;
-pub mod rn_gpio;
-// OBSOLETE pub mod rn_logger;
-pub mod rn_os_helper;
-//pub mod rn_spi;
-//pub mod rn_timing_adc;
-#[cfg(feature = "cdc")]
-pub mod rn_usb;
-#[cfg(feature = "cdc")]
-pub mod rn_usb_cdc;
 
 // ---------------------------------------------------------------------------
 //  Idiomatic Rust wrappers (public API)
@@ -182,6 +141,9 @@ pub mod task;
 
 /// Synchronisation primitives wrapping FreeRTOS mutexes and semaphores.
 pub mod sync;
+
+/// FreeRTOS-backed fixed-capacity message queue.
+pub mod queue;
 
 /// Timer wrapper with single‑shot pulse generation.
 pub mod timer;
@@ -231,6 +193,9 @@ pub use sync::{
     LazyLock,
     BinarySemaphore, CountingSemaphore, SemaphoreGuard,
 };
+
+// -- Message queues --
+pub use queue::Queue;
 
 #[cfg(feature = "cdc")]
 pub use usb::{UsbBus, UsbEvent, UsbEventHandler};

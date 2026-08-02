@@ -1,2 +1,0 @@
-unsafe impl Send for lnFastEventGroup {}
-unsafe impl Sync for lnFastEventGroup {}

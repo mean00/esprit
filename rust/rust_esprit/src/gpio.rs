@@ -2,7 +2,6 @@
 
 #[cfg(feature = "rp2040")]
 mod import_gpio {
-    pub use crate::rn_fast_gpio_rp2040 as rn_fast_gpio;
     pub(crate) use crate::rn_gpio_rp2040_c;
     pub(crate) use crate::rn_gpio_rp2040_c as gpio;
     pub use crate::rn_gpio_rp2040_c::lnPinMode_c;
@@ -10,7 +9,6 @@ mod import_gpio {
 
 #[cfg(feature = "esp32")]
 mod import_gpio {
-    pub use crate::rn_fast_gpio_esp32c3 as rn_fast_gpio;
     pub(crate) use crate::rn_gpio_esp32_c;
     pub(crate) use crate::rn_gpio_esp32_c as gpio;
     pub use crate::rn_gpio_esp32_c::lnPinMode_c;
@@ -18,7 +16,6 @@ mod import_gpio {
 
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 mod import_gpio {
-    pub use crate::rn_fast_gpio_bp as rn_fast_gpio;
     pub(crate) use crate::rn_gpio_bp_c;
     pub(crate) use crate::rn_gpio_bp_c as gpio;
     pub use crate::rn_gpio_bp_c::lnPinMode_c;
@@ -118,49 +115,37 @@ impl Pin {
 
     /// Set the pin mode.
     pub fn set_mode(&mut self, mode: GpioMode) {
-        unsafe {
-            lnPinMode_c(self.pin, mode, 0);
-        }
+        pin_mode(self.pin, mode)
     }
 
     /// Set the pin mode with a target speed in MHz.
     pub fn set_mode_speed(&mut self, mode: GpioMode, speed_mhz: u32) {
-        unsafe {
-            lnPinMode_c(self.pin, mode, speed_mhz);
-        }
+        pin_mode_speed(self.pin, mode, speed_mhz)
     }
 
     /// Drive the pin high (digital `1`).
     pub fn set_high(&mut self) {
-        unsafe {
-            lnDigitalWrite(self.pin, true);
-        }
+        digital_write(self.pin, true)
     }
 
     /// Drive the pin low (digital `0`).
     pub fn set_low(&mut self) {
-        unsafe {
-            lnDigitalWrite(self.pin, false);
-        }
+        digital_write(self.pin, false)
     }
 
     /// Write a boolean val to the pin (`true` = high, `false` = low).
     pub fn write(&mut self, val: bool) {
-        unsafe {
-            lnDigitalWrite(self.pin, val);
-        }
+        digital_write(self.pin, val)
     }
 
     /// Toggle the output state.
     pub fn toggle(&mut self) {
-        unsafe {
-            lnDigitalToggle(self.pin);
-        }
+        digital_toggle(self.pin)
     }
 
     /// Return `true` if the input reads as high.
     pub fn is_high(&self) -> bool {
-        unsafe { lnDigitalRead(self.pin) }
+        digital_read(self.pin)
     }
 
     /// Return `true` if the input reads as low.
