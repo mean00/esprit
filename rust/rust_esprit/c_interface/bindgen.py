@@ -14,14 +14,36 @@ import argparse
 import os
 import subprocess
 import sys
+from typing import List, Optional
 
 # Path to the cmake helper scripts
 _CMAKE_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "cmake"))
 _RUSTGEN_PY = os.path.join(_CMAKE_DIR, "rustgen.py")
 
+# Compiler/standard-library junk that clang drags in and that is never used
+# by the Rust wrapper layer.  Kept in one place so every generation call can
+# opt in to a clean output.
+JUNK_BLOCKLIST: List[str] = [
+    "_LIBCPP_.*",
+    "_NEWLIB_.*",
+    "_PICOLIBC_.*",
+    "__HAVE_.*",
+    "__IO_.*",
+    "__NEWLIB_.*",
+    "__PICOLIBC_.*",
+    "_ATFILE_SOURCE",
+    "_DEFAULT_SOURCE",
+    "_ISOC[0-9].*",
+    "_POSIX_.*",
+    "_XOPEN_.*",
+    "_LARGEFILE64_SOURCE",
+    "WINT_MIN",
+]
+
 
 def _run_rustgen(header: str, output: str, extra_dir: str = "",
                  extra_dir2: str = "", blocklist: bool = False,
+                 blocklist_items: Optional[List[str]] = None,
                  lang: str = "c++", verbose: bool = False) -> None:
     """Run rustgen.py to generate a single binding file."""
     out_name = os.path.basename(output)
@@ -36,6 +58,8 @@ def _run_rustgen(header: str, output: str, extra_dir: str = "",
         cmd += ["--extra-dir2", extra_dir2]
     if blocklist:
         cmd.append("--blocklist")
+    for item in (blocklist_items or []):
+        cmd += ["--blocklist-item", item]
     if verbose:
         cmd.append("--verbose")
 
@@ -54,12 +78,14 @@ def _run_rustgen(header: str, output: str, extra_dir: str = "",
 
 def gen_cpp(header: str, output: str, extra_dir: str = "",
             extra_dir2: str = "", blocklist: bool = False,
+            blocklist_items: Optional[List[str]] = None,
             verbose: bool = False) -> None:
     """Generate C++ bindings for a header."""
     if verbose:
         print(f"  [C++] {header}")
     _run_rustgen(header, output, extra_dir=extra_dir, extra_dir2=extra_dir2,
-                 blocklist=blocklist, lang="c++", verbose=verbose)
+                 blocklist=blocklist, blocklist_items=blocklist_items,
+                 lang="c++", verbose=verbose)
 
 
 def gen_c(header: str, output: str, extra_dir: str = "",
@@ -127,10 +153,18 @@ def main() -> None:
         extra_dir=os.path.join(pwd, "..", "..", "..", "mcus", "common_bluepill", "include"),
         blocklist=True, verbose=verbose,
     )
+    # The C++ `lnExti*` entry points are mangled C++ symbols and are not
+    # ABI-stable from Rust – only the `_c` shim functions are used.  Blocklist
+    # the raw C++ functions so they don't appear in the generated bindings.
+    EXTI_CPP_FUNCTIONS = [
+        "lnExtiAttachInterrupt", "lnExtiDetachInterrupt",
+        "lnExtiEnableInterrupt", "lnExtiDisableInterrupt",
+    ]
     gen_cpp(
         header=os.path.join(pwd, "lnExti_c.h"),
         output=os.path.join(dest, "rn_exti_c.rs"),
-        extra_dir=pwd, blocklist=True, verbose=verbose,
+        extra_dir=pwd, blocklist=True,
+        blocklist_items=EXTI_CPP_FUNCTIONS, verbose=verbose,
     )
 
     # --- Other bindings (no blocklist needed) ---
@@ -170,7 +204,9 @@ def main() -> None:
         output=os.path.join(dest, "rn_freertos_c.rs"),
         extra_dir=os.path.join(pwd, "..", "..", "..", "freertos_config"),
         extra_dir2=os.path.join(pwd, "..", "..", "..", "FreeRTOS"),
-        lang="c++", verbose=verbose,
+        lang="c++",
+        blocklist_items=JUNK_BLOCKLIST,
+        verbose=verbose,
     )
 
     # Debug logger

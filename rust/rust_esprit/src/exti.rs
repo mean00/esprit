@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::gpio::{self, lnPin};
+use crate::gpio::lnPin;
 use crate::rn_exti_c;
 
 /// Edge trigger configuration for external interrupts.
@@ -34,49 +34,13 @@ pub trait PinCallback {
     fn on_interrupt(&mut self, pin: lnPin);
 }
 
-// ---------- low-level FFI wrappers ----------
-//
-// NOTE: We define our own FFI extern blocks here instead of using rn_exti_c
-// because lnExti.h only forward-declares `enum lnPin : int;` without the actual
-// enum values. Bindgen sees this opaque forward declaration and generates a
-// dummy enum with only `__bindgen_cannot_repr_c_on_empty_enum = 0`, which
-// corrupts all pin values. By using u32 directly (matching the C ABI of the
-// forward-declared enum on ARM), we avoid this bindgen bug entirely.
-//
-// The trampoline transmutes the u32 to gpio::lnPin which has the proper variants.
-
-type ExtiCallback = unsafe extern "C" fn(pin: u32, cookie: *mut cty::c_void);
-
-unsafe extern "C" {
-    #[link_name = "\u{1}_Z21lnExtiAttachInterrupt5lnPin6lnEdgePFvS_PvES1_"]
-    fn lnExtiAttachInterrupt(
-        pin: u32,
-        edge: rn_exti_c::lnEdge,
-        cb: Option<ExtiCallback>,
-        cookie: *const cty::c_void,
-    );
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_Z21lnExtiDetachInterrupt5lnPin"]
-    fn lnExtiDetachInterrupt(pin: u32);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_Z21lnExtiEnableInterrupt5lnPin"]
-    fn lnExtiEnableInterrupt(pin: u32);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_Z22lnExtiDisableInterrupt5lnPin"]
-    fn lnExtiDisableInterrupt(pin: u32);
-}
-
 // ---------- trampoline ----------
 
-extern "C" fn generic_trampoline<T: PinCallback>(pin: u32, cookie: *mut cty::c_void) {
+/// C-ABI trampoline invoked by the C shim.  `cookie` points to the `&T`
+/// handler registered by [`attach_interrupt`].
+extern "C" fn generic_trampoline<T: PinCallback>(pin: lnPin, cookie: *mut cty::c_void) {
     let handler = unsafe { &mut *(cookie as *mut T) };
-    // The C++ side passes lnPin as an int (it's a C enum with underlying type int).
-    // Transmute the u32 to our canonical gpio::lnPin enum.
-    let canonical: lnPin = unsafe { core::mem::transmute(pin) };
-    handler.on_interrupt(canonical);
+    handler.on_interrupt(pin);
 }
 
 // ---------- public API ----------
@@ -87,11 +51,11 @@ extern "C" fn generic_trampoline<T: PinCallback>(pin: u32, cookie: *mut cty::c_v
 /// The C callback fires with the cookie pointing to `handler`.
 pub fn attach_interrupt<T: PinCallback>(pin: lnPin, edge: Edge, handler: &T) {
     unsafe {
-        lnExtiAttachInterrupt(
-            pin as u32,
+        rn_exti_c::lnExtiAttachInterrupt_c(
+            pin,
             edge.into(),
             Some(generic_trampoline::<T>),
-            handler as *const T as *const cty::c_void,
+            handler as *const T as *mut cty::c_void,
         );
     }
 }
@@ -99,21 +63,21 @@ pub fn attach_interrupt<T: PinCallback>(pin: lnPin, edge: Edge, handler: &T) {
 /// Detach an external interrupt from a pin.
 pub fn detach_interrupt(pin: lnPin) {
     unsafe {
-        lnExtiDetachInterrupt(pin as u32);
+        rn_exti_c::lnExtiDetachInterrupt_c(pin);
     }
 }
 
 /// Enable the external interrupt for a pin (after attaching).
 pub fn enable_interrupt(pin: lnPin) {
     unsafe {
-        lnExtiEnableInterrupt(pin as u32);
+        rn_exti_c::lnExtiEnableInterrupt_c(pin);
     }
 }
 
 /// Disable the external interrupt for a pin.
 pub fn disable_interrupt(pin: lnPin) {
     unsafe {
-        lnExtiDisableInterrupt(pin as u32);
+        rn_exti_c::lnExtiDisableInterrupt_c(pin);
     }
 }
 

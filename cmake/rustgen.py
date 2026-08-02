@@ -78,6 +78,8 @@ def main() -> None:
                         help="Second extra include directory")
     parser.add_argument("--blocklist", action="store_true",
                         help="Blocklist lnPin type and inject use crate::pin_types::lnPin")
+    parser.add_argument("--blocklist-item", action="append", default=[],
+                        help="Blocklist item by name or regex (repeatable)")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Show detailed progress")
     args = parser.parse_args()
@@ -108,11 +110,8 @@ def main() -> None:
     env = os.environ.copy()
     env["PATH"] = f"{platform_clang_path}:{env.get('PATH', '')}"
 
-    # header.rs.in and tail.rs.in are always taken from the c_interface/ directory
-    # (the same directory as the C wrapper headers), not from src/.
-    # The src/ tail.rs.in contains lnFastEventGroup Send/Sync impls which are
-    # specific to the fast event group bindings and must not be appended to
-    # other binding files.
+    # header.rs.in and tail.rs.in are always taken from the c_interface/
+    # directory (the same directory as the C wrapper headers).
     c_interface_dir = os.path.join(ln_dir, "rust", "rust_esprit", "c_interface")
     header_in = os.path.join(c_interface_dir, "header.rs.in")
     tail_in = os.path.join(c_interface_dir, "tail.rs.in")
@@ -153,6 +152,9 @@ def main() -> None:
                 "--blocklist-type", "lnPin",
                 "--raw-line", "pub use crate::pin_types::lnPin;",
             ]
+
+        for item in args.blocklist_item:
+            bindgen_args += ["--blocklist-item", item]
 
         tmp_output = output + ".tmp"
         bindgen_args += ["-o", tmp_output]
