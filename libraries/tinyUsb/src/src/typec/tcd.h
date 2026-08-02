@@ -24,8 +24,8 @@
  * This file is part of the TinyUSB stack.
  */
 
-#ifndef _TUSB_TCD_H_
-#define _TUSB_TCD_H_
+#ifndef TUSB_TCD_H_
+#define TUSB_TCD_H_
 
 #include "common/tusb_common.h"
 #include "pd_types.h"
@@ -77,6 +77,12 @@ void tcd_int_enable (uint8_t rhport);
 
 // Disable interrupt
 void tcd_int_disable(uint8_t rhport);
+
+// Enable Type-C port terminations
+void tcd_connect(uint8_t rhport);
+
+// Disable Type-C port terminations
+void tcd_disconnect(uint8_t rhport);
 
 // Interrupt Handler
 void tcd_int_handler(uint8_t rhport);

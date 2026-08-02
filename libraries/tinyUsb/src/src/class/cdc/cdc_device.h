@@ -29,55 +29,85 @@
 
 #include "cdc.h"
 
-//--------------------------------------------------------------------+
-// Class Driver Configuration
-//--------------------------------------------------------------------+
-#if !defined(CFG_TUD_CDC_EP_BUFSIZE) && defined(CFG_TUD_CDC_EPSIZE)
-  #warning CFG_TUD_CDC_EPSIZE is renamed to CFG_TUD_CDC_EP_BUFSIZE, please update to use the new name
-  #define CFG_TUD_CDC_EP_BUFSIZE    CFG_TUD_CDC_EPSIZE
-#endif
-
-#ifndef CFG_TUD_CDC_EP_BUFSIZE
-  #define CFG_TUD_CDC_EP_BUFSIZE    (TUD_OPT_HIGH_SPEED ? 512 : 64)
-#endif
-
 #ifdef __cplusplus
  extern "C" {
 #endif
 
 //--------------------------------------------------------------------+
-// Driver Configuration
+// Class Driver Configuration
 //--------------------------------------------------------------------+
-typedef struct TU_ATTR_PACKED {
-  uint8_t rx_persistent : 1; // keep rx fifo data even with bus reset or disconnect
-  uint8_t tx_persistent : 1; // keep tx fifo data even with reset or disconnect
-  uint8_t tx_overwritabe_if_not_connected : 1; // if not connected, tx fifo can be overwritten
+#ifndef CFG_TUD_CDC_NOTIFY
+  #define CFG_TUD_CDC_NOTIFY    0
+#endif
+
+#ifndef CFG_TUD_CDC_TX_BUFSIZE
+  #define CFG_TUD_CDC_TX_BUFSIZE TUD_EPSIZE_BULK_MAX
+#endif
+
+#ifndef CFG_TUD_CDC_RX_BUFSIZE
+  #define CFG_TUD_CDC_RX_BUFSIZE TUD_EPSIZE_BULK_MAX
+#endif
+
+// EP_BUFSIZE is separated to RX_EPSIZE and TX_EPSIZE
+#ifndef CFG_TUD_CDC_RX_EPSIZE
+  #ifdef CFG_TUD_CDC_EP_BUFSIZE
+    #define CFG_TUD_CDC_RX_EPSIZE CFG_TUD_CDC_EP_BUFSIZE
+  #else
+    #define CFG_TUD_CDC_RX_EPSIZE TUD_EPSIZE_BULK_MAX
+  #endif
+#endif
+
+#ifndef CFG_TUD_CDC_TX_EPSIZE
+  #ifdef CFG_TUD_CDC_EP_BUFSIZE
+    #define CFG_TUD_CDC_TX_EPSIZE  CFG_TUD_CDC_EP_BUFSIZE
+  #else
+    #define CFG_TUD_CDC_TX_EPSIZE TUD_EPSIZE_BULK_MAX
+  #endif
+#endif
+
+// Enable multi-packet RX transfer with ZLP termination for better throughput. Requires host support for ZLP.
+#ifndef CFG_TUD_CDC_RX_NEED_ZLP
+  #define CFG_TUD_CDC_RX_NEED_ZLP 0
+#endif
+
+// Keep rx fifo data even with bus reset or disconnect
+#ifndef CFG_TUD_CDC_RX_PERSISTENT
+  #define CFG_TUD_CDC_RX_PERSISTENT 0
+#endif
+
+// Keep tx fifo data even with bus reset or disconnect
+#ifndef CFG_TUD_CDC_TX_PERSISTENT
+  #define CFG_TUD_CDC_TX_PERSISTENT 0
+#endif
+
+// If not connected, tx fifo can be overwritten
+#ifndef CFG_TUD_CDC_TX_OVERWRITABLE_IF_NOT_CONNECTED
+  #define CFG_TUD_CDC_TX_OVERWRITABLE_IF_NOT_CONNECTED 1
+#endif
+
+// Backward compatible: tud_cdc_configure_t and tud_cdc_configure() are no longer used.
+// Configuration is now done via compile-time macros above.
+typedef struct {
+  bool rx_persistent;
+  bool tx_persistent;
+  bool tx_overwritabe_if_not_connected;
 } tud_cdc_configure_t;
 
-#define TUD_CDC_CONFIGURE_DEFAULT() { \
-  .rx_persistent = 0, \
-  .tx_persistent = 0, \
-  .tx_overwritabe_if_not_connected = 1, \
-}
-
-// Configure CDC driver behavior
-bool tud_cdc_configure(const tud_cdc_configure_t* driver_cfg);
-
-// Backward compatible
-#define tud_cdc_configure_fifo_t tud_cdc_configure_t
-#define tud_cdc_configure_fifo   tud_cdc_configure
+#define tud_cdc_configure(_cfg)          ((void)(_cfg))
+#define tud_cdc_configure_fifo_t         tud_cdc_configure_t
+#define tud_cdc_configure_fifo(_cfg)     ((void)(_cfg))
 
 //--------------------------------------------------------------------+
 // Application API (Multiple Ports) i.e. CFG_TUD_CDC > 1
 //--------------------------------------------------------------------+
 
-// Check if interface is ready
+// Check if the interface is ready
 bool tud_cdc_n_ready(uint8_t itf);
 
-// Check if terminal is connected to this port
+// Check if the terminal is connected to this port
 bool tud_cdc_n_connected(uint8_t itf);
 
-// Get current line state. Bit 0:  DTR (Data Terminal Ready), Bit 1: RTS (Request to Send)
+// Get the current line state. Bit 0:  DTR (Data Terminal Ready), Bit 1: RTS (Request to Send)
 uint8_t tud_cdc_n_get_line_state(uint8_t itf);
 
 // Get current line encoding: bit rate, stop bits parity etc ..
@@ -123,8 +153,50 @@ uint32_t tud_cdc_n_write_flush(uint8_t itf);
 // Return the number of bytes (characters) available for writing to TX FIFO buffer in a single n_write operation.
 uint32_t tud_cdc_n_write_available(uint8_t itf);
 
-// Clear the transmit FIFO
+// Clear the TX FIFO
 bool tud_cdc_n_write_clear(uint8_t itf);
+
+#if CFG_TUD_CDC_NOTIFY
+bool tud_cdc_n_notify_msg(uint8_t itf, cdc_notify_msg_t *msg);
+
+// Send UART status notification: DCD, DSR etc ..
+TU_ATTR_ALWAYS_INLINE static inline bool tud_cdc_n_notify_uart_state(uint8_t                        itf,
+                                                                     const cdc_notify_uart_state_t *state) {
+  cdc_notify_msg_t notify_msg;
+  notify_msg.request.bmRequestType = CDC_REQ_TYPE_NOTIF;
+  notify_msg.request.bRequest      = CDC_NOTIF_SERIAL_STATE;
+  notify_msg.request.wValue        = 0;
+  notify_msg.request.wIndex        = 0; // filled later
+  notify_msg.request.wLength       = sizeof(cdc_notify_uart_state_t);
+  notify_msg.serial_state          = *state;
+  return tud_cdc_n_notify_msg(itf, &notify_msg);
+}
+
+// Send connection speed change notification
+TU_ATTR_ALWAYS_INLINE static inline bool
+tud_cdc_n_notify_conn_speed_change(uint8_t itf, const cdc_notify_conn_speed_change_t *conn_speed_change) {
+  cdc_notify_msg_t notify_msg;
+  notify_msg.request.bmRequestType = CDC_REQ_TYPE_NOTIF;
+  notify_msg.request.bRequest      = CDC_NOTIF_CONNECTION_SPEED_CHANGE;
+  notify_msg.request.wValue        = 0;
+  notify_msg.request.wIndex        = 0; // filled later
+  notify_msg.request.wLength       = sizeof(cdc_notify_conn_speed_change_t);
+  notify_msg.conn_speed_change     = *conn_speed_change;
+  return tud_cdc_n_notify_msg(itf, &notify_msg);
+}
+
+TU_ATTR_ALWAYS_INLINE static inline bool tud_cdc_notify_msg(cdc_notify_msg_t *msg) {
+  return tud_cdc_n_notify_msg(0, msg);
+}
+
+TU_ATTR_ALWAYS_INLINE static inline bool tud_cdc_notify_uart_state(const cdc_notify_uart_state_t* state) {
+ return tud_cdc_n_notify_uart_state(0, state);
+}
+
+TU_ATTR_ALWAYS_INLINE static inline bool tud_cdc_notify_conn_speed_change(const cdc_notify_conn_speed_change_t* conn_speed_change) {
+  return tud_cdc_n_notify_conn_speed_change(0, conn_speed_change);
+}
+#endif
 
 //--------------------------------------------------------------------+
 // Application API (Single Port)
@@ -195,29 +267,32 @@ TU_ATTR_ALWAYS_INLINE static inline bool tud_cdc_write_clear(void) {
 }
 
 //--------------------------------------------------------------------+
-// Application Callback API (weak is optional)
+// Application Callback API
 //--------------------------------------------------------------------+
 
 // Invoked when received new data
-TU_ATTR_WEAK void tud_cdc_rx_cb(uint8_t itf);
+void tud_cdc_rx_cb(uint8_t itf);
 
 // Invoked when received `wanted_char`
-TU_ATTR_WEAK void tud_cdc_rx_wanted_cb(uint8_t itf, char wanted_char);
+void tud_cdc_rx_wanted_cb(uint8_t itf, char wanted_char);
 
 // Invoked when a TX is complete and therefore space becomes available in TX buffer
-TU_ATTR_WEAK void tud_cdc_tx_complete_cb(uint8_t itf);
+void tud_cdc_tx_complete_cb(uint8_t itf);
+
+// Invoked when a notification is sent to host
+void tud_cdc_notify_complete_cb(uint8_t itf);
 
 // Invoked when line state DTR & RTS are changed via SET_CONTROL_LINE_STATE
-TU_ATTR_WEAK void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts);
+void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts);
 
 // Invoked when line coding is change via SET_LINE_CODING
-TU_ATTR_WEAK void tud_cdc_line_coding_cb(uint8_t itf, cdc_line_coding_t const* p_line_coding);
+void tud_cdc_line_coding_cb(uint8_t itf, cdc_line_coding_t const* p_line_coding);
 
 // Invoked when received send break
 // \param[in]  itf  interface for which send break was received.
 // \param[in]  duration_ms  the length of time, in milliseconds, of the break signal. If a value of FFFFh, then the
 //                          device will send a break until another SendBreak request is received with value 0000h.
-TU_ATTR_WEAK void tud_cdc_send_break_cb(uint8_t itf, uint16_t duration_ms);
+void tud_cdc_send_break_cb(uint8_t itf, uint16_t duration_ms);
 
 //--------------------------------------------------------------------+
 // INTERNAL USBD-CLASS DRIVER API
@@ -233,4 +308,4 @@ bool     cdcd_xfer_cb         (uint8_t rhport, uint8_t ep_addr, xfer_result_t re
  }
 #endif
 
-#endif /* _TUSB_CDC_DEVICE_H_ */
+#endif /* TUSB_CDC_DEVICE_H_ */

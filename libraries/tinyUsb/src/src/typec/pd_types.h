@@ -24,8 +24,8 @@
  * This file is part of the TinyUSB stack.
  */
 
-#ifndef _TUSB_PD_TYPES_H_
-#define _TUSB_PD_TYPES_H_
+#ifndef TUSB_PD_TYPES_H_
+#define TUSB_PD_TYPES_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,7 +46,8 @@ TU_ATTR_BIT_FIELD_ORDER_BEGIN
 typedef enum {
   TUSB_TYPEC_PORT_SRC,
   TUSB_TYPEC_PORT_SNK,
-  TUSB_TYPEC_PORT_DRP
+  TUSB_TYPEC_PORT_DRP,
+  TUSB_TYPEC_PORT_DISCONNECTED,
 } tusb_typec_port_type_t;
 
 enum {

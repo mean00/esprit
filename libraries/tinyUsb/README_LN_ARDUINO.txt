@@ -1,10 +1,10 @@
-Manual update to 
-commit 5afcfb7522c4fd8b50512cfb277d8a3ccdbc5453 (HEAD -> master, origin/master, origin/HEAD)
-Merge: bb48e6acc 3560ed3d9
+Manual update to  tag 0.21.0
+commit dae3f9a366bfcddbf9dcf1b48d7500286a849539 (HEAD, tag: 0.21.0)
 Author: Ha Thach <thach@tinyusb.org>
-Date:   Tue Feb 11 22:54:57 2025 +0700
+Date:   Tue Jun 30 22:27:27 2026 +0700
 
-    Merge pull request #2989 from hathach/rtos-house-keeping
+    docs: convert changelog release notes from RST to Markdown (#3746)
 
-    Rtos house keeping
+    * docs: convert changelog release notes from RST to Markdown
+
 
