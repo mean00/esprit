@@ -1,10 +1,12 @@
 
 #include "LN_RTT.h"
 #include "esprit.h"
+#include "lnBarrier.h"
 #include "ln-rtt_priv.h"
 #include "string.h"
 
 #define RTT_BUFFER_SIZE (1024)
+#define RTT_FLAGS_MODE_NO_BLOCK_TRIM (1) // == SEGGER_RTT_MODE_NO_BLOCK_TRIM: write as much as fits, never block
 
 //
 uint32_t rtt_buffer[RTT_BUFFER_SIZE >> 2];
@@ -25,7 +27,7 @@ void LN_RTT_Init(void)
     my_rtt.channel.buffer_size = (uint32_t)RTT_BUFFER_SIZE;
     my_rtt.channel.read_offset = 0;
     my_rtt.channel.write_offset = 0;
-    my_rtt.channel.flags = 0;
+    my_rtt.channel.flags = RTT_FLAGS_MODE_NO_BLOCK_TRIM; // trim mode: matches LN_RTT_Write() behavior (never blocks)
     my_rtt.header.max_num_up_buffers = 1;
     my_rtt.header.max_num_down_buffers = 0;
     memcpy(my_rtt.header.id, "SEGGER RTT", 11);
@@ -34,6 +36,14 @@ void LN_RTT_Init(void)
  *
  *
  *
+ *  Concurrency contract:
+ *  - LN_RTT_Write() is NOT internally locked. The caller must guarantee a single
+ *    producer at a time. Logger_chars() serializes every logging producer
+ *    (Logger, Logger_C, Rust logger!) through loggerMutex before reaching here.
+ *  - The debug probe is the only consumer and only ever advances read_offset;
+ *    producer vs consumer is a safe single-writer/single-reader pattern.
+ *  - Non-blocking: if there is not enough free space, only what fits is written
+ *    (trim mode) and the remainder is dropped. Returns the number of bytes written.
  */
 uint32_t LN_RTT_Write(uint32_t bufferIndex, const uint8_t *buffer, uint32_t size)
 {
@@ -92,7 +102,8 @@ uint32_t LN_RTT_Write(uint32_t bufferIndex, const uint8_t *buffer, uint32_t size
             write_offset &= chan->buffer_size - 1;
         }
     }
-    asm volatile("" ::: "memory"); // barrier
+    asm volatile("" ::: "memory"); // compiler barrier
+    LN_DATA_BARRIER();             // make the data writes globally visible before we publish write_offset
     chan->write_offset = write_offset;
     return done;
 }

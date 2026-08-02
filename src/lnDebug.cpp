@@ -26,10 +26,21 @@ extern "C" void Logger_chars(int n, const char *data)
 {
     if (!n)
         return; // 0 sized dma does not work...
+    // Single funnel for ALL logging producers (Logger, Logger_C, Rust logger!,
+    // ...). loggerMutex is a *recursive* mutex, so nested acquisition is safe:
+    // Logger()/Logger_C() already hold it to protect their static format buffer,
+    // and we take it again here to serialize the actual output path (RTT ring
+    // or serial0). This protects the ring both against preemption on a single
+    // core and against concurrent producers on different cores (the FreeRTOS
+    // SMP port guards critical sections with hardware spinlocks).
+    if (loggerMutex)
+        loggerMutex->lock();
     if (loggerFunction)
         loggerFunction(n, data);
     else
         serial0->transmit(n, (uint8_t *)data);
+    if (loggerMutex)
+        loggerMutex->unlock();
 }
 
 extern "C" int Logger_C(const char *fmt, ...)
