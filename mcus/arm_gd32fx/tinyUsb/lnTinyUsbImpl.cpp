@@ -60,7 +60,7 @@ void dcd_set_address(uint8_t rhport, uint8_t dev_addr)
     (void)dev_addr;
 
     // Respond with status
-    dcd_edpt_xfer(rhport, tu_edpt_addr(0, TUSB_DIR_IN), NULL, 0);
+    dcd_edpt_xfer(rhport, tu_edpt_addr(0, TUSB_DIR_IN), NULL, 0, false);
 
     // DCD can only set address after status for this request is complete.
     // do it at dcd_edpt0_status_complete()
@@ -305,9 +305,10 @@ void dcd_transmit_packet(EndPoints::xfer_descriptor *xfer, uint16_t ep_ix)
  * @details <details>
  */
 
-bool dcd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t *buffer, uint16_t total_bytes)
+bool dcd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t *buffer, uint16_t total_bytes, bool is_isr)
 {
     (void)rhport;
+    (void)is_isr;
 
     uint8_t const epnum = tu_edpt_number(ep_addr);
     uint8_t const dir = tu_edpt_dir(ep_addr);

@@ -68,7 +68,7 @@ if(FALSE)
   add_definitions("-DCFG_TUSB_DEBUG_PRINTF=Logger_C")
 endif()
 
-set(SRCS ${CLASS_FILES} ${TUSB}/tusb.c ${TUSB}/device/usbd_control.c ${TUSB}/device/usbd.c ${TUSB}/common/tusb_fifo.c
+set(SRCS ${CLASS_FILES} ${TUSB}/tusb.c  ${TUSB}/device/usbd.c ${TUSB}/common/tusb_fifo.c
          ${DRIVERS})
 add_library(tinyUsb OBJECT ${SRCS})
 target_include_directories(tinyUsb PRIVATE ${CMAKE_BINARY_DIR})

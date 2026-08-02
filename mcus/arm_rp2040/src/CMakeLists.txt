@@ -58,7 +58,9 @@ set(BASE_SOURCES
     ${PICO_SDK_PATH}/src/rp2_common/hardware_exception/exception.c
     ${PICO_SDK_PATH}/src/rp2_common/pico_multicore/multicore.c
     ${PICO_SDK_PATH}/src/rp2_common/hardware_flash/flash.c
-    ${PICO_SDK_PATH}/src/rp2_common/hardware_sync/sync.c)
+    ${PICO_SDK_PATH}/src/rp2_common/hardware_sync/sync.c
+    ${PICO_SDK_PATH}/src/common/hardware_claim/claim.c
+    ${PICO_SDK_PATH}/src/common/pico_sync/critical_section.c)
 
 
 

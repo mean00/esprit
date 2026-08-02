@@ -240,7 +240,7 @@ void dcd_int_disable(uint8_t rhport) {
 // ----------------/MEANX---------------------
 void dcd_set_address(uint8_t rhport, uint8_t dev_addr) {
   (void)dev_addr;
-  dcd_edpt_xfer(rhport, 0x80, NULL, 0); // zlp status response
+  dcd_edpt_xfer(rhport, 0x80, NULL, 0, false); // zlp status response
 }
 
 void dcd_remote_wakeup(uint8_t rhport) {
@@ -313,8 +313,9 @@ void dcd_edpt_close(uint8_t rhport, uint8_t ep_addr) {
 }
 
 bool dcd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t *buffer,
-                   uint16_t total_bytes) {
+                   uint16_t total_bytes, bool is_isr) {
   (void)rhport;
+  (void)is_isr;
   uint8_t ep = tu_edpt_number(ep_addr);
   uint8_t dir = tu_edpt_dir(ep_addr);
 

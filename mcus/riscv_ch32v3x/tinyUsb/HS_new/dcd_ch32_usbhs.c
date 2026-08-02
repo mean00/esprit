@@ -226,7 +226,7 @@ void dcd_set_address(uint8_t rhport, uint8_t dev_addr) {
   (void)dev_addr;
 
   // Response with zlp status
-  dcd_edpt_xfer(rhport, 0x80, NULL, 0);
+  dcd_edpt_xfer(rhport, 0x80, NULL, 0, false);
 }
 
 void dcd_remote_wakeup(uint8_t rhport) { (void)rhport; }
@@ -341,8 +341,9 @@ void dcd_edpt_clear_stall(uint8_t rhport, uint8_t ep_addr) {
 }
 
 bool dcd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t *buffer,
-                   uint16_t total_bytes) {
+                   uint16_t total_bytes, bool is_isr) {
   (void)rhport;
+  (void)is_isr;
   uint8_t const ep_num = tu_edpt_number(ep_addr);
   tusb_dir_t const dir = tu_edpt_dir(ep_addr);
 
