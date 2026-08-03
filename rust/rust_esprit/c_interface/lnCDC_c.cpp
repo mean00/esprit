@@ -41,6 +41,14 @@ int lncdc_write(lncdc_c *instance, const uint8_t *buffer, int maxSize)
 }
 
 /*
+ * Non-blocking: writes only what the TX FIFO accepts right now.
+ */
+int lncdc_write_noblock(lncdc_c *instance, const uint8_t *buffer, int maxSize)
+{
+    return WRAPME(instance)->writeNoBlock(buffer, maxSize);
+}
+
+/*
 
 */
 void lncdc_flush(lncdc_c *instance)

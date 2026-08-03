@@ -109,6 +109,14 @@ impl Cdc {
         unsafe { rn_cdc_c::lncdc_write(self.raw, data.as_ptr(), data.len() as i32) }
     }
 
+    /// Non-blocking write.  Writes as much as the TX FIFO accepts right now and
+    /// returns immediately with the byte count (0 if the FIFO is full).  To
+    /// drain a full buffer, wait on `CdcEvent::WriteAvailable` (fired once per
+    /// DCD transfer completion) and retry.
+    pub fn write_no_block(&mut self, data: &[u8]) -> i32 {
+        unsafe { rn_cdc_c::lncdc_write_noblock(self.raw, data.as_ptr(), data.len() as i32) }
+    }
+
     /// Flush output buffers.
     pub fn flush(&mut self) {
         unsafe { rn_cdc_c::lncdc_flush(self.raw); }

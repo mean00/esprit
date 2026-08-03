@@ -37,6 +37,10 @@
 #else
   #define CFG_TUD_CDC_RX_BUFSIZE   @LN_USB_BUFFER_SIZE@
   #define CFG_TUD_CDC_TX_BUFSIZE   @LN_USB_BUFFER_SIZE@
-  // CDC Endpoint transfer buffer size, more is faster
-  #define CFG_TUD_CDC_EP_BUFSIZE   (TUD_OPT_HIGH_SPEED ? 128 : 64)
+  // CDC Endpoint transfer buffer size, more is faster.
+  // Device-side transfer buffer for the tu_edpt_stream (xfer_len), NOT the
+  // wire packet size. All swindle targets are full-speed: the FS bulk wire
+  // packet stays 64 B (descriptor wMaxPacketSize unchanged), so a 512 B buffer
+  // means one claim+memcpy+completion cycle per 8 packets instead of 8.
+  #define CFG_TUD_CDC_EP_BUFSIZE   512
 #endif

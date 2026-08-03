@@ -1,12 +1,16 @@
 macro(LN_MERGE_LIBS)
   # ---
+  # NOTE: LN_ALREADY_MERGED must be a PLAIN variable (not CACHE). The cache
+  # variant persisted "DONE" across reconfigures, which skipped this whole
+  # block on every later cmake run. That silently froze libesprit_single_lib.a
+  # with the objects from the FIRST configure (e.g. the merged tinyUsb archive
+  # never picked up rebuilt/renamed source objects, and toolchain flag changes
+  # such as the RP2040 E15 workaround never made it into the firmware).
   if(NOT "${LN_ALREADY_MERGED}" STREQUAL "DONE")
     set(merged_name esprit_single_lib)
     set(libs_to_merge "${USED_LIBS}")
     message(STATUS "Preparing single lib ==> ${merged_name}")
-    set(LN_ALREADY_MERGED
-        "DONE"
-        CACHE INTERNAL "")
+    set(LN_ALREADY_MERGED "DONE")
     list(APPEND libs_to_merge ${ARGN})
     set(libs_to_keep esprit_lib)
     list(APPEND libs_to_merge ln_utils embeddedPrintf esprit_lib ${USED_LIBS})

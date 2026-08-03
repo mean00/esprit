@@ -7,6 +7,16 @@
 #define MAX_CDC 4
 lnUsbCDC *_cdc_instances[MAX_CDC] = {NULL, NULL, NULL, NULL};
 
+// Max time a blocking CDC write/flush may wait for the TX FIFO to drain
+// before giving up. With the 0.21 tu_edpt_stream driver, tud_cdc_n_write()
+// returns 0 while the FIFO is full; if the host stops polling the IN endpoint
+// (dead GDB session, port closed, EP stuck) the FIFO never drains and the old
+// unbounded loop wedged the calling task forever (observed as a hard stall of
+// `load`). A bounded wait converts that wedge into a recoverable partial write.
+#ifndef CDC_WRITE_TIMEOUT_MS
+#define CDC_WRITE_TIMEOUT_MS 1000
+#endif
+
 /**
  */
 lnUsbCDC::lnUsbCDC(int instance)
@@ -64,14 +74,21 @@ int lnUsbCDC::writeAvailable()
 int lnUsbCDC::write(const uint8_t *buffer, int size)
 {
     int sent = 0;
+    const uint32_t startMs = lnGetMs();
     while (size)
     {
         int n = tud_cdc_n_write(_instance, buffer, size);
         if (n < 0)
-            return -1;
+            return sent ? sent : -1;
         if (!n)
         {
+            // FIFO is full: hand the pending data to the endpoint driver, then
+            // wait for the USB task/ISR to drain it. Never wait forever — if the
+            // host stopped polling the IN endpoint the FIFO will not drain and
+            // the caller must be able to recover (see CDC_WRITE_TIMEOUT_MS).
             tud_cdc_n_write_flush(_instance);
+            if ((lnGetMs() - startMs) >= CDC_WRITE_TIMEOUT_MS)
+                break;
             lnDelay(1); // dont busy loop
             continue;
         }
@@ -81,13 +98,16 @@ int lnUsbCDC::write(const uint8_t *buffer, int size)
     }
     return sent;
 }
-int write(uint8_t *buffer, int maxSize);
 /**
  */
 void lnUsbCDC::flush()
 {
+    const uint32_t startMs = lnGetMs();
     while (tud_cdc_n_write_flush(_instance) != 0)
     {
+        if ((lnGetMs() - startMs) >= CDC_WRITE_TIMEOUT_MS)
+            break;
+        lnDelay(1);
     }
 }
 /**

@@ -154,8 +154,8 @@ if(NOT DEFINED LN_EXT)
       "-L${MINI_SYSROOT}/lib "
       CACHE INTERNAL "")
   set(GD32_MCU
-      "-mcpu=cortex-m0plus  -DUSE_RP2040  -DPICO_RP2040_USB_FAST_IRQ=0  "
-      CACHE INTERNAL "")
+      "-mcpu=cortex-m0plus  -DUSE_RP2040  -DPICO_RP2040_USB_DEVICE_UFRAME_FIX=1  "
+      CACHE INTERNAL "" FORCE)
 
   # ____________________________ CLANG LINK USING GCC LIBS ____________________________ SET(LN_CLANG_LIBC
   # /home/fx/Arduino_stm32/arm-gcc-2020q4/bin/../lib/gcc/arm-none-eabi/10.2.1/thumb/v7-m/nofp/libgcc.a CACHE INTERNAL

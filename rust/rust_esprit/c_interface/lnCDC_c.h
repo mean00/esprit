@@ -14,6 +14,7 @@ void lncdc_delete(lncdc_c *);
 void lncdc_delete(lncdc_c *);
 int lncdc_read(lncdc_c *, uint8_t *buffer, int maxSize);
 int lncdc_write(lncdc_c *, const uint8_t *buffer, int maxSize);
+int lncdc_write_noblock(lncdc_c *, const uint8_t *buffer, int maxSize);
 void lncdc_flush(lncdc_c *);
 void lncdc_clear_input_buffers(lncdc_c *);
 void lncdc_set_event_handler(lncdc_c *, cdc_event_handler *h, void *cookie);

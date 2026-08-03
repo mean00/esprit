@@ -156,6 +156,13 @@ unsafe extern "C" {
     pub fn lncdc_write(arg1: *mut lncdc_c, buffer: *const u8, maxSize: cty::c_int) -> cty::c_int;
 }
 unsafe extern "C" {
+    pub fn lncdc_write_noblock(
+        arg1: *mut lncdc_c,
+        buffer: *const u8,
+        maxSize: cty::c_int,
+    ) -> cty::c_int;
+}
+unsafe extern "C" {
     pub fn lncdc_flush(arg1: *mut lncdc_c);
 }
 unsafe extern "C" {
