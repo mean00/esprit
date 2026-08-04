@@ -138,5 +138,5 @@ target_compile_definitions(esprit_dev INTERFACE RP_SDK_VERSION=${RP_SDK_VERSION}
 if (ESPRIT_MULTICORE)
   target_compile_definitions(esprit_dev INTERFACE LIB_PICO_MULTICORE=1)
 endif()
-target_compile_options(esprit_dev INTERFACE -include fix_sev.h)
+target_compile_options(esprit_dev INTERFACE -include ${CMAKE_CURRENT_SOURCE_DIR}/../include/fix_sev.h)
 target_link_libraries(esprit_lib PRIVATE esprit_dev)

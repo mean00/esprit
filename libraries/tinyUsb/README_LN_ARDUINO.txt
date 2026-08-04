@@ -1,10 +1,10 @@
-Manual update to 
-commit 5afcfb7522c4fd8b50512cfb277d8a3ccdbc5453 (HEAD -> master, origin/master, origin/HEAD)
-Merge: bb48e6acc 3560ed3d9
+Update to tag 0.20.0
+commit 3af1bec1a9161ee8dec29487831f7ac7ade9e189 (HEAD, tag: 0.20.0)
+Merge: 790c7a0d7 551520ddb
 Author: Ha Thach <thach@tinyusb.org>
-Date:   Tue Feb 11 22:54:57 2025 +0700
+Date:   Thu Nov 20 09:41:11 2025 +0700
 
-    Merge pull request #2989 from hathach/rtos-house-keeping
+    Merge pull request #3350 from hathach/update-changelog
 
-    Rtos house keeping
+    update changelog.rst
 
