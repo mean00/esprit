@@ -4,6 +4,11 @@
 //
 #undef printf
 //
+// Spinlock used by systemHelper.h when CRITICAL_SECTION_EXTRA_ARG is defined
+// (ESP32-S3 xtensa SMP build: ENTER_CRITICAL() -> vPortEnterCritical(&my_spinlock)).
+// Harmless on the single-core RISC-V builds where it is never referenced.
+portMUX_TYPE my_spinlock;
+//
 extern void LoggerInitMutex();
 // Custom printf function for ESP, prints 'n' characters from 'data' followed by a newline
 void espPrintf(int n, const char *data)

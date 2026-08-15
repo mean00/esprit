@@ -398,7 +398,7 @@ bool lnCreateTask(
     TaskHandle_t handle;
     if (pdPASS == xTaskCreate(pxTaskCode, pcName, adjustStackSize(stackSizeInBytes), pvParameters, uxPriority, &handle))
     {
-#if (configNUMBER_OF_CORES > 1)
+#if (configNUMBER_OF_CORES > 1) && defined(configUSE_CORE_AFFINITY)
         vTaskCoreAffinitySet(handle, (1 << 0));
 #endif
         return true;
@@ -415,7 +415,7 @@ bool lnCreateTask_core2(
     TaskHandle_t handle;
     if (pdPASS == xTaskCreate(pxTaskCode, pcName, adjustStackSize(stackSizeInBytes), pvParameters, uxPriority, &handle))
     {
-#if (configNUMBER_OF_CORES > 1)
+#if (configNUMBER_OF_CORES > 1) && defined(configUSE_CORE_AFFINITY)
         vTaskCoreAffinitySet(handle, (1 << 1));
 #endif
         return true;
