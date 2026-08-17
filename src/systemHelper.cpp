@@ -67,25 +67,16 @@ void lnDelayUs(uint32_t wait)
     }
 }
 
-static uint32_t myTick;
-extern "C" void vApplicationTickHook()
-{
-    // this is not atomic, ok but it is called under interrupt
-    myTick++;
-}
-
-/**
- *
- * @return
- */
-uint32_t lnGetMs()
-{
-    return myTick;
-}
-extern "C" uint32_t lnGetMs_c()
-{
-    return myTick;
-}
+// The millisecond timebase (lnGetMs / lnGetMs_c) and the FreeRTOS tick hook
+// that feeds it are NOT common code: under ESP-IDF (LN_ESPRESSIF) the hook is
+// never wired up (xPortSysTickHandler calls esp_vApplicationTickHook(), which
+// only runs callbacks registered via esp_register_freertos_tick_hook()), so a
+// tick-counter lnGetMs() would stay 0 forever - platform_timeout_is_expired()
+// would never return true and the SWD WAIT/FAULT retry loop in sendHeader()
+// would spin indefinitely (Task WDT crash).
+// The build selects one implementation via LN_EXTERNAL_SYSTEM_HELPER:
+//   - default (tick-based):        esprit/src/lnSystemTime.cpp
+//   - ESP-IDF (esp_timer-based):   esprit/mcus/riscv_esp32/src/lnSystemTime_esp32.cpp
 
 void lnDelay(uint32_t a);
 /**

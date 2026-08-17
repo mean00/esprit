@@ -27,5 +27,8 @@ uint64_t lnGetUs64()
 {
     return (uint64_t)esp_timer_get_time();
 }
-// lnGetMs()/lnGetMs_c() are provided by esprit/src/systemHelper.cpp
-// (FreeRTOS tick counter). EOF
+// lnGetMs()/lnGetMs_c() are provided by
+// esprit/mcus/riscv_esp32/src/lnSystemTime_esp32.cpp (esp_timer-based).
+// The tick-based lnSystemTime.cpp is NOT used on ESP-IDF: the FreeRTOS tick
+// hook is never wired up there, so a tick counter would stay 0 forever.
+// EOF

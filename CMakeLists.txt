@@ -8,6 +8,7 @@ endif()
 
 option(LN_EXTERNAL_FREERTOS "Deactivate internal freertos (esp)")
 option(LN_EXTERNAL_MALLOC "Deactivate internal malloc (esp)")
+option(LN_EXTERNAL_SYSTEM_HELPER "Deactivate internal systemHelper timebase (esp), use per-MCU one")
 option(ESPRIT_MULTICORE "Enable FreeRTOS SMP multicore" OFF)
 
 if(True) # NOT ESPRIT_ROOT)

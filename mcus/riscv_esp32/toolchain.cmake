@@ -87,3 +87,8 @@ set(CMAKE_C_FLAGS
 set(CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} ${PPATH} ${IDF_CPN_EXTRA} ${CUSTOM_TARGET_FLAGS} -DLN_ESPRESSIF=1"
     CACHE INTERNAL "")
+# ESP-IDF provides its own FreeRTOS/esp_timer infrastructure: use the external
+# esp_timer-based millisecond timebase (lnSystemTime_esp32.cpp) instead of the
+# tick-hook default (esprit/src/lnSystemTime.cpp). Forces ON for all ESP32
+# builds; other MCUs keep the default.
+set(LN_EXTERNAL_SYSTEM_HELPER ON CACHE BOOL "" FORCE)
