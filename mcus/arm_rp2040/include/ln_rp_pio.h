@@ -63,7 +63,7 @@ class rpPIO_SM
     bool setPinsValue(uint32_t value);
     bool execute();
     bool stop();
-    bool write(uint32_t nb, uint32_t *data);
+    bool write(uint32_t nb, const uint32_t *data);
     bool read(uint32_t nb, uint32_t *data);
     bool uploadCode(uint32_t codeSizeInHalfWord, const uint16_t *code, uint32_t wrapBegin, uint32_t wrapEnd);
     bool execute_jmp(uint32_t addr);

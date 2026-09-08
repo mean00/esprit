@@ -361,7 +361,7 @@ bool rpPIO_SM::read(uint32_t nb, uint32_t *data)
  *
  *
  */
-bool rpPIO_SM::write(uint32_t nb, uint32_t *data)
+bool rpPIO_SM::write(uint32_t nb, const uint32_t *data)
 {
 #warning INCOMPLETE/ TEMPORARY
     xAssert(nb == 1);
