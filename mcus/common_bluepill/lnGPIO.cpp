@@ -40,8 +40,11 @@ void lnPinMode(const lnPin xpin, const lnGpioMode mode, const uint32_t speedInMh
 #define SPEED_10MHZ 1
 #define SPEED_2MHZ 2
 
+    // speedInMhz == 0 means "not specified", i.e. the default argument of
+    // lnPinMode() in lnGPIO.h, and picks the fastest slew rate. Otherwise take
+    // the lowest setting that covers the request (below 10 MHz -> 2 MHz).
     uint32_t speed;
-    if (speedInMhz == 0 || speed >= 50)
+    if (speedInMhz == 0 || speedInMhz >= 50)
     {
         speed = SPEED_50MHZ;
     }
@@ -241,9 +244,11 @@ lnFastIO::lnFastIO(lnPin pin)
 
     LN_GPIO *port = gpio[pin >> 4];
     _onoff = (uint32_t *)&port->BOP;
+    _in = (volatile uint32_t *)&port->ISTAT; // read(), kept volatile through the pointer type
     int bit = 1 << (pin & 0xf);
     _offbit = bit << 16;
     _onbit = bit;
+    _inbit = bit;
 }
 
 // EOF
