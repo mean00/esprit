@@ -492,7 +492,13 @@ void lnUsbDevice::irq()
     if (flags & LN_USBD_INTF_STIF) // transfer complete
     {
 
-        uint32_t f = flags;
+        // The endpoint identity lives in the low bits of USBD_INTF, which
+        // `flags` above masked off (it only keeps the interrupt *types*).
+        // Dispatching this first completion with the masked value reported it
+        // as an EP0 IN completion: tinyusb then saw a bogus control transfer
+        // completion and the real endpoint's TX_ST was left set. Use the value
+        // read at interrupt entry, like the re-read in the loop below.
+        uint32_t f = flags_original;
         flags &= ~LN_USBD_INTF_STIF;
         while (f & LN_USBD_INTF_STIF)
         {

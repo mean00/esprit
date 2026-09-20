@@ -1,6 +1,16 @@
 #pragma once
 #define ENTRY_SIZE_T uint32_t
 
+// Number of CDC interfaces the USB descriptors of this build instantiate (see
+// lnBMP_usb_descriptor_2cdc.h / lnBMP_usb_descriptor_3cdc.h). Each one uses a
+// notification, an OUT and an IN endpoint, so the highest endpoint row the
+// hardware looks up is 2 * LN_USBD_CDC_INTERFACES.
+#ifdef USE_3_CDC
+#define LN_USBD_CDC_INTERFACES 3
+#else
+#define LN_USBD_CDC_INTERFACES 2
+#endif
+
 struct BTableEntry
 {
     volatile ENTRY_SIZE_T TxAdr;
@@ -11,7 +21,9 @@ struct BTableEntry
 
 /**
   The Setup of shared ram is  (from bottom)
-              8*8 => EndpointBufferdescriptor
+       8*16   => EndpointBufferdescriptor : one BTableEntry per endpoint
+                (the PMA only carries 16 bits per 32 bit slot, so each of the
+                 4 fields of an endpoint takes 4 bytes)
        0x40   64 bytes Rx buffer  // 128 bytes per endpoint
        0x40   64 bytes Tx buffer
 */
@@ -44,6 +56,31 @@ class EndPoints
     static xfer_descriptor *getDescriptor(uint32_t ep, uint32_t dir)
     {
         return (xfer_status + 2 * (ep & 0x7f) + (!!dir));
+    }
+
+    // Size, in the PMA addressing unit used by ep_bufferTail, of the buffer
+    // descriptor table. A row is sizeof(BTableEntry) bytes - 4 x 32 bit slots
+    // of which only 16 bits are used, see the note in lnUsbDevice::copyFromSRAM
+    // - so the endpoint data buffers MUST start after the rows the descriptors
+    // use. With the old 8 byte per endpoint assumption they started at byte 64,
+    // i.e. inside the rows the descriptors use: on the 2-CDC build EP0's OUT
+    // buffer is the first allocation (64..127) and so covered the rows of
+    // EP4..EP7. Every control-OUT with a data phase - the line coding the host
+    // sends when it opens a port - is written there, i.e. on top of EP4's
+    // TxAdr/TxSize. EP4 is CDC1's data OUT/IN, the bridge/logger endpoint, so
+    // the bridge read its address/count out of those host bytes: it transmitted
+    // from whatever PMA offset they happened to encode (GDB reply bytes came out
+    // on the log port) and its own data was written to a wrong PMA offset. EP4
+    // is the only endpoint of the 2-CDC build affected, since EP5..EP7 are not
+    // used - which is why the GDB channel and the target link kept working while
+    // the log/bridge port was corrupted.
+    static int btableSize()
+    {
+        // Rows 0..2*LN_USBD_CDC_INTERFACES (80 bytes with 2 CDC, 112 with 3).
+        // The 3 CDC descriptors keep their data endpoints at 32 bytes because
+        // the pool has to hold those rows + EP0 (2 x 64) + 3 x (8 + 32 + 32):
+        // 112 + 128 + 216 = 456 of the 512 bytes of PMA.
+        return (2 * LN_USBD_CDC_INTERFACES + 1) * (int)sizeof(BTableEntry);
     }
 
     static void setRxBufferSize(uint32_t ep, uint32_t size)
@@ -94,7 +131,7 @@ class EndPoints
     {
         if (!partial)
             ep_nbEp = 2;
-        ep_bufferTail = 8 * LN_USBD_MAX_ENDPOINT;
+        ep_bufferTail = btableSize();
         int start = 0;
         if (partial)
             start = 2;
