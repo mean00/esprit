@@ -1,23 +1,23 @@
 #pragma once
 
-#include "lnBasicTimer.h"
-#include "lnBasicTimer_priv.h"
+#include "lnPeripherals.h"
+#include "lnTimer_priv.h"
 
-extern LN_BTimers_Registers *aBTimers[];
+extern LN_Timers_Registers *abTimers[];
 
 /**
- * @brief An inline-heavy timer watcher based on lnBasicTimer.
+ * @brief An inline-heavy timer watcher based on general purpose timers.
  * Designed for highly precise, lock-free timer polling.
  */
-class lnTimerWatch : public lnBasicTimer
+class lnTimerWatch
 {
   public:
     /**
-     * @param timer The basic timer index (e.g., 0 for TIMER5).
+     * @param timerIndex The general timer index (e.g., 4 for TIMER4 which maps to TIM5).
      */
-    lnTimerWatch(int timer) : lnBasicTimer(timer)
+    lnTimerWatch(int timerIndex) : _timerIndex(timerIndex)
     {
-        _t = aBTimers[_timer];
+        _t = abTimers[_timerIndex];
     }
 
     /**
@@ -45,13 +45,16 @@ class lnTimerWatch : public lnBasicTimer
      */
     void setup()
     {
+        lnPeripherals::enable((Peripherals)(pTIMER0 + _timerIndex));
+        _t->CTL0 = 0;
         _t->PSC = 0;
         _t->CAR = 0xFFFF;
         _t->CNT = 0;
-        _t->CTL0 = LN_BTIMER_CTL0_EN;
+        _t->CTL0 = LN_TIMER_CTL0_CEN;
     }
 
   protected:
-    LN_BTimers_Registers *_t;
+    LN_Timers_Registers *_t;
     uint16_t _start_tick;
+    int _timerIndex;
 };
