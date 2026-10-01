@@ -44,7 +44,8 @@ JUNK_BLOCKLIST: List[str] = [
 def _run_rustgen(header: str, output: str, extra_dir: str = "",
                  extra_dir2: str = "", blocklist: bool = False,
                  blocklist_items: Optional[List[str]] = None,
-                 lang: str = "c++", verbose: bool = False) -> None:
+                 lang: str = "c++", verbose: bool = False,
+                 reference_mcu: bool = True) -> None:
     """Run rustgen.py to generate a single binding file."""
     out_name = os.path.basename(output)
     print(f"  {out_name}")
@@ -56,6 +57,16 @@ def _run_rustgen(header: str, output: str, extra_dir: str = "",
            "--extra-dir", extra_dir]
     if extra_dir2:
         cmd += ["--extra-dir2", extra_dir2]
+    if reference_mcu:
+        ln_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        cmd += [
+            "--include-path", f"{ln_dir}/mcus/arm_gd32fx/boards/bluepill/",
+            "--include-path", f"{ln_dir}/mcus/arm_gd32fx/include/",
+            "--include-path", f"{ln_dir}/mcus/common_bluepill/",
+            "--include-path", f"{ln_dir}/legacy/boards/bluepill/",
+            "--include-path", f"{ln_dir}/FreeRTOS/portable/GCC/ARM_CM3/"
+        ]
+
     if blocklist:
         cmd.append("--blocklist")
     for item in (blocklist_items or []):
@@ -120,21 +131,21 @@ def main() -> None:
         header=os.path.join(pwd, "lnGPIO_c.h"),
         output=os.path.join(dest, "rn_gpio_bp_c.rs"),
         extra_dir=os.path.join(pwd, "..", "..", "..", "mcus", "common_bluepill", "include"),
-        lang="c++", verbose=verbose,
+        lang="c++", verbose=verbose, reference_mcu=True,
     )
     # RP2040
     _run_rustgen(
         header=os.path.join(pwd, "lnGPIO_c.h"),
         output=os.path.join(dest, "rn_gpio_rp2040_c.rs"),
         extra_dir=os.path.join(pwd, "..", "..", "..", "mcus", "arm_rp2040", "include"),
-        lang="c++", verbose=verbose,
+        lang="c++", verbose=verbose, reference_mcu=True,
     )
     # ESP32
     _run_rustgen(
         header=os.path.join(pwd, "lnGPIO_c.h"),
         output=os.path.join(dest, "rn_gpio_esp32_c.rs"),
         extra_dir=os.path.join(pwd, "..", "..", "..", "mcus", "riscv_esp32", "include"),
-        lang="c++", verbose=verbose,
+        lang="c++", verbose=verbose, reference_mcu=True,
     )
 
     # --- Bindings that need lnPin blocklist ---

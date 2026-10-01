@@ -283,6 +283,8 @@ pub struct lnFastIO {
     pub _onoff: *mut cty::c_uint,
     pub _onbit: cty::c_uint,
     pub _offbit: cty::c_uint,
+    pub _in: *mut cty::c_uint,
+    pub _inbit: cty::c_uint,
 }
 unsafe extern "C" {
     #[link_name = "\u{1}_ZN8lnFastIOC1E5lnPin"]

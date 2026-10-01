@@ -76,6 +76,10 @@ def main() -> None:
                         help="Extra include directory")
     parser.add_argument("--extra-dir2", default="",
                         help="Second extra include directory")
+    parser.add_argument("--include-path", action="append", default=[],
+                        help="Additional include paths (repeatable)")
+    parser.add_argument("--header-in", default="", help="Custom header.rs.in to prepend")
+    parser.add_argument("--tail-in", default="", help="Custom tail.rs.in to append")
     parser.add_argument("--blocklist", action="store_true",
                         help="Blocklist lnPin type and inject use crate::pin_types::lnPin")
     parser.add_argument("--blocklist-item", action="append", default=[],
@@ -110,14 +114,13 @@ def main() -> None:
     env = os.environ.copy()
     env["PATH"] = f"{platform_clang_path}:{env.get('PATH', '')}"
 
-    # header.rs.in and tail.rs.in are always taken from the c_interface/
-    # directory (the same directory as the C wrapper headers).
+    # Allow overriding header/tail, fallback to default esprit ones
     c_interface_dir = os.path.join(ln_dir, "rust", "rust_esprit", "c_interface")
-    header_in = os.path.join(c_interface_dir, "header.rs.in")
-    tail_in = os.path.join(c_interface_dir, "tail.rs.in")
+    header_in = os.path.abspath(args.header_in) if args.header_in else os.path.join(c_interface_dir, "header.rs.in")
+    tail_in = os.path.abspath(args.tail_in) if args.tail_in else os.path.join(c_interface_dir, "tail.rs.in")
+    
     if not os.path.isfile(header_in):
-        print(f"ERROR: header.rs.in not found in {c_interface_dir}",
-              file=sys.stderr)
+        print(f"ERROR: header.rs.in not found at {header_in}", file=sys.stderr)
         sys.exit(1)
 
     # Prepare temporary header with uint32_t workaround for ARM
@@ -164,8 +167,12 @@ def main() -> None:
             "-x", lang,
             "-DLN_ARCH=LN_ARCH_ARM",
             "-funsigned-char",
-            f"-I{extra_dir}",
         ]
+        # Allow multiple include paths to avoid shadowing MCU paths
+        for path in args.include_path:
+            clang_args.append(f"-I{os.path.abspath(path)}")
+        if extra_dir:
+            clang_args.append(f"-I{extra_dir}")
         if extra_dir2:
             clang_args.append(f"-I{extra_dir2}")
         clang_args += [
@@ -173,11 +180,6 @@ def main() -> None:
             f"-I{ln_dir}/include/",
             f"-I{ln_dir}/arduinoLayer/include/",
             f"-I{ln_dir}/FreeRTOS/include/",
-            f"-I{ln_dir}/mcus/arm_gd32fx/boards/bluepill/",
-            f"-I{ln_dir}/mcus/arm_gd32fx/include/",
-            f"-I{ln_dir}/mcus/common_bluepill/",
-            f"-I{ln_dir}/legacy/boards/bluepill/",
-            f"-I{ln_dir}/FreeRTOS/portable/GCC/ARM_CM3/",
             "-target", "thumbv7m-none-eabi",
             f"-I{platform_clang_path}/../lib/clang-runtimes/arm-none-eabi/armv7m_soft_nofp/include/",
         ]
