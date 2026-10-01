@@ -94,9 +94,6 @@ lnMultiPulse::lnMultiPulse(lnPin pin, int tickFqHz)
     Peripherals per = pTIMER1;
     per = (Peripherals)((int)per + _timer - 1);
     uint32_t clock = lnPeripherals::getClock(per);
-#if LN_ARCH == LN_ARCH_ARM
-    clock *= 2; // APB1 prescaler compensation
-#endif
     int divider = (clock + tickFqHz / 2) / tickFqHz;
     if (divider < 1)
         divider = 1;

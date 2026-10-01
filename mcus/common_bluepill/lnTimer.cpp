@@ -87,7 +87,7 @@ void lnTimer::setPwmFrequency(uint32_t fqInHz)
     // disable
     t->CTL0 &= ~LN_TIMER_CTL0_CEN;
 
-    int divider = (2 * clock + (fqInHz * PMW_RANGE / 2)) / (fqInHz * PMW_RANGE);
+    int divider = (clock + (fqInHz * PMW_RANGE / 2)) / (fqInHz * PMW_RANGE);
 
     if (!divider)
         divider = 1;
@@ -110,7 +110,6 @@ void lnTimer::setTickFrequency(uint32_t fqInHz)
     t->CTL0 &= ~LN_TIMER_CTL0_CEN;
 
     int divider = (clock + fqInHz / 2) / (fqInHz);
-    divider *= 2;
     while (divider > 65535)
     {
         divider = divider / 2;
@@ -309,13 +308,7 @@ void lnAdcTimer::setPwmFrequency(int fqInHz)
     Peripherals per = pTIMER1;
     per = (Peripherals)((int)per + _timer - 1);
     uint32_t clock = lnPeripherals::getClock(per);
-    // If ABP1 prescale=1, clock*=2 ???? see 5.2.1 in GD32VF103
-    if (_timer)
-    {
-        // Timer0,7,8,9 is connected to APB2 with prescaler==1 so no x2
-        // timer 1, 2,3,4 are connected to APB1 with prescaler =1/2, so *2
-        clock = clock * 2;
-    }
+
     // disable
     t->CTL0 &= ~LN_TIMER_CTL0_CEN;
 
@@ -366,10 +359,7 @@ void lnSquareSignal::setFrequency(uint32_t fqInHz)
 
     per = (Peripherals)((int)per + _timer - 1);
     uint32_t clock = lnPeripherals::getClock(per);
-    // If ABP1 prescale=1, clock*=2 ???? see 5.2 in GD32VF103
     // disable
-    if (_timer)
-        clock *= 2;
 
     int divider = (clock + (fqInHz * PMW_RANGE / 2)) / (fqInHz * PMW_RANGE);
 

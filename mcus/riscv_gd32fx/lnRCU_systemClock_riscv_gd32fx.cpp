@@ -23,6 +23,10 @@ uint32_t lnPeripherals::getClock(const Peripherals periph)
 {
     switch (periph)
     {
+    case pTIMER1:
+    case pTIMER2:
+    case pTIMER3:
+    case pTIMER4:
     case pTIMER5:
     case pTIMER6:
         return _rcuClockApb1 * 2;
