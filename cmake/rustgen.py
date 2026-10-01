@@ -156,6 +156,21 @@ def main() -> None:
                 "--raw-line", "pub use crate::pin_types::lnPin;",
             ]
 
+        # Global blocklists to strip toolchain/libc noise
+        global_junk = [
+            # Standard JUNK_BLOCKLIST from esprit
+            "_LIBCPP_.*", "_NEWLIB_.*", "_PICOLIBC_.*", "__HAVE_.*", "__IO_.*",
+            "__NEWLIB_.*", "__PICOLIBC_.*", "_ATFILE_SOURCE", "_DEFAULT_SOURCE",
+            "_ISOC[0-9].*", "_POSIX_.*", "_XOPEN_.*", "_LARGEFILE64_SOURCE", "WINT_MIN",
+            
+            # Additional libc macro noise
+            "__.*VISIBLE", "__OBSOLETE_.*", "__GNU.*", "___int.*", "__INT.*",
+            "__FAST.*", "__LEAST.*", "__int.*_defined", "__SCHAR_.*", "__LONG_.*",
+            "__have_.*", "__RAND_MAX", "__bool_true_false_are_defined", "true_", "false_"
+        ]
+        for junk in global_junk:
+            bindgen_args += ["--blocklist-item", junk]
+
         for item in args.blocklist_item:
             bindgen_args += ["--blocklist-item", item]
 
