@@ -195,16 +195,11 @@ bool lnDmaTimer::setTickFrequency(int fqInHz)
     Peripherals per = pTIMER1;
     per = (Peripherals)((int)per + _timer - 1);
     uint32_t clock = lnPeripherals::getClock(per);
-    // If ABP1 prescale=1, clock*=2 ???? see 5.2 in GD32VF103
     // disable
     t->CTL0 &= ~LN_TIMER_CTL0_CEN;
-
+    // getClock() already returns the real timer input clock (APB1 x2 for TIMER1..6),
+    // so no architecture specific compensation is needed here.
     int divider = (clock + fqInHz / 2) / (fqInHz);
-// dafuq ?
-#warning Dirty workaround of x2 mismatch between gd32/arm and CH32/riscv timer clocks
-#if LN_ARCH == LN_ARCH_ARM
-    divider *= 2;
-#endif
 
 #warning FIXME we assume no prescaler needed
     t->PSC = 0;
