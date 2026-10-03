@@ -58,6 +58,10 @@ pub type SpiBus = Spi;
 impl Spi {
     /// Create a new SPI bus on hardware instance `instance` with chip-select `cs_pin`.
     /// `cs_pin` is the C `Pin` enum value (e.g. `Pin::PA4`).
+    pub fn set_dma_mode(&mut self, enable: bool) {
+        unsafe { crate::rn_spi_c::lnspi_set_dma_mode(self.raw, enable) }
+    }
+
     pub fn new(instance: u32, cs_pin: Pin) -> Self {
         let raw = unsafe { rn_spi_c::lnspi_create(instance, cs_pin as i32) };
         assert!(!raw.is_null(), "lnspi_create returned NULL");

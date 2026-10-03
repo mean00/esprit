@@ -76,6 +76,7 @@ unsafe extern "C" {
 unsafe extern "C" {
     #[link_name = "\u{1}_Z11lnspi_beginP8ln_spi_cj"]
     pub fn lnspi_begin(instance: *mut ln_spi_c, dataSize: cty::c_uint);
+    pub fn lnspi_set_dma_mode(ptr: *mut ln_spi_c, enable: bool);
 }
 unsafe extern "C" {
     #[link_name = "\u{1}_Z9lnspi_endP8ln_spi_c"]

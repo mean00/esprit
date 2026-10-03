@@ -13,7 +13,11 @@
 //! // mp is dropped → automatic cleanup
 //! ```
 
-use crate::Pin;
+use crate::gpio::Pin;
+
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+use rs_multi_pulse_bluepill as mp;
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
 use crate::c_api::rn_multi_pulse_c as mp;
 
 /// Safe wrapper around a multi-pulse generator.
@@ -21,7 +25,7 @@ use crate::c_api::rn_multi_pulse_c as mp;
 /// Manages the lifetime of the underlying C++ `lnMultiPulse` object.
 /// When this struct is dropped, the generator is stopped and freed.
 pub struct MultiPulse {
-    inner: *mut crate::raw::ln_multi_pulse_c,
+    inner: *mut mp::ln_multi_pulse_c,
 }
 
 // The pointer is safe to send between threads because the underlying

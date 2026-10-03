@@ -22,9 +22,7 @@ mod import_gpio {
 
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 mod import_gpio {
-    pub(crate) use crate::rn_gpio_bp_c;
-    pub(crate) use crate::rn_gpio_bp_c as gpio;
-    pub use crate::rn_gpio_bp_c::lnPinMode_c;
+    pub use rs_gpio_bluepill as gpio;
 }
 
 // Internal FFI facade: other modules reach the raw GPIO functions through
@@ -65,6 +63,7 @@ pub use import_gpio::gpio::lnPin as Pin;
 pub type pin = Pin;
 
 /// Build a [`Pin`] from a raw numeric value (advanced).
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
 impl From<u32> for Pin {
     fn from(val: u32) -> Self {
         // SAFETY: `lnPin` is a C enum; this mirrors the cast historically
@@ -100,6 +99,30 @@ pub enum GpioMode {
     UartAlt = 13,
 }
 
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+impl From<GpioMode> for crate::raw::lnGpioMode {
+    fn from(mode: GpioMode) -> Self {
+        use rs_gpio_bluepill::Mode::*;
+        match mode {
+            GpioMode::Floating => Floating,
+            GpioMode::InputFloating => InputFloating,
+            GpioMode::InputPullUp => InputPullup,
+            GpioMode::InputPullDown => InputPulldown,
+            GpioMode::Output => Output,
+            GpioMode::OutputOpenDrain => OutputOpenDrain,
+            GpioMode::AlternatePushPull => AlternatePushPull,
+            GpioMode::AlternateOpenDrain => AlternateOpenDrain,
+            GpioMode::Pwm => Pwm,
+            GpioMode::Adc => AdcMode,
+            GpioMode::Dac => DacMode,
+            GpioMode::Uart => Uart,
+            GpioMode::Spi => SpiMode,
+            GpioMode::UartAlt => UartAlt,
+        }
+    }
+}
+
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
 impl From<GpioMode> for crate::raw::lnGpioMode {
     fn from(mode: GpioMode) -> Self {
         use crate::raw::lnGpioMode::{

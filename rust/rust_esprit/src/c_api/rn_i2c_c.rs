@@ -93,4 +93,5 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn lni2c_begin(ptr: *mut ln_i2c_c, target: cty::c_uint) -> bool;
+    pub fn lni2c_set_dma_mode(ptr: *mut ln_i2c_c, enable: bool);
 }

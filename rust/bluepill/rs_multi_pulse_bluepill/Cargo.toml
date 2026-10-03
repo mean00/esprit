@@ -1,0 +1,8 @@
+[package]
+name = "rs_multi_pulse_bluepill"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rs_bluepill = { path = "../rs_bluepill" }
+rs_gpio_bluepill = { path = "../rs_gpio_bluepill" }

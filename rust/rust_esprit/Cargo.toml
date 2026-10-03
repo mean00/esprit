@@ -6,7 +6,16 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
+rs_spi_bluepill = { path = "../bluepill/rs_spi_bluepill" }
+rs_i2c_bluepill = { path = "../bluepill/rs_i2c_bluepill" }
 cty = "0.2.2"
+rs_rcu_bluepill = { path = "../bluepill/rs_rcu_bluepill" }
+rs_gpio_bluepill = { path = "../bluepill/rs_gpio_bluepill" }
+rs_exti_bluepill = { path = "../bluepill/rs_exti_bluepill" }
+rs_timer_bluepill = { path = "../bluepill/rs_timer_bluepill" }
+rs_adc_bluepill = { path = "../bluepill/rs_adc_bluepill" }
+rs_multi_pulse_bluepill = { path = "../bluepill/rs_multi_pulse_bluepill" }
+rs_uart_bluepill = { path = "../bluepill/rs_uart_bluepill" }
 ufmt = { version = "0.2.0", default-features = false }
 heapless = { version = "0.7.17", features = ["ufmt-impl"] }
 cfg-if = "1.0"

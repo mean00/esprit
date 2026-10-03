@@ -8,8 +8,13 @@
 //! `&mut T` parameter to [`async_read`](AdcTiming::async_read), and
 //! the buffer is obtained via the [`AdcBuffer`] trait.
 
-use crate::Pin;
+use crate::gpio::Pin;
+
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+use rs_adc_bluepill as rn_timing_adc_c;
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
 use crate::rn_timing_adc_c;
+
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
 use core::marker::PhantomData;

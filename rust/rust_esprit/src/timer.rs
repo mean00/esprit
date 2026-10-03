@@ -3,7 +3,11 @@
 //! Provides a [`Timer`] struct that can be created from a pin and used to
 //! generate single‑shot pulses via [`Timer::single_shot`].
 
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+use rs_timer_bluepill as rt;
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
 use crate::c_api::rn_timer_c as rt;
+
 use crate::gpio::Pin;
 
 /// A hardware timer channel, wrapping the C++ `lnTimer` class.
@@ -18,7 +22,7 @@ use crate::gpio::Pin;
 /// // Timer is automatically freed when `t` goes out of scope
 /// ```
 pub struct Timer {
-    inner: *mut crate::raw::ln_timer_c,
+    inner: *mut rt::ln_timer_c,
 }
 
 impl Timer {

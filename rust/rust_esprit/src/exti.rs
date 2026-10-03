@@ -1,6 +1,10 @@
 #![allow(dead_code)]
 
 use crate::gpio::{lnPin, Pin};
+
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+use rs_exti_bluepill as rn_exti_c;
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
 use crate::rn_exti_c;
 
 /// Edge trigger configuration for external interrupts.
@@ -14,6 +18,19 @@ pub enum Edge {
 }
 
 /// Convert from the platform's `Edge` to the C-bindgen `lnEdge`.
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+impl From<Edge> for rn_exti_c::lnEdge {
+    fn from(e: Edge) -> Self {
+        match e {
+            Edge::None => rn_exti_c::Edge::None,
+            Edge::Rising => rn_exti_c::Edge::Rising,
+            Edge::Falling => rn_exti_c::Edge::Falling,
+            Edge::Both => rn_exti_c::Edge::Both,
+        }
+    }
+}
+
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
 impl From<Edge> for rn_exti_c::lnEdge {
     fn from(e: Edge) -> Self {
         match e {

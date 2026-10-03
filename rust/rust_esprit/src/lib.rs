@@ -1,3 +1,4 @@
+#![allow(unused_unsafe)]
 //! # rust_esprit
 //!
 //! Rust bindings for the **Esprit** HAL — the bare‑metal framework for
@@ -168,10 +169,22 @@ pub(crate) use c_api::rn_gpio_bp_c;
 pub(crate) use c_api::rn_gpio_esp32_c;
 #[cfg(feature = "rp2040")]
 pub(crate) use c_api::rn_gpio_rp2040_c;
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+pub(crate) use rs_i2c_bluepill as rn_i2c_c;
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
 pub(crate) use c_api::rn_i2c_c;
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+pub(crate) use rs_spi_bluepill as rn_spi_c;
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
 pub(crate) use c_api::rn_spi_c;
 pub(crate) use c_api::rn_timer_c;
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+pub(crate) use rs_uart_bluepill as rn_serial_c;
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
 pub(crate) use c_api::rn_serial_c;
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+pub(crate) use rs_adc_bluepill as rn_timing_adc_c;
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
 pub(crate) use c_api::rn_timing_adc_c;
 pub(crate) use c_api::rn_multi_pulse_c;
 #[cfg(feature = "cdc")]
@@ -223,7 +236,7 @@ pub mod raw {
     /// Canonical pin enum (the same type as the crate-root `Pin`).
     pub use crate::pin_types::lnPin;
     #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
-    pub use crate::rn_gpio_bp_c::{
+    pub use rs_gpio_bluepill::{
         lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
         lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
         lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
@@ -439,6 +452,55 @@ pub mod std_shim {
     //! use rust_esprit::std::time::Instant;
     //! ```
 
+    // --- ZERO-COST CORE RE-EXPORTS ---
+    pub use core::any;
+    pub use core::cell;
+    pub use core::clone;
+    pub use core::cmp;
+    pub use core::convert;
+    pub use core::default;
+    pub use core::fmt;
+    pub use core::hash;
+    pub use core::iter;
+    pub use core::marker;
+    pub use core::mem;
+    pub use core::num;
+    pub use core::ops;
+    pub use core::option;
+    pub use core::pin;
+    pub use core::ptr;
+    pub use core::result;
+    pub use core::slice;
+    pub use core::str;
+    pub use core::task;
+
+    // --- ZERO-COST ALLOC RE-EXPORTS ---
+    pub mod vec { pub use alloc::vec::*; }
+    pub mod string { pub use alloc::string::*; }
+    pub mod boxed { pub use alloc::boxed::*; }
+    pub mod borrow { pub use alloc::borrow::*; }
+    pub mod rc { pub use alloc::rc::*; }
+
+    pub mod collections {
+        //! Heap-allocated collections (backed by FreeRTOS heap).
+        pub use alloc::collections::*;
+    }
+
+    pub mod error {
+        //! Error handling traits.
+        pub use core::error::Error;
+    }
+
+    pub mod prelude {
+        pub mod v1 {
+            pub use core::prelude::rust_2021::*;
+            pub use alloc::vec::Vec;
+            pub use alloc::string::{String, ToString};
+            pub use alloc::boxed::Box;
+            pub use alloc::borrow::ToOwned;
+        }
+    }
+
     pub mod sync {
         //! FreeRTOS-backed synchronisation primitives.
         pub use crate::sync::{
@@ -450,6 +512,47 @@ pub mod std_shim {
             LazyLock,
             BinarySemaphore, CountingSemaphore, SemaphoreGuard,
         };
+
+        pub mod mpsc {
+            //! FreeRTOS-backed message passing.
+            use crate::sync::Arc;
+            use crate::queue::Queue;
+
+            #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+            pub struct RecvError;
+
+            #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+            pub struct SendError<T>(pub T);
+
+            pub struct SyncSender<T>(Arc<Queue<T>>);
+            pub struct Receiver<T>(Arc<Queue<T>>);
+
+            #[inline(always)]
+            pub fn sync_channel<T>(bound: usize) -> (SyncSender<T>, Receiver<T>) {
+                let q = Arc::new(Queue::new(bound as u32));
+                (SyncSender(q.clone()), Receiver(q))
+            }
+
+            impl<T> SyncSender<T> {
+                #[inline]
+                pub fn send(&self, t: T) -> Result<(), SendError<T>> {
+                    self.0.send(t).map_err(SendError)
+                }
+            }
+
+            impl<T> Receiver<T> {
+                #[inline]
+                pub fn recv(&self) -> Result<T, RecvError> {
+                    Ok(self.0.receive())
+                }
+            }
+
+            impl<T> Clone for SyncSender<T> {
+                fn clone(&self) -> Self {
+                    SyncSender(self.0.clone())
+                }
+            }
+        }
     }
 
     pub mod time {
@@ -460,14 +563,6 @@ pub mod std_shim {
     pub mod thread {
         //! FreeRTOS-backed task spawning.
         pub use crate::task::{spawn, yield_now, current, sleep, sleep_ms};
-    }
-
-    pub mod collections {
-        //! Heap-allocated collections (backed by FreeRTOS heap).
-        //! Re-exports from `alloc`.
-        pub use alloc::vec::Vec;
-        pub use alloc::string::String;
-        pub use alloc::boxed::Box;
     }
 }
 

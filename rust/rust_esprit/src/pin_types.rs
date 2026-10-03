@@ -9,7 +9,7 @@
 //! that all consumers use the same type.
 
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
-pub use crate::rn_gpio_bp_c::lnPin;
+pub use rs_gpio_bluepill::lnPin;
 
 #[cfg(feature = "esp32")]
 pub use crate::rn_gpio_esp32_c::lnPin;

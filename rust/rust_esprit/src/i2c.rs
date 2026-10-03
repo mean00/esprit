@@ -15,6 +15,10 @@ pub type I2cBus = I2c;
 
 impl I2c {
     /// Create a new I²C bus on hardware instance `instance` at `speed_hz` Hz.
+    pub fn set_dma_mode(&mut self, enable: bool) {
+        unsafe { crate::rn_i2c_c::lni2c_set_dma_mode(self.raw, enable) }
+    }
+
     pub fn new(instance: u32, speed_hz: u32) -> Self {
         let raw = unsafe { rn_i2c_c::lni2c_create(instance, speed_hz) };
         assert!(!raw.is_null(), "lni2c_create returned NULL");
