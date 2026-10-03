@@ -164,9 +164,16 @@ if(NOT DEFINED LN_EXT)
   #
   # SET(EXTRA_DEBUG "-fno-omit-frame-pointer") SET(EXTRA_DEBUG "-Wdouble-promotion -Werror=double-promotion
   # -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables")
-  set(EXTRA_DEBUG
+  IF(FALSE)
+    set(EXTRA_DEBUG
       "-Wdouble-promotion -Werror=double-promotion -fno-omit-frame-pointer -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables"
   )
+  ELSE()
+    set(EXTRA_DEBUG
+      "-Wdouble-promotion -Werror=double-promotion  -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables"
+  )
+
+  ENDIF()
   #
   set(GD32_MCU_C_FLAGS
       "--sysroot ${PLATFORM_CLANG_SYSROOT} ${EXTRA_DEBUG} ${PLATFORM_CLANG_C_FLAGS} -DLN_MCU=LN_MCU_CH32V3x -DLN_ARCH=LN_ARCH_RISCV ${LN_BOARD_NAME_FLAG} -I${ESPRIT_ROOT}/riscv_ch32v3x/"

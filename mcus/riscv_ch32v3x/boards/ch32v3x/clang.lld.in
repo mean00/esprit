@@ -96,14 +96,8 @@ SECTIONS
          * Program code and vague linking
          */
         *(.text .text.* .gnu.linkonce.t.*)
-        *(*.rodata)
-        *(*.rodata.*)
-        /* Keep the FreeRTOS debug struct so the debugger can always find it */
-        KEEP(*(.rodata.freertos_debug))
 
         *(.plt)
-        *(.eh_frame_hdr)
-        *(.eh_frame)
 
 
         . = ALIGN(4);
@@ -137,15 +131,35 @@ SECTIONS
         KEEP (*(SORT(.dtors.*)))
         KEEP (*crtend.o(.dtors))
       } > REGION_TEXT
-      .rodata_section : 
+    /*
+     * End of text
+     */
+    .text.align :
       {
-    	    . = ALIGN(8);
-    	    *(.srodata.cst16)
-    	    *(.srodata.cst8)
-    	    *(.srodata.cst4)
-    	    *(.srodata.cst2)
-    	    *(.srodata .srodata.*)
-          . = ALIGN(4);
+        . = ALIGN(8);
+        __text_end__ = .;
+      } > REGION_TEXT
+
+    /*
+     * Read-only data.
+     *
+     * Historically this was folded into .text above; it now lives in its own
+     * output section so the layout matches the ARM/GD32 script
+     * (esprit/mcus/arm_gd32fx/boards/bluepill/clang.lld.in) and .text holds
+     * code only, which makes the two builds directly comparable.
+     */
+    .rodata :
+      {
+        . = ALIGN(8);
+        *(.srodata.cst16)
+        *(.srodata.cst8)
+        *(.srodata.cst4)
+        *(.srodata.cst2)
+        *(.srodata .srodata.*)
+        *(.rodata .rodata.* .gnu.linkonce.r.*)
+        /* Keep the FreeRTOS debug struct so the debugger can always find it */
+        KEEP(*(.rodata.freertos_debug))
+        . = ALIGN(4);
       } > REGION_TEXT
 
       .vma_section : 
@@ -238,5 +252,18 @@ SECTIONS
     .debug_funcnames 0 (NOLOAD) : { *(.debug_funcnames) }
     .debug_typenames 0 (NOLOAD) : { *(.debug_typenames) }
     .debug_varnames  0 (NOLOAD) : { *(.debug_varnames) }
+
+    /*
+     * Sections we do not want in the image.
+     *
+     * *(.eh_frame*): nothing ever unwinds here. Rust is built with panic=abort,
+     *   the C/C++ code with -fno-exceptions/-fno-rtti/-fno-unwind-tables, and
+     *   rustc has no working knob on riscv32 anyway (-C force-unwind-tables=no is
+     *   accepted but LLVM still emits .eh_frame). Left in .text it is ~9.5 kB of
+     *   dead weight. The ARM/Thumb-2 targets emit no .eh_frame at all, so dropping
+     *   it also keeps the two builds comparable.
+     * *(.note.GNU-stack): informational only; parity with the ARM/GD32 script.
+     */
+    /DISCARD/ : { *(.eh_frame) *(.eh_frame.*) *(.note.GNU-stack) }
 }
 
