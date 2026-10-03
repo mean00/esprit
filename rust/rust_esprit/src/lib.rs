@@ -186,6 +186,16 @@ pub(crate) use c_api::rn_serial_c;
 pub(crate) use rs_adc_bluepill as rn_timing_adc_c;
 #[cfg(any(feature = "rp2040", feature = "esp32"))]
 pub(crate) use c_api::rn_timing_adc_c;
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+pub(crate) use rs_adc_bluepill as rn_simple_adc_c;
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
+pub(crate) use c_api::rn_simple_adc_c;
+
+#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+pub(crate) use rs_timer_bluepill as rn_hw_stopwatch_c;
+#[cfg(any(feature = "rp2040", feature = "esp32"))]
+pub(crate) use c_api::rn_hw_stopwatch_c;
+
 pub(crate) use c_api::rn_multi_pulse_c;
 #[cfg(feature = "cdc")]
 pub(crate) use c_api::rn_usb_c;
@@ -574,3 +584,6 @@ pub mod std_shim {
 /// ```
 #[cfg(feature = "fake_std")]
 pub use std_shim as std;
+
+pub mod simple_adc;
+pub mod hw_stopwatch;

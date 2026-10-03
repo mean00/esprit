@@ -32,3 +32,5 @@ pub mod rn_multi_pulse_c;
 pub mod rn_serial_c;
 #[cfg(feature = "cdc")]
 pub mod rn_usb_c;
+pub mod rn_simple_adc_c;
+pub mod rn_hw_stopwatch_c;

@@ -26,8 +26,8 @@ fn pack_handle(instance: u32) -> *mut ln_timing_adc_c {
     instance as usize as *mut ln_timing_adc_c
 }
 
-fn pin_to_adc_channel(pin: lnPin) -> u32 {
-    let p = pin as u32;
+fn pin_to_adc_channel(pin: u32) -> u32 {
+    let p = pin;
     if p < 8 {
         p // PA0-PA7 -> CH0-CH7
     } else if p >= 16 && p <= 17 {
@@ -90,7 +90,7 @@ pub extern "C" fn ln_timing_adc_set_source(
         let mut rsq2 = 0;
         for i in 0..nb_pins {
             let p = *pin.add(i as usize);
-            let ch = pin_to_adc_channel(p);
+            let ch = pin_to_adc_channel(p as u32);
             rsq2 |= ch << (5 * i);
         }
         write_volatile(&mut (*regs).rsq2, rsq2);
@@ -175,4 +175,85 @@ pub extern "C" fn ln_timing_adc_async_read(
         unsafe { callback(ctx); }
     }
     true
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_simple_adc_create(instance: u32, pin: u32) -> *mut c_void {
+    if instance == 0 {
+        enable(Peripheral::Adc0);
+    } else {
+        enable(Peripheral::Adc1);
+    }
+    let packed = (instance & 0xFFFF) | ((pin & 0xFFFF) << 16);
+    pack_handle(packed) as *mut c_void
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_simple_adc_destroy(_adc: *mut c_void) {}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_simple_adc_set_smpt(adc: *mut c_void, smpt: u32) {
+    let packed = unpack_handle(adc as *mut ln_timing_adc_c);
+    let instance = packed & 0xFFFF;
+    let regs = AdcRegisters::ptr(instance);
+    // Setting SMPT isn't strictly necessary for our basic emulation, but we could set SAMPT0/SAMPT1
+    // For now we do nothing or apply a basic config
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_simple_adc_read(adc: *mut c_void) -> i32 {
+    let packed = unpack_handle(adc as *mut ln_timing_adc_c);
+    let instance = packed & 0xFFFF;
+    let pin_val = (packed >> 16) & 0xFFFF;
+    let regs = AdcRegisters::ptr(instance);
+    
+    // We assume the pin is hardcoded for the Swindle target to ADC_IN channel (Vcc/NRST etc)
+    // Actually the pin is passed during creation. We don't store it in the handle because
+    // it's a zero-allocation crate. We can just configure a default channel or read the 
+    // configured channel if we had stored it.
+    // Wait, the original `lnSimpleADC` sets the RSQ2 channel based on the pin.
+    // To be perfect, we should pack the pin into the handle as well!
+    // Handle is 32-bit: | 16 bits PIN | 16 bits INSTANCE |
+    
+    unsafe {
+        let ch = pin_to_adc_channel(pin_val);
+        
+        // Set EXTTRIG (bit 20) and EXTSEL to SWSTART (bits 19:17 = 111)
+        let mut ctl1 = read_volatile(&mut (*regs).ctl1);
+        ctl1 |= (7 << 17) | (1 << 20);
+        ctl1 |= 1; // ADON
+        write_volatile(&mut (*regs).ctl1, ctl1);
+        
+        // ADC power-up delay
+        let mut nop_ctr = 0; while nop_ctr < 1000 { core::arch::asm!("nop"); nop_ctr+=1; }
+        
+        // Trigger calibration (RSTCLB then CLB)
+        ctl1 = read_volatile(&mut (*regs).ctl1);
+        ctl1 |= 1 << 3; // RSTCLB
+        write_volatile(&mut (*regs).ctl1, ctl1);
+        while (read_volatile(&mut (*regs).ctl1) & (1 << 3)) != 0 { core::arch::asm!("nop"); }
+        
+        ctl1 = read_volatile(&mut (*regs).ctl1);
+        ctl1 |= 1 << 2; // CLB
+        write_volatile(&mut (*regs).ctl1, ctl1);
+        while (read_volatile(&mut (*regs).ctl1) & (1 << 2)) != 0 { core::arch::asm!("nop"); }
+        
+        // 1 sample => RSQ0 = 0
+        write_volatile(&mut (*regs).rsq0, 0);
+        write_volatile(&mut (*regs).rsq2, ch); // Channel 0..15
+        
+        // SWRCST to start conversion
+        ctl1 = read_volatile(&mut (*regs).ctl1);
+        ctl1 |= 1 << 22; // SWSTART
+        write_volatile(&mut (*regs).ctl1, ctl1);
+        
+        // Wait for EOC (bit 1 of STAT)
+        while (read_volatile(&mut (*regs).stat) & 2) == 0 {
+            core::arch::asm!("nop");
+        }
+        
+        // Read RDATA
+        let data = read_volatile(&mut (*regs).rdata) & 0xFFFF;
+        data as i32
+    }
 }

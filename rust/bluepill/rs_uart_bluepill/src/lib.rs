@@ -69,8 +69,13 @@ pub extern "C" fn lnserial_tx_init(s: *mut ln_serial_tx_c) -> bool {
 pub extern "C" fn lnserial_tx_set_speed(s: *mut ln_serial_tx_c, speed: u32) -> bool {
     let instance = unpack_tx_handle(s);
     let regs = UartRegisters::ptr(instance);
-    // Rough simulation for Bluepill APB2=72MHz (USART0) and APB1=36MHz (USART1/2)
-    let pclk = if instance == 0 { 72_000_000 } else { 36_000_000 };
+    let periph = match instance {
+        0 => Peripheral::Uart0,
+        1 => Peripheral::Uart1,
+        2 => Peripheral::Uart2,
+        _ => Peripheral::Uart0,
+    };
+    let pclk = rs_rcu_bluepill::get_clock(periph);
     let usartdiv = (pclk + (speed / 2)) / speed;
     unsafe {
         write_volatile(&mut (*regs).baud, usartdiv);

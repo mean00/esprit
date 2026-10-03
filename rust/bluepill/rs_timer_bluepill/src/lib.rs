@@ -90,3 +90,61 @@ pub fn ln_timer_delete(handle: *mut ln_timer_c) {
         write_volatile(&mut (*regs).ctl0, ctl0);
     }
 }
+
+
+static mut START_TICKS: [u16; 8] = [0; 8];
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_hw_stopwatch_create(timer_index: u32) -> *mut c_void {
+    let packed = timer_index;
+    packed as usize as *mut c_void
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_hw_stopwatch_destroy(_sw: *mut c_void) {}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_hw_stopwatch_setup(sw: *mut c_void) {
+    let timer_index = sw as usize as u32;
+    let periph = match timer_index {
+        0 => Peripheral::Timer0,
+        1 => Peripheral::Timer1,
+        2 => Peripheral::Timer2,
+        3 => Peripheral::Timer3,
+        4 => Peripheral::Timer4, // TIM5
+        5 => Peripheral::Timer5,
+        6 => Peripheral::Timer6,
+        _ => Peripheral::Timer0,
+    };
+    enable(periph);
+    
+    let regs = TimerRegisters::ptr(timer_index);
+    unsafe {
+        write_volatile(&mut (*regs).ctl0, 0);
+        write_volatile(&mut (*regs).psc, 0);
+        write_volatile(&mut (*regs).car, 0xFFFF);
+        write_volatile(&mut (*regs).cnt, 0);
+        write_volatile(&mut (*regs).ctl0, 1); // CEN
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_hw_stopwatch_start(sw: *mut c_void) {
+    let timer_index = sw as usize as u32;
+    let regs = TimerRegisters::ptr(timer_index);
+    let cnt = unsafe { read_volatile(&mut (*regs).cnt) as u16 };
+    unsafe { START_TICKS[timer_index as usize % 8] = cnt; }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_hw_stopwatch_wait(sw: *mut c_void, ticks: u16) {
+    let timer_index = sw as usize as u32;
+    let start_tick = unsafe { START_TICKS[timer_index as usize % 8] };
+    
+    let regs = TimerRegisters::ptr(timer_index);
+    unsafe {
+        while ((read_volatile(&mut (*regs).cnt) as u16).wrapping_sub(start_tick)) < ticks {
+            core::arch::asm!("nop");
+        }
+    }
+}

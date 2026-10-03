@@ -28,3 +28,4 @@ rust/rnArduino/target
 *attic*
 rust/rust_esprit/target/
 *.old
+rust/bluepill/rs*bluepill/target/
