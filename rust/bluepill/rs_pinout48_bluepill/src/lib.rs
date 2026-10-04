@@ -306,39 +306,64 @@ pub fn setup_timer_pin(pin: Pin) -> Option<(u32, u32, rs_dma_bluepill::DmaEngine
     ))
 }
 
-// --- C API aliases (-1 = not available, like the legacy pinMappings table) ---
+/// Idiomatic struct interface for query-based pinout and peripheral mapping.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Pinout;
 
-const C_NONE: i32 = -1;
+impl Pinout {
+    #[inline(always)]
+    pub fn exists(pin: Pin) -> bool {
+        pin_exists(pin)
+    }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rs_pinout_adc(pin: u32) -> i32 {
-    adc_channel(Pin::from(pin)).map_or(C_NONE, i32::from)
+    #[inline(always)]
+    pub fn info(pin: Pin) -> Option<PinInfo> {
+        pin_info(pin)
+    }
+
+    #[inline(always)]
+    pub fn adc_channel(pin: Pin) -> Option<u8> {
+        adc_channel(pin)
+    }
+
+    #[inline(always)]
+    pub fn timer_channel(pin: Pin) -> Option<TimerChannel> {
+        timer_channel(pin)
+    }
+
+    #[inline(always)]
+    pub fn dac_channel(pin: Pin) -> Option<u8> {
+        dac_channel(pin)
+    }
+
+    #[inline(always)]
+    pub fn i2c_pin(pin: Pin) -> Option<I2cPin> {
+        i2c_pin(pin)
+    }
+
+    #[inline(always)]
+    pub fn spi_pin(pin: Pin) -> Option<SpiPin> {
+        spi_pin(pin)
+    }
+
+    #[inline(always)]
+    pub fn uart_pin(pin: Pin) -> Option<UartPin> {
+        uart_pin(pin)
+    }
+
+    #[inline(always)]
+    pub fn timer_dma(timer: u8, channel: u8) -> Option<DmaChannel> {
+        timer_dma(timer, channel)
+    }
+
+    #[inline(always)]
+    pub fn setup_timer_pin(pin: Pin) -> Option<(u32, u32, rs_dma_bluepill::DmaEngine, usize)> {
+        setup_timer_pin(pin)
+    }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rs_pinout_dac(pin: u32) -> i32 {
-    dac_channel(Pin::from(pin)).map_or(C_NONE, i32::from)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn rs_pinout_timer(pin: u32) -> i32 {
-    timer_channel(Pin::from(pin)).map_or(C_NONE, |t| i32::from(t.timer))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn rs_pinout_timer_channel(pin: u32) -> i32 {
-    timer_channel(Pin::from(pin)).map_or(C_NONE, |t| i32::from(t.channel))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn rs_pinout_timer_dma_engine(timer: u8, channel: u8) -> i32 {
-    timer_dma(timer, channel).map_or(C_NONE, |d| i32::from(d.engine))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn rs_pinout_timer_dma_channel(timer: u8, channel: u8) -> i32 {
-    timer_dma(timer, channel).map_or(C_NONE, |d| i32::from(d.channel))
-}
+pub mod shim;
+pub use shim::*;
 
 #[cfg(test)]
 mod tests {

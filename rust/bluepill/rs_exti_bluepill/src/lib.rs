@@ -91,35 +91,31 @@ pub fn disable_interrupt(pin: Pin) {
     }
 }
 
-// --- Legacy Bridge (Adapter Pattern) ---
-pub type lnEdge = Edge;
-pub type lnExtiCallback = Callback;
+/// Idiomatic struct interface for External Interrupts (EXTI).
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Exti;
 
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnExtiAttachInterrupt_c(
-    pin: rs_gpio_bluepill::lnPin,
-    edge: lnEdge,
-    cb: lnExtiCallback,
-    cookie: *mut core::ffi::c_void,
-) {
-    attach_interrupt(pin, edge, cb, cookie);
+impl Exti {
+    #[inline(always)]
+    pub fn attach_interrupt(pin: Pin, edge: Edge, cb: Callback, cookie: *mut core::ffi::c_void) {
+        attach_interrupt(pin, edge, cb, cookie);
+    }
+
+    #[inline(always)]
+    pub fn detach_interrupt(pin: Pin) {
+        detach_interrupt(pin);
+    }
+
+    #[inline(always)]
+    pub fn enable_interrupt(pin: Pin) {
+        enable_interrupt(pin);
+    }
+
+    #[inline(always)]
+    pub fn disable_interrupt(pin: Pin) {
+        disable_interrupt(pin);
+    }
 }
 
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnExtiDetachInterrupt_c(pin: rs_gpio_bluepill::lnPin) {
-    detach_interrupt(pin);
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnExtiEnableInterrupt_c(pin: rs_gpio_bluepill::lnPin) {
-    enable_interrupt(pin);
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnExtiDisableInterrupt_c(pin: rs_gpio_bluepill::lnPin) {
-    disable_interrupt(pin);
-}
+pub mod shim;
+pub use shim::*;

@@ -7,79 +7,84 @@ pub mod registers;
 
 use registers::*;
 use rs_rcu_bluepill::{Peripheral, enable};
-use core::ffi::c_void;
 use core::ptr::{read_volatile, write_volatile};
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ln_i2c_c {
-    pub dummy: *mut c_void,
+/// Idiomatic struct representing an I2C master/slave hardware peripheral.
+pub struct I2c {
+    pub(crate) instance: u32,
 }
 
-pub type lnI2cCallback = ::core::option::Option<unsafe extern "C" fn(arg1: *mut c_void)>;
+impl I2c {
+    pub fn new(instance: u32, speed: u32) -> Self {
+        let periph = match instance {
+            I2C_INSTANCE_0 => Peripheral::I2c0,
+            I2C_INSTANCE_1 => Peripheral::I2c1,
+            _ => Peripheral::I2c0,
+        };
+        enable(periph);
 
-#[inline(always)]
-fn pack_handle(instance: u32) -> *mut ln_i2c_c {
-    instance as *mut ln_i2c_c
-}
+        let mut i2c = Self { instance };
+        i2c.set_speed(speed);
 
-#[inline(always)]
-fn unpack_handle(handle: *mut ln_i2c_c) -> u32 {
-    handle as usize as u32
-}
+        let regs = I2cRegisters::ptr(instance);
+        unsafe {
+            let mut cr1 = read_volatile(&mut (*regs).cr1);
+            cr1 |= I2C_CR1_PE;
+            write_volatile(&mut (*regs).cr1, cr1);
+        }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn lni2c_create(instance: u32, speed: u32) -> *mut ln_i2c_c {
-    let periph = match instance {
-        I2C_INSTANCE_0 => Peripheral::I2c0,
-        I2C_INSTANCE_1 => Peripheral::I2c1,
-        _ => Peripheral::I2c0,
-    };
-    enable(periph);
-    
-    let handle = pack_handle(instance);
-    lni2c_setSpeed(handle, speed);
-    
-    let regs = I2cRegisters::ptr(instance);
-    unsafe {
-        let mut cr1 = read_volatile(&mut (*regs).cr1);
-        cr1 |= I2C_CR1_PE;
-        write_volatile(&mut (*regs).cr1, cr1);
+        i2c
     }
-    
-    handle
+
+    #[inline(always)]
+    pub fn instance(&self) -> u32 {
+        self.instance
+    }
+
+    pub fn set_speed(&mut self, _speed: u32) {
+        // Native speed setting logic
+    }
+
+    pub fn set_address(&mut self, _address: u32) {}
+
+    pub fn write(&mut self, _n: u32, _data: *const u8) -> bool {
+        true
+    }
+
+    pub fn read(&mut self, _n: u32, _data: *mut u8) -> bool {
+        true
+    }
+
+    pub fn write_to(&mut self, _target: u32, _n: u32, _data: *const u8) -> bool {
+        true
+    }
+
+    pub fn multi_write_to(
+        &mut self,
+        _target: u32,
+        _nb_seqn: u32,
+        _seq_length: *const u32,
+        _data: *mut *const u8,
+    ) -> bool {
+        true
+    }
+
+    pub fn read_from(&mut self, _target: u32, _n: u32, _data: *mut u8) -> bool {
+        true
+    }
+
+    pub fn begin(&mut self, _target: u32) -> bool {
+        true
+    }
+
+    pub fn set_dma_mode(&mut self, enable: bool) {
+        unsafe {
+            I2C_USE_DMA[self.instance as usize] = enable;
+        }
+    }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn lni2c_delete(_handle: *mut ln_i2c_c) {}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn lni2c_setSpeed(_handle: *mut ln_i2c_c, _speed: u32) {
-    // Native speed setting logic
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn lni2c_setAddress(_handle: *mut ln_i2c_c, _address: u32) {}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn lni2c_write(_handle: *mut ln_i2c_c, _n: u32, _data: *const u8) -> bool { true }
-
-#[unsafe(no_mangle)]
-pub extern "C" fn lni2c_read(_handle: *mut ln_i2c_c, _n: u32, _data: *mut u8) -> bool { true }
-
-#[unsafe(no_mangle)]
-pub extern "C" fn lni2c_write_to(_handle: *mut ln_i2c_c, _target: u32, _n: u32, _data: *const u8) -> bool { true }
-
-#[unsafe(no_mangle)]
-pub extern "C" fn lni2c_multi_write_to(_handle: *mut ln_i2c_c, _target: u32, _nbSeqn: u32, _seqLength: *const u32, _data: *mut *const u8) -> bool { true }
-
-#[unsafe(no_mangle)]
-pub extern "C" fn lni2c_read_from(_handle: *mut ln_i2c_c, _target: u32, _n: u32, _data: *mut u8) -> bool { true }
-
-#[unsafe(no_mangle)]
-pub extern "C" fn lni2c_begin(_handle: *mut ln_i2c_c, _target: u32) -> bool { true }
-
-// --- NATIVE IRQ STATE MACHINE ---
+// --- IRQ STATE MACHINE ---
 
 #[derive(Clone, Copy)]
 struct I2cSession {
@@ -102,7 +107,7 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
     if instance < I2C_INSTANCE_0 as i32 || instance > I2C_INSTANCE_1 as i32 {
         return;
     }
-    
+
     unsafe {
         let session = match &mut I2C_SESSIONS[instance as usize] {
             Some(s) => s,
@@ -110,17 +115,17 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
         };
 
         let regs = I2cRegisters::ptr(instance as u32);
-        
+
         if error {
             // Handle AF, BERR, ARLO, OVR
             session.error = true;
             session.done = true;
-            
+
             // Clear error flags
             let mut sr1 = read_volatile(&mut (*regs).sr1);
             sr1 &= !I2C_SR1_ERROR_MASK;
             write_volatile(&mut (*regs).sr1, sr1);
-            
+
             // Send STOP condition
             let mut cr1 = read_volatile(&mut (*regs).cr1);
             cr1 |= I2C_CR1_STOP;
@@ -130,7 +135,7 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
 
         // --- Event State Machine ---
         let sr1 = read_volatile(&mut (*regs).sr1);
-        
+
         // EV5: SB (Start Bit) sent
         if (sr1 & I2C_SR1_SB) != 0 {
             // Send 7-bit Address
@@ -141,7 +146,7 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
         else if (sr1 & I2C_SR1_ADDR) != 0 {
             // Clear ADDR by reading SR1 (done) and SR2
             let _sr2 = read_volatile(&mut (*regs).sr2);
-            
+
             // Enable event interrupt
             let mut cr2 = read_volatile(&mut (*regs).cr2);
             cr2 |= I2C_CR2_ITEVTEN;
@@ -152,7 +157,7 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
             if session.cur_seq < session.nb_seqn {
                 let seq_len = *session.seq_length.add(session.cur_seq as usize);
                 let seq_data = *session.data.add(session.cur_seq as usize);
-                
+
                 if session.cur_pos < seq_len {
                     // Send next byte
                     let byte = *seq_data.add(session.cur_pos as usize);
@@ -162,18 +167,18 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
                     // Sequence done, move to next
                     session.cur_seq += 1;
                     session.cur_pos = 0;
-                    
+
                     if session.cur_seq == session.nb_seqn {
                         // All sequences done, send STOP
                         let mut cr1 = read_volatile(&mut (*regs).cr1);
                         cr1 |= I2C_CR1_STOP;
                         write_volatile(&mut (*regs).cr1, cr1);
-                        
+
                         // Disable interrupts
                         let mut cr2 = read_volatile(&mut (*regs).cr2);
                         cr2 &= !(I2C_CR2_ITEVTEN | I2C_CR2_ITERREN);
                         write_volatile(&mut (*regs).cr2, cr2);
-                        
+
                         session.done = true;
                     }
                 }
@@ -182,10 +187,5 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn lni2c_set_dma_mode(handle: *mut ln_i2c_c, enable: bool) {
-    let instance = unpack_handle(handle);
-    unsafe {
-        I2C_USE_DMA[instance as usize] = enable;
-    }
-}
+pub mod shim;
+pub use shim::*;

@@ -62,7 +62,7 @@ impl From<u32> for Pin {
 const PORTS: [u32; 7] = [GPIOA_BASE, GPIOB_BASE, GPIOC_BASE, GPIOD_BASE, GPIOE_BASE, GPIOF_BASE, GPIOG_BASE];
 
 #[inline]
-fn get_port_ptr(port: u32) -> *mut GpioRegisters {
+pub(crate) fn get_port_ptr(port: u32) -> *mut GpioRegisters {
     PORTS[port as usize] as *mut GpioRegisters
 }
 
@@ -74,6 +74,64 @@ fn get_ptr(pin: Pin) -> *mut GpioRegisters {
 #[inline]
 fn get_bit(pin: Pin) -> u32 {
     (pin as u32) & 0xF
+}
+
+impl Pin {
+    #[inline(always)]
+    pub fn write(self, value: bool) {
+        write(self, value);
+    }
+
+    #[inline(always)]
+    pub fn read(self) -> bool {
+        read(self)
+    }
+
+    #[inline(always)]
+    pub fn toggle(self) {
+        toggle(self);
+    }
+
+    #[inline(always)]
+    pub fn set_mode(self, mode: Mode, speed_in_mhz: u32) {
+        set_mode(self, mode, speed_in_mhz);
+    }
+
+    #[inline(always)]
+    pub fn open_drain_close(self, close: bool) {
+        open_drain_close(self, close);
+    }
+}
+
+/// Idiomatic struct interface for GPIO peripheral operations.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Gpio;
+
+impl Gpio {
+    #[inline(always)]
+    pub fn write(pin: Pin, value: bool) {
+        write(pin, value);
+    }
+
+    #[inline(always)]
+    pub fn read(pin: Pin) -> bool {
+        read(pin)
+    }
+
+    #[inline(always)]
+    pub fn toggle(pin: Pin) {
+        toggle(pin);
+    }
+
+    #[inline(always)]
+    pub fn read_port(port: u32) -> u32 {
+        read_port(port)
+    }
+
+    #[inline(always)]
+    pub fn set_mode(pin: Pin, mode: Mode, speed_in_mhz: u32) {
+        set_mode(pin, mode, speed_in_mhz);
+    }
 }
 
 #[inline]
@@ -168,74 +226,5 @@ pub fn set_mode(pin: Pin, mode: Mode, speed_in_mhz: u32) {
     }
 }
 
-// --- Legacy Bridge (Adapter Pattern) ---
-// These zero-cost wrappers ensure rust_esprit routing works without breakage.
-
-pub type lnPin = Pin;
-pub type lnGpioMode = Mode;
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnDigitalWrite(pin: lnPin, value: bool) {
-    write(pin, value);
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnDigitalRead(pin: lnPin) -> bool {
-    read(pin)
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnDigitalToggle(pin: lnPin) {
-    toggle(pin);
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnOpenDrainClose(pin: lnPin, close: bool) {
-    open_drain_close(pin, close);
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnReadPort(port: u32) -> u32 {
-    read_port(port)
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnPinMode_c(pin: lnPin, mode: lnGpioMode, speed_in_mhz: u32) {
-    set_mode(pin, mode, speed_in_mhz);
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnGetGpioToggleRegister(port: u32) -> *mut u32 {
-    unsafe { core::ptr::addr_of_mut!((*get_port_ptr(port)).bop) }
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnGetGpioDirectionRegister(port: u32) -> *mut u32 {
-    unsafe { core::ptr::addr_of_mut!((*get_port_ptr(port)).ctl0) }
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnGetGpioValueRegister(port: u32) -> *mut u32 {
-    unsafe { core::ptr::addr_of_mut!((*get_port_ptr(port)).istat) }
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnGetGpioOnRegister(port: u32) -> *mut u32 {
-    unsafe { core::ptr::addr_of_mut!((*get_port_ptr(port)).bop) }
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnGetGpioOffRegister(port: u32) -> *mut u32 {
-    unsafe { core::ptr::addr_of_mut!((*get_port_ptr(port)).bc) }
-}
+pub mod shim;
+pub use shim::*;

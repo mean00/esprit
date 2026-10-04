@@ -50,3 +50,32 @@ pub fn select_exti_source(port: u32, source: u32) {
         write_volatile(&mut (*afio).extiss[idx], mask);
     }
 }
+
+/// Idiomatic struct interface for Alternate Function I/O (AFIO).
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Afio;
+
+impl Afio {
+    #[inline(always)]
+    pub fn enable() {
+        enable_afio();
+    }
+
+    #[inline(always)]
+    pub fn release_jtag_pins() {
+        release_jtag_pins();
+    }
+
+    #[inline(always)]
+    pub fn remap_timer2_partial() {
+        remap_timer2_partial();
+    }
+
+    #[inline(always)]
+    pub fn select_exti_source(port: u32, source: u32) {
+        select_exti_source(port, source);
+    }
+}
+
+pub mod shim;
+pub use shim::*;

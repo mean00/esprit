@@ -4,6 +4,8 @@
 #![no_std]
 
 pub mod registers;
+pub mod shim;
+pub use shim::*;
 
 use registers::*;
 use rs_rcu_bluepill::{Peripheral, enable};

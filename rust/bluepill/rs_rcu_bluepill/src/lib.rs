@@ -209,29 +209,31 @@ pub fn get_clock(periph: Peripheral) -> u32 {
 }
 
 
-// --- Legacy Bridge (Adapter Pattern) ---
-pub type Peripherals = Peripheral;
+/// Idiomatic struct interface for Reset and Clock Unit (RCU/RCC).
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Rcu;
 
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnPeripherals_enable(periph: Peripherals) {
-    enable(periph);
+impl Rcu {
+    #[inline(always)]
+    pub fn enable(periph: Peripheral) {
+        enable(periph);
+    }
+
+    #[inline(always)]
+    pub fn disable(periph: Peripheral) {
+        disable(periph);
+    }
+
+    #[inline(always)]
+    pub fn reset(periph: Peripheral) {
+        reset(periph);
+    }
+
+    #[inline(always)]
+    pub fn get_clock(periph: Peripheral) -> u32 {
+        get_clock(periph)
+    }
 }
 
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnPeripherals_disable(periph: Peripherals) {
-    disable(periph);
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnPeripherals_reset(periph: Peripherals) {
-    reset(periph);
-}
-
-#[inline(always)]
-#[allow(non_snake_case)]
-pub fn lnPeripherals_getClock(periph: Peripherals) -> u32 {
-    get_clock(periph)
-}
+pub mod shim;
+pub use shim::*;
