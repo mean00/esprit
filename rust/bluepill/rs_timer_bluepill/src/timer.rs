@@ -52,13 +52,14 @@ impl Timer {
         }
     }
 
-    /// Disable the timer counter (CEN).
+    /// Disable the timer counter (CEN) and clear counter.
     #[inline]
     pub fn disable(&mut self) {
         unsafe {
             let mut ctl0 = read_volatile(&mut (*self.regs).ctl0);
             ctl0 &= !TIMER_CTL0_CEN;
             write_volatile(&mut (*self.regs).ctl0, ctl0);
+            write_volatile(&mut (*self.regs).cnt, 0);
         }
     }
 
@@ -69,6 +70,15 @@ impl Timer {
             write_volatile(&mut (*self.regs).cnt, 0);
         }
     }
+
+    /// Set counter value.
+    #[inline]
+    pub fn set_counter(&mut self, cnt: u32) {
+        unsafe {
+            write_volatile(&mut (*self.regs).cnt, cnt);
+        }
+    }
+
 
     /// Set counter prescaler value.
     #[inline]
@@ -134,14 +144,15 @@ impl Timer {
         Ok(divider)
     }
 
-    /// Set the compare mode (PWM0, PWM1, ForceLow) with preload on a given channel (0..3).
+    /// Set the compare mode (PWM0, PWM1, ForceLow) on a given channel (0..3).
     pub fn set_channel_mode(&mut self, channel: u32, mode: ChannelMode) {
         let mode_val = match mode {
             ChannelMode::Pwm0 => TIMER_CHCTL_MODE_PWM0,
             ChannelMode::Pwm1 => 0x7,
             ChannelMode::ForceLow => TIMER_CHCTL_MODE_FORCE_LOW,
         };
-        let cfg = (mode_val << 4) | TIMER_CHCTL_PRELOAD_EN;
+        let cfg = mode_val << 4;
+
 
         unsafe {
             match channel {

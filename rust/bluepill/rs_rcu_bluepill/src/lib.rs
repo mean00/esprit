@@ -195,44 +195,17 @@ pub fn reset(periph: Peripheral) {
 
 // The clock tree is configured by the RCU system-clock init (lnInitSystemClock), which
 // records the resulting frequencies in these globals. They are the single source of
-// truth for the peripheral input clocks: we query them, we never assume a frequency.
 unsafe extern "C" {
-    static _rcuClockApb1: u32;
-    static _rcuClockApb2: u32;
-    static SystemCoreClock: u32;
+    #[link_name = "\u{1}_ZN13lnPeripherals8getClockE11Peripherals"]
+    fn ln_peripherals_get_clock(periph: Peripheral) -> u32;
 }
-
-/// Timers on APB1 run at 2x the APB1 clock when the APB1 prescaler is not 1.
-const APB1_TIMER_MULTIPLIER: u32 = 2;
 
 /// Input clock (Hz) feeding `periph`, as computed by the RCU.
+#[inline(always)]
 pub fn get_clock(periph: Peripheral) -> u32 {
-    let (apb1, apb2, sysclk) = unsafe {
-        (
-            core::ptr::read_volatile(&raw const _rcuClockApb1),
-            core::ptr::read_volatile(&raw const _rcuClockApb2),
-            core::ptr::read_volatile(&raw const SystemCoreClock),
-        )
-    };
-    match periph {
-        Peripheral::Timer1
-        | Peripheral::Timer2
-        | Peripheral::Timer3
-        | Peripheral::Timer4
-        | Peripheral::Timer5
-        | Peripheral::Timer6 => apb1 * APB1_TIMER_MULTIPLIER,
-        Peripheral::Uart0
-        | Peripheral::Timer0
-        | Peripheral::Spi0
-        | Peripheral::Afio
-        | Peripheral::Adc0
-        | Peripheral::Adc1
-        | Peripheral::Apb2 => apb2,
-        Peripheral::SysClock => sysclk,
-        // APB1 peripherals (UART1..4, SPI1/2, I2C, ...)
-        _ => apb1,
-    }
+    unsafe { ln_peripherals_get_clock(periph) }
 }
+
 
 // --- Legacy Bridge (Adapter Pattern) ---
 pub type Peripherals = Peripheral;

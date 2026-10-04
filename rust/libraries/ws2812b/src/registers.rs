@@ -7,8 +7,9 @@
 /// Carrier PWM frequency for WS2812B (830 kHz corresponds to ~1.20 µs period).
 pub const WS2812B_PWM_FREQUENCY_HZ: u32 = 830_000;
 
-/// Minimum reset / latch low duration in microseconds (>50 µs required by WS2812B).
-pub const WS2812B_RESET_DELAY_US: u32 = 80;
+/// Minimum reset / latch low duration in microseconds (>280 µs required by modern WS2812B/SK6812).
+pub const WS2812B_RESET_DELAY_US: u32 = 300;
+
 
 /// Size of the circular DMA ping-pong buffer in bytes (2 LEDs * 24 bytes/LED).
 pub const BUFFER_SIZE_BYTES: usize = 48;

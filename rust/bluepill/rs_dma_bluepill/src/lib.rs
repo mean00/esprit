@@ -160,4 +160,14 @@ impl DmaChannel {
             write_volatile(&mut (*regs).ifcr, DMA_FLAG_HTIF << shift);
         }
     }
+
+    /// Return the number of remaining transfers in CNDTR.
+    pub fn remaining_transfers(&self) -> u32 {
+        let regs = self.regs();
+        unsafe {
+            let ch_regs = &(*regs).channels[self.channel_idx];
+            read_volatile(&ch_regs.cndtr)
+        }
+    }
 }
+

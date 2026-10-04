@@ -204,11 +204,16 @@ impl<const N: usize> Ws2812b<N> {
 
                 timer.start_dma(pwm_buffer.data.as_ptr(), BUFFER_SIZE_BYTES);
 
-                let mut timeout: u32 = 200_000;
+                let mut timeout: u32 = 2_000_000;
                 while !timer.is_half_transfer() && timeout > 0 {
                     timeout -= 1;
                 }
                 timer.clear_half_transfer();
+
+                // Half transfer fired when DMA loaded byte 23 into CCR.
+                // Wait 2 µs for byte 23 to finish playing (~1.2 µs) into the trailing zeros.
+                delay_us(2);
+
 
                 timer.stop();
                 delay_us(WS2812B_RESET_DELAY_US);
@@ -235,6 +240,8 @@ impl<const N: usize> Ws2812b<N> {
                         if next_led < N {
                             let grb = get_grb_for_led(leds, led_brightness, *global_brightness, next_led);
                             write_pwm_samples(lookup, &mut pwm_buffer.data, false, grb);
+                        } else if next_led == N {
+                            pwm_buffer.data[0..HALF_BUFFER_BYTES].fill(0);
                         }
                         next_led += 1;
                         waiting_for_half = false;
@@ -245,6 +252,8 @@ impl<const N: usize> Ws2812b<N> {
                         if next_led < N {
                             let grb = get_grb_for_led(leds, led_brightness, *global_brightness, next_led);
                             write_pwm_samples(lookup, &mut pwm_buffer.data, true, grb);
+                        } else if next_led == N {
+                            pwm_buffer.data[HALF_BUFFER_BYTES..BUFFER_SIZE_BYTES].fill(0);
                         }
                         next_led += 1;
                         waiting_for_half = true;
@@ -253,6 +262,7 @@ impl<const N: usize> Ws2812b<N> {
                 timeout -= 1;
             }
 
+            delay_us(2);
             timer.stop();
             delay_us(WS2812B_RESET_DELAY_US);
         }
@@ -307,14 +317,20 @@ fn write_pwm_samples(
     target[5] = lookup[low_b];
 }
 
-/// Simple microsecond busy delay loop.
+unsafe extern "C" {
+    #[link_name = "\u{1}_Z9lnDelayUsj"]
+    fn ln_delay_us(us: u32);
+}
+
+
+/// Precise microsecond delay using Esprit system timer.
 #[inline(always)]
 fn delay_us(us: u32) {
-    let iterations = us * 12;
-    for _ in 0..iterations {
-        core::hint::spin_loop();
+    unsafe {
+        ln_delay_us(us);
     }
 }
+
 
 // -----------------------------------------------------------------------------
 // Legacy C ABI Aliases (Esprit Rust Rule 6)

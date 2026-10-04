@@ -74,9 +74,9 @@ impl DmaTimer {
                 // Free PB4 from JTAG NJTRST: SWJ_CFG = 010 (JTAG disabled, SW enabled)
                 pcf0 &= !(7 << 24);
                 pcf0 |= 2 << 24;
-                // TIM3 partial remap: TIM3_REMAP = 01 (PB4=CH1, PB5=CH2)
+                // TIM3 partial remap: TIM3_REMAP = 10 (PB4=CH1, PB5=CH2)
                 pcf0 &= !(3 << 10);
-                pcf0 |= 1 << 10;
+                pcf0 |= 2 << 10;
                 core::ptr::write_volatile(&mut (*afio).pcf0, pcf0);
             }
         }
@@ -93,7 +93,6 @@ impl DmaTimer {
         self.timer.set_channel_mode(self.channel, ChannelMode::Pwm0);
         self.timer.set_channel_compare(self.channel, rollover / 2);
         self.timer.set_channel_output(self.channel, true);
-        self.timer.set_auto_reload_preload(true);
 
         self.rollover = rollover;
         Ok(rollover)
@@ -107,10 +106,21 @@ impl DmaTimer {
         // Configure DMA in circular mode (8-bit source, 16-bit destination)
         self.dma.begin_circular_tx_transfer(periph_addr, mem_addr, length as u32, false, true);
 
-        // Connect Timer to DMA and start counting
+        // Preload compare register with rollover / 2 and restore PWM mode
+        self.timer.set_channel_compare(self.channel, self.rollover / 2);
         self.timer.enable_channel_dma(self.channel, true);
         self.timer.set_dma_on_compare_event(true);
-        self.timer.reset_counter();
+        self.timer.set_channel_mode(self.channel, ChannelMode::Pwm0);
+
+        // Preload CNT = CAR - 1.
+        // At CNT = CAR - 1, CNT >= CHCV (rollover / 2), so output is LOW.
+        // On the next clock cycle (~10 ns), CNT rolls over to 0, triggering the
+        // update event. DMAS routes this update event to DMA, immediately loading
+        // data[0] into CHCV and starting the first PWM pulse with proper timing.
+        self.timer.disable();
+        let car = self.timer.auto_reload();
+        self.timer.set_counter(car.saturating_sub(1));
+        self.timer.set_channel_output(self.channel, true);
         self.timer.enable();
     }
 
@@ -138,10 +148,18 @@ impl DmaTimer {
         self.dma.clear_transfer_complete();
     }
 
+    /// Return the number of remaining transfers in DMA CNDTR.
+    #[inline]
+    pub fn remaining_dma_transfers(&self) -> u32 {
+        self.dma.remaining_transfers()
+    }
+
     /// Stop Timer and DMA, forcing the output channel low.
     pub fn stop(&mut self) {
         self.timer.disable();
+        self.timer.set_channel_output(self.channel, false);
         self.timer.enable_channel_dma(self.channel, false);
+        self.timer.set_channel_compare(self.channel, 0);
         self.timer.set_channel_mode(self.channel, ChannelMode::ForceLow);
         self.dma.end_transfer();
     }
