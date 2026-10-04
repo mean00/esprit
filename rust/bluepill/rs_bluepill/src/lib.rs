@@ -49,3 +49,7 @@ pub const SPI3_BASE: u32 = 0x4000_3C00;
 
 pub const I2C1_BASE: u32 = 0x4000_5400;
 pub const I2C2_BASE: u32 = 0x4000_5800;
+
+pub const USART1_BASE: u32 = 0x4001_3800;
+pub const USART2_BASE: u32 = 0x4000_4400;
+pub const USART3_BASE: u32 = 0x4000_4800;

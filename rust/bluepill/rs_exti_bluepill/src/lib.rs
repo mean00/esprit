@@ -26,14 +26,7 @@ pub fn attach_interrupt(pin: Pin, edge: Edge, _cb: Callback, _cookie: *mut core:
     let source = (pin as u32) & 0xF;
     
     // 1. Select source via AFIO
-    let afio = rs_afio_bluepill::registers::AfioRegisters::ptr();
-    unsafe {
-        let mut mask = read_volatile(&mut (*afio).extiss[(source >> 2) as usize]);
-        let shift = 4 * (source & 3);
-        mask &= !(0xF << shift);
-        mask |= port << shift;
-        write_volatile(&mut (*afio).extiss[(source >> 2) as usize], mask);
-    }
+    rs_afio_bluepill::select_exti_source(port, source);
     
     // 2. Program Edge via EXTI
     const EDGE_RISING_BIT: u32 = 1;

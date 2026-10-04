@@ -24,30 +24,30 @@ pub struct ln_timer_c {
 
 #[inline(always)]
 fn pack_handle(timer: u32, channel: u32) -> *mut ln_timer_c {
-    let packed = (timer & 0xFF) | ((channel & 0xFF) << 8);
+    let packed = (timer & TIMER_HANDLE_MASK) | ((channel & TIMER_HANDLE_MASK) << TIMER_HANDLE_CHANNEL_SHIFT);
     packed as *mut ln_timer_c
 }
 
 #[inline(always)]
 fn unpack_handle(handle: *mut ln_timer_c) -> (u32, u32) {
     let packed = handle as usize as u32;
-    (packed & 0xFF, (packed >> 8) & 0xFF)
+    (packed & TIMER_HANDLE_MASK, (packed >> TIMER_HANDLE_CHANNEL_SHIFT) & TIMER_HANDLE_MASK)
 }
 
 pub fn ln_timer_create_from_pin(_pin: lnPin) -> *mut ln_timer_c {
     // Note: Pin mapping array needs to be fully ported to Rust.
     // For now, this is a native stub.
-    pack_handle(0, 0)
+    pack_handle(TIMER_INSTANCE_0, TIMER_CHANNEL_0)
 }
 
 pub fn ln_timer_create(timer: u32, channel: u32) -> *mut ln_timer_c {
     // Enable clock for the timer
     let periph = match timer {
-        0 => Peripheral::Timer0,
-        1 => Peripheral::Timer1,
-        2 => Peripheral::Timer2,
-        3 => Peripheral::Timer3,
-        4 => Peripheral::Timer4,
+        TIMER_INSTANCE_0 => Peripheral::Timer0,
+        TIMER_INSTANCE_1 => Peripheral::Timer1,
+        TIMER_INSTANCE_2 => Peripheral::Timer2,
+        TIMER_INSTANCE_3 => Peripheral::Timer3,
+        TIMER_INSTANCE_4 => Peripheral::Timer4,
         _ => Peripheral::Timer0,
     };
     enable(periph);
@@ -63,12 +63,12 @@ pub fn ln_timer_single_shot(handle: *mut ln_timer_c, duration_ms: u32, _up: bool
         // Simple native implementation of single_shot
         // 1. Disable timer
         let mut ctl0 = read_volatile(&mut (*regs).ctl0);
-        ctl0 &= !1; // Clear CEN
+        ctl0 &= !TIMER_CTL0_CEN; // Clear CEN
         write_volatile(&mut (*regs).ctl0, ctl0);
         
         // 2. Set prescaler for 1ms ticks (assuming 72MHz or similar)
         // Note: Real implementation needs to query system clock
-        write_volatile(&mut (*regs).psc, 71999);
+        write_volatile(&mut (*regs).psc, TIMER_PRESCALER_1MS_72MHZ);
         
         // 3. Set auto-reload register to duration
         write_volatile(&mut (*regs).car, duration_ms);
@@ -77,10 +77,10 @@ pub fn ln_timer_single_shot(handle: *mut ln_timer_c, duration_ms: u32, _up: bool
         // ... omitted channel-specific setup for brevity ...
         
         // 5. Enable One-Pulse Mode (OPM)
-        ctl0 |= 1 << 3; // Set OPM
+        ctl0 |= TIMER_CTL0_OPM; // Set OPM
         
         // 6. Start timer
-        ctl0 |= 1; // Set CEN
+        ctl0 |= TIMER_CTL0_CEN; // Set CEN
         write_volatile(&mut (*regs).ctl0, ctl0);
     }
 }
@@ -91,13 +91,13 @@ pub fn ln_timer_delete(handle: *mut ln_timer_c) {
     unsafe {
         // Disable timer
         let mut ctl0 = read_volatile(&mut (*regs).ctl0);
-        ctl0 &= !1;
+        ctl0 &= !TIMER_CTL0_CEN;
         write_volatile(&mut (*regs).ctl0, ctl0);
     }
 }
 
 
-static mut START_TICKS: [u16; 8] = [0; 8];
+static mut START_TICKS: [u16; STOPWATCH_MAX_INSTANCES] = [0; STOPWATCH_MAX_INSTANCES];
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ln_hw_stopwatch_create(timer_index: u32) -> *mut c_void {
@@ -112,13 +112,13 @@ pub extern "C" fn ln_hw_stopwatch_destroy(_sw: *mut c_void) {}
 pub extern "C" fn ln_hw_stopwatch_setup(sw: *mut c_void) {
     let timer_index = sw as usize as u32;
     let periph = match timer_index {
-        0 => Peripheral::Timer0,
-        1 => Peripheral::Timer1,
-        2 => Peripheral::Timer2,
-        3 => Peripheral::Timer3,
-        4 => Peripheral::Timer4, // TIM5
-        5 => Peripheral::Timer5,
-        6 => Peripheral::Timer6,
+        TIMER_INSTANCE_0 => Peripheral::Timer0,
+        TIMER_INSTANCE_1 => Peripheral::Timer1,
+        TIMER_INSTANCE_2 => Peripheral::Timer2,
+        TIMER_INSTANCE_3 => Peripheral::Timer3,
+        TIMER_INSTANCE_4 => Peripheral::Timer4, // TIM5
+        TIMER_INSTANCE_5 => Peripheral::Timer5,
+        TIMER_INSTANCE_6 => Peripheral::Timer6,
         _ => Peripheral::Timer0,
     };
     enable(periph);
@@ -127,9 +127,9 @@ pub extern "C" fn ln_hw_stopwatch_setup(sw: *mut c_void) {
     unsafe {
         write_volatile(&mut (*regs).ctl0, 0);
         write_volatile(&mut (*regs).psc, 0);
-        write_volatile(&mut (*regs).car, 0xFFFF);
+        write_volatile(&mut (*regs).car, STOPWATCH_COUNTER_MAX);
         write_volatile(&mut (*regs).cnt, 0);
-        write_volatile(&mut (*regs).ctl0, 1); // CEN
+        write_volatile(&mut (*regs).ctl0, TIMER_CTL0_CEN); // CEN
     }
 }
 
@@ -138,13 +138,13 @@ pub extern "C" fn ln_hw_stopwatch_start(sw: *mut c_void) {
     let timer_index = sw as usize as u32;
     let regs = TimerRegisters::ptr(timer_index);
     let cnt = unsafe { read_volatile(&mut (*regs).cnt) as u16 };
-    unsafe { START_TICKS[timer_index as usize % 8] = cnt; }
+    unsafe { START_TICKS[timer_index as usize % STOPWATCH_MAX_INSTANCES] = cnt; }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ln_hw_stopwatch_wait(sw: *mut c_void, ticks: u16) {
     let timer_index = sw as usize as u32;
-    let start_tick = unsafe { START_TICKS[timer_index as usize % 8] };
+    let start_tick = unsafe { START_TICKS[timer_index as usize % STOPWATCH_MAX_INSTANCES] };
     
     let regs = TimerRegisters::ptr(timer_index);
     unsafe {

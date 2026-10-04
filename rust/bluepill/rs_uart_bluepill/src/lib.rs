@@ -5,7 +5,7 @@
 
 pub mod registers;
 
-use registers::UartRegisters;
+use registers::*;
 use rs_rcu_bluepill::{Peripheral, enable};
 use rs_dma_bluepill::{DmaChannel, DmaEngine};
 use core::ptr::{read_volatile, write_volatile};
@@ -26,10 +26,10 @@ struct UartConfig {
     rx_enabled: bool,
 }
 
-static mut UART_CONFIGS: [UartConfig; 3] = [
-    UartConfig { use_dma: false, speed: 115200, rx_enabled: false },
-    UartConfig { use_dma: false, speed: 115200, rx_enabled: false },
-    UartConfig { use_dma: false, speed: 115200, rx_enabled: false },
+static mut UART_CONFIGS: [UartConfig; UART_MAX_INSTANCES] = [
+    UartConfig { use_dma: false, speed: UART_DEFAULT_BAUDRATE, rx_enabled: false },
+    UartConfig { use_dma: false, speed: UART_DEFAULT_BAUDRATE, rx_enabled: false },
+    UartConfig { use_dma: false, speed: UART_DEFAULT_BAUDRATE, rx_enabled: false },
 ];
 
 fn pack_tx_handle(instance: u32) -> *mut ln_serial_tx_c { instance as usize as *mut ln_serial_tx_c }
@@ -43,9 +43,9 @@ fn unpack_rx_handle(handle: *mut ln_serial_rx_c) -> u32 { handle as usize as u32
 pub extern "C" fn lnserial_tx_create(instance: u32, dma: bool, _buffered: bool) -> *mut ln_serial_tx_c {
     unsafe {
         UART_CONFIGS[instance as usize].use_dma = dma;
-        if instance == 0 { enable(Peripheral::Uart0); }
-        else if instance == 1 { enable(Peripheral::Uart1); }
-        else if instance == 2 { enable(Peripheral::Uart2); }
+        if instance == UART_INSTANCE_0 { enable(Peripheral::Uart0); }
+        else if instance == UART_INSTANCE_1 { enable(Peripheral::Uart1); }
+        else if instance == UART_INSTANCE_2 { enable(Peripheral::Uart2); }
     }
     pack_tx_handle(instance)
 }
@@ -59,7 +59,7 @@ pub extern "C" fn lnserial_tx_init(s: *mut ln_serial_tx_c) -> bool {
     let regs = UartRegisters::ptr(instance);
     unsafe {
         let mut ctl0 = read_volatile(&mut (*regs).ctl0);
-        ctl0 |= (1 << 13) | (1 << 3); // UEN (USART Enable) | TEN (Transmit Enable)
+        ctl0 |= USART_CTL0_UEN | USART_CTL0_TEN; // UEN (USART Enable) | TEN (Transmit Enable)
         write_volatile(&mut (*regs).ctl0, ctl0);
     }
     true
@@ -70,9 +70,9 @@ pub extern "C" fn lnserial_tx_set_speed(s: *mut ln_serial_tx_c, speed: u32) -> b
     let instance = unpack_tx_handle(s);
     let regs = UartRegisters::ptr(instance);
     let periph = match instance {
-        0 => Peripheral::Uart0,
-        1 => Peripheral::Uart1,
-        2 => Peripheral::Uart2,
+        UART_INSTANCE_0 => Peripheral::Uart0,
+        UART_INSTANCE_1 => Peripheral::Uart1,
+        UART_INSTANCE_2 => Peripheral::Uart2,
         _ => Peripheral::Uart0,
     };
     let pclk = rs_rcu_bluepill::get_clock(periph);
@@ -92,11 +92,11 @@ pub extern "C" fn lnserial_tx_transmit(s: *mut ln_serial_tx_c, size: u32, buffer
         if UART_CONFIGS[instance as usize].use_dma {
             // NATIVE DMA BRANCH
             let mut ctl2 = read_volatile(&mut (*regs).ctl2);
-            ctl2 |= 1 << 7; // DENT (DMA Enable Transmitter)
+            ctl2 |= USART_CTL2_DMAT; // DENT (DMA Enable Transmitter)
             write_volatile(&mut (*regs).ctl2, ctl2);
             
             // Channel mapping: USART0 TX is DMA0 CH3, USART1 TX is DMA0 CH6
-            let ch_idx = if instance == 0 { 3 } else { 6 };
+            let ch_idx = if instance == UART_INSTANCE_0 { UART0_DMA_TX_CHANNEL } else { UART1_DMA_TX_CHANNEL };
             let mut dma = DmaChannel::new(DmaEngine::Dma0, ch_idx);
             
             dma.begin_tx_transfer(
@@ -115,10 +115,10 @@ pub extern "C" fn lnserial_tx_transmit(s: *mut ln_serial_tx_c, size: u32, buffer
             // NATIVE IRQ/POLLING BRANCH
             for i in 0..size {
                 let byte = *buffer.add(i as usize);
-                while (read_volatile(&mut (*regs).stat) & (1 << 7)) == 0 {} // Wait TBE (Transmit Buffer Empty)
+                while (read_volatile(&mut (*regs).stat) & USART_STAT_TBE) == 0 {} // Wait TBE (Transmit Buffer Empty)
                 write_volatile(&mut (*regs).data, byte as u32);
             }
-            while (read_volatile(&mut (*regs).stat) & (1 << 6)) == 0 {} // Wait TC (Transmission Complete)
+            while (read_volatile(&mut (*regs).stat) & USART_STAT_TC) == 0 {} // Wait TC (Transmission Complete)
         }
     }
     true
@@ -135,9 +135,9 @@ pub extern "C" fn lnserial_tx_raw_write(s: *mut ln_serial_tx_c, size: u32, buffe
 pub extern "C" fn lnserial_rx_create(instance: u32, _rx_buffer_size: u32, dma: bool) -> *mut ln_serial_rx_c {
     unsafe {
         UART_CONFIGS[instance as usize].use_dma = dma;
-        if instance == 0 { enable(Peripheral::Uart0); }
-        else if instance == 1 { enable(Peripheral::Uart1); }
-        else if instance == 2 { enable(Peripheral::Uart2); }
+        if instance == UART_INSTANCE_0 { enable(Peripheral::Uart0); }
+        else if instance == UART_INSTANCE_1 { enable(Peripheral::Uart1); }
+        else if instance == UART_INSTANCE_2 { enable(Peripheral::Uart2); }
     }
     pack_rx_handle(instance)
 }
@@ -151,7 +151,7 @@ pub extern "C" fn lnserial_rx_init(s: *mut ln_serial_rx_c) -> bool {
     let regs = UartRegisters::ptr(instance);
     unsafe {
         let mut ctl0 = read_volatile(&mut (*regs).ctl0);
-        ctl0 |= (1 << 13) | (1 << 2); // UEN | REN (Receiver Enable)
+        ctl0 |= USART_CTL0_UEN | USART_CTL0_REN; // UEN | REN (Receiver Enable)
         write_volatile(&mut (*regs).ctl0, ctl0);
     }
     true
@@ -188,7 +188,7 @@ pub extern "C" fn lnserial_rx_read(s: *mut ln_serial_rx_c, max: u32, to: *mut u8
     let instance = unpack_rx_handle(s);
     let regs = UartRegisters::ptr(instance);
     unsafe {
-        if (read_volatile(&mut (*regs).stat) & (1 << 5)) != 0 { // RBNE (Read Buffer Not Empty)
+        if (read_volatile(&mut (*regs).stat) & USART_STAT_RBNE) != 0 { // RBNE (Read Buffer Not Empty)
             let byte = read_volatile(&mut (*regs).data) as u8;
             if max > 0 { *to = byte; return 1; }
         }

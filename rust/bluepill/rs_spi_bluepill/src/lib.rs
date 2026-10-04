@@ -28,7 +28,7 @@ pub struct lnSPISettings {
 
 pub type lnSpiCallback = ::core::option::Option<unsafe extern "C" fn(arg1: *mut c_void)>;
 
-static mut SPI_USE_DMA: [bool; 3] = [false, false, false];
+static mut SPI_USE_DMA: [bool; SPI_MAX_INSTANCES] = [false; SPI_MAX_INSTANCES];
 
 #[inline(always)]
 fn pack_handle(instance: u32) -> *mut ln_spi_c {
@@ -43,9 +43,9 @@ fn unpack_handle(handle: *mut ln_spi_c) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn lnspi_create(instance: u32, pinCs: i32) -> *mut ln_spi_c {
     let periph = match instance {
-        0 => Peripheral::Spi0,
-        1 => Peripheral::Spi1,
-        2 => Peripheral::Spi2,
+        SPI_INSTANCE_0 => Peripheral::Spi0,
+        SPI_INSTANCE_1 => Peripheral::Spi1,
+        SPI_INSTANCE_2 => Peripheral::Spi2,
         _ => Peripheral::Spi0,
     };
     enable(periph);
@@ -61,14 +61,14 @@ pub extern "C" fn lnspi_begin(handle: *mut ln_spi_c, dataSize: u32) {
     let regs = SpiRegisters::ptr(idx);
     unsafe {
         let mut cr1 = read_volatile(&mut (*regs).cr1);
-        cr1 |= (1 << 2); // Set Master Mode (MSTR)
-        cr1 |= (1 << 8) | (1 << 9); // Set SSM and SSI (Software Slave Management)
-        if dataSize == 16 {
-            cr1 |= (1 << 11); // Set DFF to 16-bit
+        cr1 |= SPI_CR1_MSTR; // Set Master Mode (MSTR)
+        cr1 |= SPI_CR1_SSI | SPI_CR1_SSM; // Set SSM and SSI (Software Slave Management)
+        if dataSize == SPI_DATA_SIZE_16 {
+            cr1 |= SPI_CR1_DFF; // Set DFF to 16-bit
         } else {
-            cr1 &= !(1 << 11); // Set DFF to 8-bit
+            cr1 &= !SPI_CR1_DFF; // Set DFF to 8-bit
         }
-        cr1 |= (1 << 6); // Enable SPI (SPE)
+        cr1 |= SPI_CR1_SPE; // Enable SPI (SPE)
         write_volatile(&mut (*regs).cr1, cr1);
     }
 }
@@ -79,7 +79,7 @@ pub extern "C" fn lnspi_end(handle: *mut ln_spi_c) {
     let regs = SpiRegisters::ptr(idx);
     unsafe {
         let mut cr1 = read_volatile(&mut (*regs).cr1);
-        cr1 &= !(1 << 6); // Disable SPI (SPE)
+        cr1 &= !SPI_CR1_SPE; // Disable SPI (SPE)
         write_volatile(&mut (*regs).cr1, cr1);
     }
 }
@@ -95,8 +95,8 @@ pub extern "C" fn lnspi_set_data_mode(handle: *mut ln_spi_c, mode: u32) {
     let regs = SpiRegisters::ptr(idx);
     unsafe {
         let mut cr1 = read_volatile(&mut (*regs).cr1);
-        cr1 &= !3; // Clear CPOL and CPHA
-        cr1 |= mode & 3; // Set them
+        cr1 &= !SPI_CR1_MODE_MASK; // Clear CPOL and CPHA
+        cr1 |= mode & SPI_CR1_MODE_MASK; // Set them
         write_volatile(&mut (*regs).cr1, cr1);
     }
 }
@@ -107,10 +107,10 @@ pub extern "C" fn lnspi_set_bit_order(handle: *mut ln_spi_c, order: u32) {
     let regs = SpiRegisters::ptr(idx);
     unsafe {
         let mut cr1 = read_volatile(&mut (*regs).cr1);
-        if order == 0 {
-            cr1 |= (1 << 7); // LSBFIRST
+        if order == spiBitOrder_SPI_LSBFIRST {
+            cr1 |= SPI_CR1_LSBFIRST; // LSBFIRST
         } else {
-            cr1 &= !(1 << 7); // MSBFIRST
+            cr1 &= !SPI_CR1_LSBFIRST; // MSBFIRST
         }
         write_volatile(&mut (*regs).cr1, cr1);
     }
@@ -172,13 +172,13 @@ pub extern "C" fn lnspi_transfer8_old(handle: *mut ln_spi_c, val: u8) -> u8 {
     let regs = SpiRegisters::ptr(idx);
     unsafe {
         // Wait for TXE
-        while (read_volatile(&mut (*regs).sr) & (1 << 1)) == 0 {}
+        while (read_volatile(&mut (*regs).sr) & SPI_SR_TXE) == 0 {}
         // Write data
         write_volatile(&mut (*regs).dr, val as u32);
         // Wait for RXNE
-        while (read_volatile(&mut (*regs).sr) & (1 << 0)) == 0 {}
+        while (read_volatile(&mut (*regs).sr) & SPI_SR_RXNE) == 0 {}
         // Read data
-        (read_volatile(&mut (*regs).dr) & 0xFF) as u8
+        (read_volatile(&mut (*regs).dr) & SPI_DR_DATA_8BIT_MASK) as u8
     }
 }
 pub type spiBitOrder = u32;

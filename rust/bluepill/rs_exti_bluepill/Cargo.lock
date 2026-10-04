@@ -7,6 +7,7 @@ name = "rs_afio_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_rcu_bluepill",
 ]
 
 [[package]]
@@ -24,6 +25,13 @@ dependencies = [
 
 [[package]]
 name = "rs_gpio_bluepill"
+version = "0.1.0"
+dependencies = [
+ "rs_bluepill",
+]
+
+[[package]]
+name = "rs_rcu_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",

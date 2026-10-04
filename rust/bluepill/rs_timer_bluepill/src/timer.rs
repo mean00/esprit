@@ -27,11 +27,11 @@ impl Timer {
     /// Initialise a hardware timer by index (0 = TIM1, 1 = TIM2, 2 = TIM3, 3 = TIM4, 4 = TIM5).
     pub fn new(timer_idx: u32) -> Result<Self, &'static str> {
         let periph = match timer_idx {
-            0 => Peripheral::Timer0,
-            1 => Peripheral::Timer1,
-            2 => Peripheral::Timer2,
-            3 => Peripheral::Timer3,
-            4 => Peripheral::Timer4,
+            TIMER_INSTANCE_0 => Peripheral::Timer0,
+            TIMER_INSTANCE_1 => Peripheral::Timer1,
+            TIMER_INSTANCE_2 => Peripheral::Timer2,
+            TIMER_INSTANCE_3 => Peripheral::Timer3,
+            TIMER_INSTANCE_4 => Peripheral::Timer4,
             _ => return Err("Invalid timer index"),
         };
         enable(periph);
@@ -122,11 +122,11 @@ impl Timer {
     /// Returns the period (rollover count = CAR + 1).
     pub fn set_frequency(&mut self, frequency_hz: u32) -> Result<u32, &'static str> {
         let periph = match self.timer_idx {
-            0 => Peripheral::Timer0,
-            1 => Peripheral::Timer1,
-            2 => Peripheral::Timer2,
-            3 => Peripheral::Timer3,
-            4 => Peripheral::Timer4,
+            TIMER_INSTANCE_0 => Peripheral::Timer0,
+            TIMER_INSTANCE_1 => Peripheral::Timer1,
+            TIMER_INSTANCE_2 => Peripheral::Timer2,
+            TIMER_INSTANCE_3 => Peripheral::Timer3,
+            TIMER_INSTANCE_4 => Peripheral::Timer4,
             _ => return Err("Invalid timer"),
         };
         let clock = get_clock(periph);
@@ -148,36 +148,36 @@ impl Timer {
     pub fn set_channel_mode(&mut self, channel: u32, mode: ChannelMode) {
         let mode_val = match mode {
             ChannelMode::Pwm0 => TIMER_CHCTL_MODE_PWM0,
-            ChannelMode::Pwm1 => 0x7,
+            ChannelMode::Pwm1 => TIMER_CHCTL_MODE_PWM1,
             ChannelMode::ForceLow => TIMER_CHCTL_MODE_FORCE_LOW,
         };
-        let cfg = mode_val << 4;
+        let cfg = mode_val << TIMER_CHCTL_MODE_SHIFT;
 
 
         unsafe {
             match channel {
-                0 => {
+                TIMER_CHANNEL_0 => {
                     let mut reg = read_volatile(&mut (*self.regs).chctlc0);
-                    reg &= !0x00FF;
+                    reg &= !TIMER_CHCTLC_CH_LOW_MASK;
                     reg |= cfg;
                     write_volatile(&mut (*self.regs).chctlc0, reg);
                 }
-                1 => {
+                TIMER_CHANNEL_1 => {
                     let mut reg = read_volatile(&mut (*self.regs).chctlc0);
-                    reg &= !0xFF00;
-                    reg |= cfg << 8;
+                    reg &= !TIMER_CHCTLC_CH_HIGH_MASK;
+                    reg |= cfg << TIMER_CHCTLC_CH_HIGH_SHIFT;
                     write_volatile(&mut (*self.regs).chctlc0, reg);
                 }
-                2 => {
+                TIMER_CHANNEL_2 => {
                     let mut reg = read_volatile(&mut (*self.regs).chctlc1);
-                    reg &= !0x00FF;
+                    reg &= !TIMER_CHCTLC_CH_LOW_MASK;
                     reg |= cfg;
                     write_volatile(&mut (*self.regs).chctlc1, reg);
                 }
-                3 => {
+                TIMER_CHANNEL_3 => {
                     let mut reg = read_volatile(&mut (*self.regs).chctlc1);
-                    reg &= !0xFF00;
-                    reg |= cfg << 8;
+                    reg &= !TIMER_CHCTLC_CH_HIGH_MASK;
+                    reg |= cfg << TIMER_CHCTLC_CH_HIGH_SHIFT;
                     write_volatile(&mut (*self.regs).chctlc1, reg);
                 }
                 _ => {}
@@ -189,10 +189,10 @@ impl Timer {
     pub fn set_channel_compare(&mut self, channel: u32, value: u32) {
         unsafe {
             match channel {
-                0 => write_volatile(&mut (*self.regs).chcv0, value),
-                1 => write_volatile(&mut (*self.regs).chcv1, value),
-                2 => write_volatile(&mut (*self.regs).chcv2, value),
-                3 => write_volatile(&mut (*self.regs).chcv3, value),
+                TIMER_CHANNEL_0 => write_volatile(&mut (*self.regs).chcv0, value),
+                TIMER_CHANNEL_1 => write_volatile(&mut (*self.regs).chcv1, value),
+                TIMER_CHANNEL_2 => write_volatile(&mut (*self.regs).chcv2, value),
+                TIMER_CHANNEL_3 => write_volatile(&mut (*self.regs).chcv3, value),
                 _ => {}
             }
         }
@@ -242,7 +242,7 @@ impl Timer {
     /// Return the peripheral memory address of the compare register (CHCVx).
     pub fn channel_compare_reg_addr(&self, channel: u32) -> u32 {
         unsafe {
-            core::ptr::addr_of_mut!((*self.regs).chcv0) as usize as u32 + (channel * 4)
+            core::ptr::addr_of_mut!((*self.regs).chcv0) as usize as u32 + (channel * TIMER_REG_OFFSET_BYTES)
         }
     }
 }

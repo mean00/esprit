@@ -55,6 +55,8 @@ pub enum Peripheral {
 }
 
 
+use registers::*;
+
 struct PeripheralInfo {
     bus: u8,
     mask: u32,
@@ -63,43 +65,43 @@ struct PeripheralInfo {
 fn get_periph_info(periph: Peripheral) -> Option<PeripheralInfo> {
     match periph {
         Peripheral::None => None,
-        Peripheral::Spi0 => Some(PeripheralInfo { bus: 2, mask: 1 << 12 }),
-        Peripheral::Spi1 => Some(PeripheralInfo { bus: 1, mask: 1 << 14 }),
-        Peripheral::Spi2 => Some(PeripheralInfo { bus: 1, mask: 1 << 15 }),
-        Peripheral::Uart0 => Some(PeripheralInfo { bus: 2, mask: 1 << 14 }),
-        Peripheral::Uart1 => Some(PeripheralInfo { bus: 1, mask: 1 << 17 }),
-        Peripheral::Uart2 => Some(PeripheralInfo { bus: 1, mask: 1 << 18 }),
-        Peripheral::Uart3 => Some(PeripheralInfo { bus: 1, mask: 1 << 19 }),
-        Peripheral::Uart4 => Some(PeripheralInfo { bus: 1, mask: 1 << 20 }),
-        Peripheral::I2c0 => Some(PeripheralInfo { bus: 1, mask: 1 << 21 }),
-        Peripheral::I2c1 => Some(PeripheralInfo { bus: 1, mask: 1 << 22 }),
-        Peripheral::Can0 => Some(PeripheralInfo { bus: 1, mask: 1 << 25 }),
-        Peripheral::Can1 => Some(PeripheralInfo { bus: 1, mask: 1 << 26 }),
-        Peripheral::Dac => Some(PeripheralInfo { bus: 1, mask: 1 << 29 }),
-        Peripheral::Pmu => Some(PeripheralInfo { bus: 1, mask: 1 << 28 }),
-        Peripheral::Bkp => Some(PeripheralInfo { bus: 1, mask: 1 << 27 }),
-        Peripheral::Wwdgt => Some(PeripheralInfo { bus: 1, mask: 1 << 11 }),
-        Peripheral::Timer0 => Some(PeripheralInfo { bus: 2, mask: 1 << 11 }),
-        Peripheral::Timer1 => Some(PeripheralInfo { bus: 1, mask: 1 << 0 }),
-        Peripheral::Timer2 => Some(PeripheralInfo { bus: 1, mask: 1 << 1 }),
-        Peripheral::Timer3 => Some(PeripheralInfo { bus: 1, mask: 1 << 2 }),
-        Peripheral::Timer4 => Some(PeripheralInfo { bus: 1, mask: 1 << 3 }),
-        Peripheral::Timer5 => Some(PeripheralInfo { bus: 1, mask: 1 << 4 }),
-        Peripheral::Timer6 => Some(PeripheralInfo { bus: 1, mask: 1 << 5 }),
-        Peripheral::Usb => Some(PeripheralInfo { bus: 1, mask: 1 << 23 }),
-        Peripheral::Adc0 => Some(PeripheralInfo { bus: 2, mask: 1 << 9 }),
-        Peripheral::Adc1 => Some(PeripheralInfo { bus: 2, mask: 1 << 10 }),
-        Peripheral::GpioA => Some(PeripheralInfo { bus: 2, mask: 1 << 2 }),
-        Peripheral::GpioB => Some(PeripheralInfo { bus: 2, mask: 1 << 3 }),
-        Peripheral::GpioC => Some(PeripheralInfo { bus: 2, mask: 1 << 4 }),
-        Peripheral::GpioD => Some(PeripheralInfo { bus: 2, mask: 1 << 5 }),
-        Peripheral::GpioE => Some(PeripheralInfo { bus: 2, mask: 1 << 6 }),
-        Peripheral::Afio => Some(PeripheralInfo { bus: 2, mask: 1 << 0 }),
-        Peripheral::Dma0 => Some(PeripheralInfo { bus: 8, mask: 1 << 0 }),
-        Peripheral::Dma1 => Some(PeripheralInfo { bus: 8, mask: 1 << 1 }),
-        Peripheral::Ethernet => Some(PeripheralInfo { bus: 8, mask: 7 << 14 }),
-        Peripheral::UsbHsCh32v3x => Some(PeripheralInfo { bus: 8, mask: 1 << 11 }),
-        Peripheral::UsbFsOtgCh32v3x => Some(PeripheralInfo { bus: 8, mask: 1 << 12 }),
+        Peripheral::Spi0 => Some(PeripheralInfo { bus: BUS_APB2, mask: RCU_APB2_SPI0 }),
+        Peripheral::Spi1 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_SPI1 }),
+        Peripheral::Spi2 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_SPI2 }),
+        Peripheral::Uart0 => Some(PeripheralInfo { bus: BUS_APB2, mask: RCU_APB2_USART0 }),
+        Peripheral::Uart1 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_USART1 }),
+        Peripheral::Uart2 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_USART2 }),
+        Peripheral::Uart3 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_USART3 }),
+        Peripheral::Uart4 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_USART4 }),
+        Peripheral::I2c0 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_I2C0 }),
+        Peripheral::I2c1 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_I2C1 }),
+        Peripheral::Can0 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_CAN0 }),
+        Peripheral::Can1 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_CAN1 }),
+        Peripheral::Dac => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_DAC }),
+        Peripheral::Pmu => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_PMU }),
+        Peripheral::Bkp => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_BKPI }),
+        Peripheral::Wwdgt => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_WWDGT }),
+        Peripheral::Timer0 => Some(PeripheralInfo { bus: BUS_APB2, mask: RCU_APB2_TIMER0 }),
+        Peripheral::Timer1 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_TIMER1 }),
+        Peripheral::Timer2 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_TIMER2 }),
+        Peripheral::Timer3 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_TIMER3 }),
+        Peripheral::Timer4 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_TIMER4 }),
+        Peripheral::Timer5 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_TIMER5 }),
+        Peripheral::Timer6 => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_TIMER6 }),
+        Peripheral::Usb => Some(PeripheralInfo { bus: BUS_APB1, mask: RCU_APB1_USBD }),
+        Peripheral::Adc0 => Some(PeripheralInfo { bus: BUS_APB2, mask: RCU_APB2_ADC0 }),
+        Peripheral::Adc1 => Some(PeripheralInfo { bus: BUS_APB2, mask: RCU_APB2_ADC1 }),
+        Peripheral::GpioA => Some(PeripheralInfo { bus: BUS_APB2, mask: RCU_APB2_PA }),
+        Peripheral::GpioB => Some(PeripheralInfo { bus: BUS_APB2, mask: RCU_APB2_PB }),
+        Peripheral::GpioC => Some(PeripheralInfo { bus: BUS_APB2, mask: RCU_APB2_PC }),
+        Peripheral::GpioD => Some(PeripheralInfo { bus: BUS_APB2, mask: RCU_APB2_PD }),
+        Peripheral::GpioE => Some(PeripheralInfo { bus: BUS_APB2, mask: RCU_APB2_PE }),
+        Peripheral::Afio => Some(PeripheralInfo { bus: BUS_APB2, mask: RCU_APB2_AF }),
+        Peripheral::Dma0 => Some(PeripheralInfo { bus: BUS_AHB, mask: RCU_AHB_DMA0 }),
+        Peripheral::Dma1 => Some(PeripheralInfo { bus: BUS_AHB, mask: RCU_AHB_DMA1 }),
+        Peripheral::Ethernet => Some(PeripheralInfo { bus: BUS_AHB, mask: RCU_AHB_ETHMAC }),
+        Peripheral::UsbHsCh32v3x => Some(PeripheralInfo { bus: BUS_AHB, mask: RCU_AHB_USBHS_CH32V3X }),
+        Peripheral::UsbFsOtgCh32v3x => Some(PeripheralInfo { bus: BUS_AHB, mask: RCU_AHB_USBFS_OTG_CH32V3X }),
         _ => None,
     }
 }
@@ -110,17 +112,17 @@ pub fn enable(periph: Peripheral) {
         let rcu = registers::RcuRegisters::ptr();
         unsafe {
             match info.bus {
-                1 => {
+                BUS_APB1 => {
                     let mut val = core::ptr::read_volatile(&mut (*rcu).apb1en);
                     val |= info.mask;
                     core::ptr::write_volatile(&mut (*rcu).apb1en, val);
                 },
-                2 => {
+                BUS_APB2 => {
                     let mut val = core::ptr::read_volatile(&mut (*rcu).apb2en);
                     val |= info.mask;
                     core::ptr::write_volatile(&mut (*rcu).apb2en, val);
                 },
-                8 => {
+                BUS_AHB => {
                     let mut val = core::ptr::read_volatile(&mut (*rcu).ahben);
                     val |= info.mask;
                     core::ptr::write_volatile(&mut (*rcu).ahben, val);
@@ -137,17 +139,17 @@ pub fn disable(periph: Peripheral) {
         let rcu = registers::RcuRegisters::ptr();
         unsafe {
             match info.bus {
-                1 => {
+                BUS_APB1 => {
                     let mut val = core::ptr::read_volatile(&mut (*rcu).apb1en);
                     val &= !info.mask;
                     core::ptr::write_volatile(&mut (*rcu).apb1en, val);
                 },
-                2 => {
+                BUS_APB2 => {
                     let mut val = core::ptr::read_volatile(&mut (*rcu).apb2en);
                     val &= !info.mask;
                     core::ptr::write_volatile(&mut (*rcu).apb2en, val);
                 },
-                8 => {
+                BUS_AHB => {
                     let mut val = core::ptr::read_volatile(&mut (*rcu).ahben);
                     val &= !info.mask;
                     core::ptr::write_volatile(&mut (*rcu).ahben, val);
@@ -164,26 +166,26 @@ pub fn reset(periph: Peripheral) {
         let rcu = registers::RcuRegisters::ptr();
         unsafe {
             match info.bus {
-                1 => {
+                BUS_APB1 => {
                     let mut val = core::ptr::read_volatile(&mut (*rcu).apb1rst);
                     val |= info.mask;
                     core::ptr::write_volatile(&mut (*rcu).apb1rst, val);
                     val &= !info.mask;
                     core::ptr::write_volatile(&mut (*rcu).apb1rst, val);
                 },
-                2 => {
+                BUS_APB2 => {
                     let mut val = core::ptr::read_volatile(&mut (*rcu).apb2rst);
                     val |= info.mask;
                     core::ptr::write_volatile(&mut (*rcu).apb2rst, val);
                     val &= !info.mask;
                     core::ptr::write_volatile(&mut (*rcu).apb2rst, val);
                 },
-                8 => {
+                BUS_AHB => {
                     if periph == Peripheral::Ethernet {
                         let mut val = core::ptr::read_volatile(&mut (*rcu).ahbrst);
-                        val |= 1 << 14;
+                        val |= RCU_AHBRST_ETHMAC;
                         core::ptr::write_volatile(&mut (*rcu).ahbrst, val);
-                        val &= !(1 << 14);
+                        val &= !RCU_AHBRST_ETHMAC;
                         core::ptr::write_volatile(&mut (*rcu).ahbrst, val);
                     }
                 },

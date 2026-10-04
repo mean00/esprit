@@ -5,7 +5,7 @@
 
 pub mod registers;
 
-use registers::AdcRegisters;
+use registers::*;
 use rs_gpio_bluepill::lnPin;
 use rs_dma_bluepill::{DmaChannel, DmaEngine};
 use rs_rcu_bluepill::{Peripheral, enable};
@@ -79,11 +79,11 @@ pub extern "C" fn ln_timing_adc_set_source(
     unsafe {
         // Setup Scan Mode
         let mut ctl0 = read_volatile(&mut (*regs).ctl0);
-        ctl0 |= 1 << 8; // SCAN mode
+        ctl0 |= ADC_CTL0_SM;
         write_volatile(&mut (*regs).ctl0, ctl0);
 
         // Configure sequencer length
-        let rsq0 = (nb_pins.saturating_sub(1) & 0x0F) << 20;
+        let rsq0 = (nb_pins.saturating_sub(1) & 0x0F) << ADC_RSQ0_LEN_POS;
         write_volatile(&mut (*regs).rsq0, rsq0);
         
         // Map pins to RSQ2 (Assuming first 5 pins fit in RSQ2)
@@ -96,16 +96,14 @@ pub extern "C" fn ln_timing_adc_set_source(
         write_volatile(&mut (*regs).rsq2, rsq2);
         
         // Setup External Trigger
-        // For Timer 2 TRGO on STM32/GD32 ADC1, ETSRC is usually 0b011
-        // We will default to a software trigger or specific timer trigger 
-        // to simplify the example without fully mapping the entire timer matrix.
         let mut ctl1 = read_volatile(&mut (*regs).ctl1);
-        ctl1 |= 0b111 << 17; // EXTSEL = SWSTART (for simple simulation/fallback)
-        ctl1 |= 1 << 20; // EXTTRIG = Enabled
+        ctl1 &= !ADC_CTL1_ETSRC_MASK;
+        ctl1 |= ADC_CTL1_ETSRC_SWSTART;
+        ctl1 |= ADC_CTL1_ETERC;
         write_volatile(&mut (*regs).ctl1, ctl1);
         
         // Enable ADC
-        ctl1 |= 1; // ADON
+        ctl1 |= ADC_CTL1_ADCON;
         write_volatile(&mut (*regs).ctl1, ctl1);
     }
 
@@ -122,16 +120,16 @@ pub extern "C" fn ln_timing_adc_multi_read(
     let regs = AdcRegisters::ptr(instance);
     
     // Read total pins from RSQ0
-    let nb_pins = unsafe { ((read_volatile(&mut (*regs).rsq0) >> 20) & 0x0F) + 1 };
+    let nb_pins = unsafe { ((read_volatile(&mut (*regs).rsq0) >> ADC_RSQ0_LEN_POS) & 0x0F) + 1 };
     let total_samples = nb_sample_per_channel * nb_pins;
     
     // NATIVE DMA CONFIGURATION
-    let mut dma = DmaChannel::new(DmaEngine::Dma0, 0); // DMA0 Channel 0 is ADC0
+    let mut dma = DmaChannel::new(ADC0_DMA_ENGINE, ADC0_DMA_CHANNEL_IDX);
     
     unsafe {
         // Prepare ADC for DMA
         let mut ctl1 = read_volatile(&mut (*regs).ctl1);
-        ctl1 |= 1 << 8; // DMA mode enabled
+        ctl1 |= ADC_CTL1_DMA;
         write_volatile(&mut (*regs).ctl1, ctl1);
         
         // Configure DMA
@@ -143,8 +141,8 @@ pub extern "C" fn ln_timing_adc_multi_read(
             true  // 16-bit MSIZE
         );
         
-        // Trigger conversion (SWSTART for fallback)
-        ctl1 |= 1 << 22; // SWSTART
+        // Trigger conversion (SWRCST for regular conversion start)
+        ctl1 |= ADC_CTL1_SWRCST;
         write_volatile(&mut (*regs).ctl1, ctl1);
         
         // Blocking wait
@@ -153,7 +151,7 @@ pub extern "C" fn ln_timing_adc_multi_read(
         dma.end_transfer();
         
         // Cleanup ADC DMA flag
-        ctl1 &= !(1 << 8);
+        ctl1 &= !ADC_CTL1_DMA;
         write_volatile(&mut (*regs).ctl1, ctl1);
     }
     
@@ -218,10 +216,12 @@ pub extern "C" fn ln_simple_adc_read(adc: *mut c_void) -> i32 {
     unsafe {
         let ch = pin_to_adc_channel(pin_val);
         
-        // Set EXTTRIG (bit 20) and EXTSEL to SWSTART (bits 19:17 = 111)
+        // Set EXTTRIG and EXTSEL to SWSTART
         let mut ctl1 = read_volatile(&mut (*regs).ctl1);
-        ctl1 |= (7 << 17) | (1 << 20);
-        ctl1 |= 1; // ADON
+        ctl1 &= !ADC_CTL1_ETSRC_MASK;
+        ctl1 |= ADC_CTL1_ETSRC_SWSTART;
+        ctl1 |= ADC_CTL1_ETERC;
+        ctl1 |= ADC_CTL1_ADCON;
         write_volatile(&mut (*regs).ctl1, ctl1);
         
         // ADC power-up delay
@@ -229,31 +229,31 @@ pub extern "C" fn ln_simple_adc_read(adc: *mut c_void) -> i32 {
         
         // Trigger calibration (RSTCLB then CLB)
         ctl1 = read_volatile(&mut (*regs).ctl1);
-        ctl1 |= 1 << 3; // RSTCLB
+        ctl1 |= ADC_CTL1_RSTCLB;
         write_volatile(&mut (*regs).ctl1, ctl1);
-        while (read_volatile(&mut (*regs).ctl1) & (1 << 3)) != 0 { core::arch::asm!("nop"); }
+        while (read_volatile(&mut (*regs).ctl1) & ADC_CTL1_RSTCLB) != 0 { core::arch::asm!("nop"); }
         
         ctl1 = read_volatile(&mut (*regs).ctl1);
-        ctl1 |= 1 << 2; // CLB
+        ctl1 |= ADC_CTL1_CLB;
         write_volatile(&mut (*regs).ctl1, ctl1);
-        while (read_volatile(&mut (*regs).ctl1) & (1 << 2)) != 0 { core::arch::asm!("nop"); }
+        while (read_volatile(&mut (*regs).ctl1) & ADC_CTL1_CLB) != 0 { core::arch::asm!("nop"); }
         
-        // 1 sample => RSQ0 = 0
+        // 1 sample => RSQ0 = 0 (1 conversion)
         write_volatile(&mut (*regs).rsq0, 0);
         write_volatile(&mut (*regs).rsq2, ch); // Channel 0..15
         
         // SWRCST to start conversion
         ctl1 = read_volatile(&mut (*regs).ctl1);
-        ctl1 |= 1 << 22; // SWSTART
+        ctl1 |= ADC_CTL1_SWRCST;
         write_volatile(&mut (*regs).ctl1, ctl1);
         
-        // Wait for EOC (bit 1 of STAT)
-        while (read_volatile(&mut (*regs).stat) & 2) == 0 {
+        // Wait for EOC
+        while (read_volatile(&mut (*regs).stat) & ADC_STAT_EOC) == 0 {
             core::arch::asm!("nop");
         }
         
         // Read RDATA
-        let data = read_volatile(&mut (*regs).rdata) & 0xFFFF;
+        let data = read_volatile(&mut (*regs).rdata) & ADC_RDATA_DATA_MASK;
         data as i32
     }
 }

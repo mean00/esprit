@@ -31,8 +31,8 @@ fn unpack_handle(handle: *mut ln_i2c_c) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn lni2c_create(instance: u32, speed: u32) -> *mut ln_i2c_c {
     let periph = match instance {
-        0 => Peripheral::I2c0,
-        1 => Peripheral::I2c1,
+        I2C_INSTANCE_0 => Peripheral::I2c0,
+        I2C_INSTANCE_1 => Peripheral::I2c1,
         _ => Peripheral::I2c0,
     };
     enable(periph);
@@ -43,7 +43,7 @@ pub extern "C" fn lni2c_create(instance: u32, speed: u32) -> *mut ln_i2c_c {
     let regs = I2cRegisters::ptr(instance);
     unsafe {
         let mut cr1 = read_volatile(&mut (*regs).cr1);
-        cr1 |= 1; // PE
+        cr1 |= I2C_CR1_PE;
         write_volatile(&mut (*regs).cr1, cr1);
     }
     
@@ -94,12 +94,12 @@ struct I2cSession {
     done: bool,
 }
 
-static mut I2C_SESSIONS: [Option<I2cSession>; 2] = [None, None];
-static mut I2C_USE_DMA: [bool; 2] = [false, false];
+static mut I2C_SESSIONS: [Option<I2cSession>; I2C_MAX_INSTANCES] = [None; I2C_MAX_INSTANCES];
+static mut I2C_USE_DMA: [bool; I2C_MAX_INSTANCES] = [false; I2C_MAX_INSTANCES];
 
 #[unsafe(no_mangle)]
 pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
-    if instance < 0 || instance > 1 {
+    if instance < I2C_INSTANCE_0 as i32 || instance > I2C_INSTANCE_1 as i32 {
         return;
     }
     
@@ -118,12 +118,12 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
             
             // Clear error flags
             let mut sr1 = read_volatile(&mut (*regs).sr1);
-            sr1 &= !(0x0F00); // Clear error bits
+            sr1 &= !I2C_SR1_ERROR_MASK;
             write_volatile(&mut (*regs).sr1, sr1);
             
             // Send STOP condition
             let mut cr1 = read_volatile(&mut (*regs).cr1);
-            cr1 |= 1 << 9; // STOP
+            cr1 |= I2C_CR1_STOP;
             write_volatile(&mut (*regs).cr1, cr1);
             return;
         }
@@ -132,23 +132,23 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
         let sr1 = read_volatile(&mut (*regs).sr1);
         
         // EV5: SB (Start Bit) sent
-        if (sr1 & (1 << 0)) != 0 {
+        if (sr1 & I2C_SR1_SB) != 0 {
             // Send 7-bit Address
-            let addr = (session.target & 0x7F) << 1;
+            let addr = (session.target & I2C_ADDRESS_7BIT_MASK) << I2C_ADDRESS_7BIT_SHIFT;
             write_volatile(&mut (*regs).dr, addr);
         }
         // EV6: ADDR (Address sent)
-        else if (sr1 & (1 << 1)) != 0 {
+        else if (sr1 & I2C_SR1_ADDR) != 0 {
             // Clear ADDR by reading SR1 (done) and SR2
             let _sr2 = read_volatile(&mut (*regs).sr2);
             
-            // Enable TXE interrupt
+            // Enable event interrupt
             let mut cr2 = read_volatile(&mut (*regs).cr2);
-            cr2 |= 1 << 9; // BUFIE
+            cr2 |= I2C_CR2_ITEVTEN;
             write_volatile(&mut (*regs).cr2, cr2);
         }
         // EV8: TXE (Data register empty)
-        else if (sr1 & (1 << 7)) != 0 {
+        else if (sr1 & I2C_SR1_TXE) != 0 {
             if session.cur_seq < session.nb_seqn {
                 let seq_len = *session.seq_length.add(session.cur_seq as usize);
                 let seq_data = *session.data.add(session.cur_seq as usize);
@@ -166,12 +166,12 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
                     if session.cur_seq == session.nb_seqn {
                         // All sequences done, send STOP
                         let mut cr1 = read_volatile(&mut (*regs).cr1);
-                        cr1 |= 1 << 9; // STOP
+                        cr1 |= I2C_CR1_STOP;
                         write_volatile(&mut (*regs).cr1, cr1);
                         
                         // Disable interrupts
                         let mut cr2 = read_volatile(&mut (*regs).cr2);
-                        cr2 &= !((1 << 9) | (1 << 8)); // BUFIE, ITEVTEN
+                        cr2 &= !(I2C_CR2_ITEVTEN | I2C_CR2_ITERREN);
                         write_volatile(&mut (*regs).cr2, cr2);
                         
                         session.done = true;

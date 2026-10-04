@@ -3,6 +3,7 @@
 //! Exposes a clean, high-level API for PWM generation with DMA circular buffering.
 //! Neither this module nor consumers need to know how hardware registers are accessed.
 
+use crate::registers::*;
 use crate::timer::{ChannelMode, Timer};
 use rs_dma_bluepill::{DmaChannel, DmaEngine};
 use rs_gpio_bluepill::Pin;
@@ -64,7 +65,7 @@ impl DmaTimer {
             .map_err(|_| DmaTimerError::InvalidClock)?;
 
         self.timer.set_channel_mode(self.channel, ChannelMode::Pwm0);
-        self.timer.set_channel_compare(self.channel, rollover / 2);
+        self.timer.set_channel_compare(self.channel, rollover / PWM_HALF_DUTY_DIVISOR);
         self.timer.set_channel_output(self.channel, true);
 
         self.rollover = rollover;
@@ -80,7 +81,7 @@ impl DmaTimer {
         self.dma.begin_circular_tx_transfer(periph_addr, mem_addr, length as u32, false, true);
 
         // Preload compare register with rollover / 2 and restore PWM mode
-        self.timer.set_channel_compare(self.channel, self.rollover / 2);
+        self.timer.set_channel_compare(self.channel, self.rollover / PWM_HALF_DUTY_DIVISOR);
         self.timer.enable_channel_dma(self.channel, true);
         self.timer.set_dma_on_compare_event(true);
         self.timer.set_channel_mode(self.channel, ChannelMode::Pwm0);

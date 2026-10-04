@@ -36,3 +36,17 @@ pub fn remap_timer2_partial() {
         write_volatile(&mut (*afio).pcf0, pcf0);
     }
 }
+
+/// Select GPIO port as EXTI trigger source for the given pin index (0..15).
+pub fn select_exti_source(port: u32, source: u32) {
+    enable_afio();
+    let afio = AfioRegisters::ptr();
+    unsafe {
+        let idx = (source >> 2) as usize;
+        let shift = 4 * (source & 3);
+        let mut mask = read_volatile(&mut (*afio).extiss[idx]);
+        mask &= !(0xF << shift);
+        mask |= port << shift;
+        write_volatile(&mut (*afio).extiss[idx], mask);
+    }
+}
