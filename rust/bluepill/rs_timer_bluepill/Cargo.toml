@@ -8,4 +8,8 @@ rs_bluepill = { path = "../rs_bluepill" }
 rs_gpio_bluepill = { path = "../rs_gpio_bluepill" }
 rs_rcu_bluepill = { path = "../rs_rcu_bluepill" }
 rs_dma_bluepill = { path = "../rs_dma_bluepill" }
-rs_afio_bluepill = { path = "../rs_afio_bluepill" }
+rs_pinout48_bluepill = { path = "../rs_pinout48_bluepill" }
+
+[features]
+bluepill48 = ["rs_pinout48_bluepill/bluepill48"]
+bluepill64 = ["rs_pinout48_bluepill/bluepill64"]

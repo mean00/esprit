@@ -274,6 +274,38 @@ pub fn timer_dma(timer: u8, channel: u8) -> Option<DmaChannel> {
     TIMER_DMA_TABLE.iter().find(|e| e.0 == timer && e.1 == channel).map(|e| e.2)
 }
 
+/// Setup a pin for timer PWM output and resolve its Timer and DMA assignments.
+///
+/// Automatically handles GPIO configuration (Pwm mode, 50MHz) and AFIO remapping
+/// / JTAG pin release if required by the board pinout.
+/// Returns `Some((timer_idx, channel_idx, dma_engine, dma_channel_idx))` on success.
+pub fn setup_timer_pin(pin: Pin) -> Option<(u32, u32, rs_dma_bluepill::DmaEngine, usize)> {
+    let t_chan = timer_channel(pin)?;
+    let dma = timer_dma(t_chan.timer, t_chan.channel)?;
+
+    if t_chan.needs_remap {
+        // PB4 and PB5 need JTAG pins released and Timer 2 (TIM3) partially remapped
+        if pin == Pin::PB4 || pin == Pin::PB5 {
+            rs_afio_bluepill::release_jtag_pins();
+            rs_afio_bluepill::remap_timer2_partial();
+        }
+    }
+
+    rs_gpio_bluepill::set_mode(pin, rs_gpio_bluepill::Mode::Pwm, 50);
+
+    let dma_engine = match dma.engine {
+        registers::DMA_ENGINE0 => rs_dma_bluepill::DmaEngine::Dma0,
+        _ => rs_dma_bluepill::DmaEngine::Dma1,
+    };
+
+    Some((
+        t_chan.timer as u32,
+        t_chan.channel as u32,
+        dma_engine,
+        dma.channel as usize,
+    ))
+}
+
 // --- C API aliases (-1 = not available, like the legacy pinMappings table) ---
 
 const C_NONE: i32 = -1;

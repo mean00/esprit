@@ -13,3 +13,5 @@ bluepill = [
     "dep:rs_gpio_bluepill",
     "dep:rs_timer_bluepill",
 ]
+bluepill48 = ["bluepill", "rs_timer_bluepill?/bluepill48"]
+bluepill64 = ["bluepill", "rs_timer_bluepill?/bluepill64"]

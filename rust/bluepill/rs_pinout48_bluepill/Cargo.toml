@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 rs_gpio_bluepill = { path = "../rs_gpio_bluepill" }
+rs_afio_bluepill = { path = "../rs_afio_bluepill" }
+rs_dma_bluepill = { path = "../rs_dma_bluepill" }
 
 # Exactly one of these two features MUST be enabled (compile_error! otherwise).
 # They are derived from the CMake variables USE_48PIN_PACKAGE / USE_64PIN_PACKAGE

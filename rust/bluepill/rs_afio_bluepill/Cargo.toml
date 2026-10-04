@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 rs_bluepill = { path = "../rs_bluepill" }
+rs_rcu_bluepill = { path = "../rs_rcu_bluepill" }
