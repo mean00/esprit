@@ -24,3 +24,8 @@ The drivers must be split into two distinct layers:
 ## 6. Idiomatic Rust & Legacy C++ Compatibility
 - Make the internal code highly idiomatic for Rust (leveraging enums, safe abstractions, etc.).
 - **Alias System**: Provide an alias system (via `#[unsafe(no_mangle)] pub extern "C" fn`) to remain completely compatible with the C-API used for wrapping other legacy C++ code in the project.
+
+## 7. Target build
+We have several build targets : GD32F3, CH32V3xx, RP2040, RP2350 which must be dealt with as features.
+The GD32F3 & CH32V3xx automatically enable an internal feature called bluepill.
+When the bluepill feature is enabled, the rust driver in rust/bluepill are enabled and built

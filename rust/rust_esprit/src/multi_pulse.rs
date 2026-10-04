@@ -17,7 +17,9 @@ use crate::gpio::Pin;
 
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 use rs_multi_pulse_bluepill as mp;
-#[cfg(any(feature = "rp2040", feature = "esp32"))]
+#[cfg(feature = "rp2040")]
+use rs_multi_pulse_rp2xxx as mp;
+#[cfg(feature = "esp32")]
 use crate::c_api::rn_multi_pulse_c as mp;
 
 /// Safe wrapper around a multi-pulse generator.

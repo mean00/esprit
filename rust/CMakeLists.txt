@@ -23,5 +23,10 @@ if(NOT (USE_RP2040 OR USE_RP2350))
   cond_build(LN_ENABLE_TIMING_ADC lnTiming_adc_c.cpp)
   cond_build(LN_ENABLE_I2C lnI2C_c.cpp)
   target_sources(esprit_c_bindings PRIVATE ${C}/lnTimer_c.cpp ${C}/lnMultiPulse_c.cpp)
+else()
+  # RP2xxx has no lnTimingAdc, but it does have the C++ lnSimpleADC driver
+  # (mcus/arm_rp2xxx/src/ln_rp_adc.cpp).  This bridge lets rs_adc_rp2xxx, the
+  # Rust ADC backend used on RP2040/RP2350, drive it.
+  target_sources(esprit_c_bindings PRIVATE ${C}/ln_rp_simple_adc_c.cpp)
 endif()
 target_link_libraries(esprit_c_bindings PRIVATE esprit_dev)

@@ -6,16 +6,27 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
-rs_spi_bluepill = { path = "../bluepill/rs_spi_bluepill" }
-rs_i2c_bluepill = { path = "../bluepill/rs_i2c_bluepill" }
+# --- Platform backends -------------------------------------------------------
+# Only one family is selected, by the cargo features below:
+#   * `bluepill` — GD32 / CH32: the pure-Rust backends in esprit/rust/bluepill/
+#   * `rp2040`   — RP2040 / RP2350: the stubs in esprit/rust/rp2xxx/ (the C++
+#                  bridges for timer/multi-pulse/ADC/I2C are not built there)
+# See esprit/rust/rp2xxx/README.md.
+rs_spi_bluepill = { path = "../bluepill/rs_spi_bluepill", optional = true }
+rs_i2c_bluepill = { path = "../bluepill/rs_i2c_bluepill", optional = true }
 cty = "0.2.2"
-rs_rcu_bluepill = { path = "../bluepill/rs_rcu_bluepill" }
-rs_gpio_bluepill = { path = "../bluepill/rs_gpio_bluepill" }
-rs_exti_bluepill = { path = "../bluepill/rs_exti_bluepill" }
-rs_timer_bluepill = { path = "../bluepill/rs_timer_bluepill" }
-rs_adc_bluepill = { path = "../bluepill/rs_adc_bluepill" }
-rs_multi_pulse_bluepill = { path = "../bluepill/rs_multi_pulse_bluepill" }
-rs_uart_bluepill = { path = "../bluepill/rs_uart_bluepill" }
+rs_rcu_bluepill = { path = "../bluepill/rs_rcu_bluepill", optional = true }
+rs_gpio_bluepill = { path = "../bluepill/rs_gpio_bluepill", optional = true }
+rs_exti_bluepill = { path = "../bluepill/rs_exti_bluepill", optional = true }
+rs_timer_bluepill = { path = "../bluepill/rs_timer_bluepill", optional = true }
+rs_adc_bluepill = { path = "../bluepill/rs_adc_bluepill", optional = true }
+rs_multi_pulse_bluepill = { path = "../bluepill/rs_multi_pulse_bluepill", optional = true }
+rs_uart_bluepill = { path = "../bluepill/rs_uart_bluepill", optional = true }
+rs_spi_rp2xxx = { path = "../rp2xxx/rs_spi_rp2xxx", optional = true }
+rs_i2c_rp2xxx = { path = "../rp2xxx/rs_i2c_rp2xxx", optional = true }
+rs_timer_rp2xxx = { path = "../rp2xxx/rs_timer_rp2xxx", optional = true }
+rs_adc_rp2xxx = { path = "../rp2xxx/rs_adc_rp2xxx", optional = true }
+rs_multi_pulse_rp2xxx = { path = "../rp2xxx/rs_multi_pulse_rp2xxx", optional = true }
 ufmt = { version = "0.2.0", default-features = false }
 heapless = { version = "0.7.17", features = ["ufmt-impl"] }
 cfg-if = "1.0"
@@ -24,9 +35,40 @@ embedded-hal = { version = "1.0", optional = true }
 [features]
 cdc = []
 embedded-hal = ["dep:embedded-hal"]
-rp2040 = []
+
+# GD32 / CH32 (Bluepill): enables the pure-Rust peripheral backends.
+# This is the default so that plain `cargo build` / `cargo clippy` and the
+# demo projects keep their historical behaviour; builds that must *not* pull
+# the Bluepill backends (RP2040/RP2350, driven by swindle/rs/CMakeLists.txt)
+# depend on this crate with `default-features = false`.
+bluepill = [
+    "dep:rs_spi_bluepill",
+    "dep:rs_i2c_bluepill",
+    "dep:rs_rcu_bluepill",
+    "dep:rs_gpio_bluepill",
+    "dep:rs_exti_bluepill",
+    "dep:rs_timer_bluepill",
+    "dep:rs_adc_bluepill",
+    "dep:rs_multi_pulse_bluepill",
+    "dep:rs_uart_bluepill",
+]
+
+# RP2040: the C++ bridges for timer / multi-pulse / timing-ADC / I2C are not
+# built on RP2xxx (esprit/rust/CMakeLists.txt), so those modules are backed by
+# the panicking stubs in esprit/rust/rp2xxx/ instead.
+rp2040 = [
+    "dep:rs_spi_rp2xxx",
+    "dep:rs_i2c_rp2xxx",
+    "dep:rs_timer_rp2xxx",
+    "dep:rs_adc_rp2xxx",
+    "dep:rs_multi_pulse_rp2xxx",
+]
+# RP2350 shares the complete RP2xxx code path (bindings, cfgs and stubs).
+rp2350 = ["rp2040"]
+
 esp32 = []
-default = []
+
+default = ["bluepill"]
 
 # esprit provides its own std-compatible shim (FreeRTOS-backed).
 # Removes #![no_std] and re-exports FreeRTOS-backed implementations

@@ -1,4 +1,11 @@
-use crate::c_api::rn_simple_adc_c;
+//! Safe Rust wrapper around the simple (single-shot) ADC backend.
+//!
+//! The backend is selected by the platform features (see
+//! `esprit/rust/rp2xxx/README.md`): `rs_adc_bluepill` on GD32/CH32,
+//! `rs_adc_rp2xxx` on RP2040/RP2350 (which forwards to the C++ `lnSimpleADC`
+//! driver through `c_interface/ln_rp_simple_adc_c.cpp`), the C API elsewhere.
+
+use crate::rn_simple_adc_c;
 use core::ffi::c_void;
 
 pub struct SimpleAdc {

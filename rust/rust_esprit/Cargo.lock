@@ -110,6 +110,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "rs_adc_rp2xxx"
+version = "0.1.0"
+
+[[package]]
 name = "rs_afio_bluepill"
 version = "0.1.0"
 dependencies = [
@@ -154,12 +158,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "rs_i2c_rp2xxx"
+version = "0.1.0"
+
+[[package]]
 name = "rs_multi_pulse_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_gpio_bluepill",
 ]
+
+[[package]]
+name = "rs_multi_pulse_rp2xxx"
+version = "0.1.0"
 
 [[package]]
 name = "rs_rcu_bluepill"
@@ -178,6 +190,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "rs_spi_rp2xxx"
+version = "0.1.0"
+
+[[package]]
 name = "rs_timer_bluepill"
 version = "0.1.0"
 dependencies = [
@@ -185,6 +201,10 @@ dependencies = [
  "rs_gpio_bluepill",
  "rs_rcu_bluepill",
 ]
+
+[[package]]
+name = "rs_timer_rp2xxx"
+version = "0.1.0"
 
 [[package]]
 name = "rs_uart_bluepill"
@@ -204,13 +224,18 @@ dependencies = [
  "embedded-hal",
  "heapless",
  "rs_adc_bluepill",
+ "rs_adc_rp2xxx",
  "rs_exti_bluepill",
  "rs_gpio_bluepill",
  "rs_i2c_bluepill",
+ "rs_i2c_rp2xxx",
  "rs_multi_pulse_bluepill",
+ "rs_multi_pulse_rp2xxx",
  "rs_rcu_bluepill",
  "rs_spi_bluepill",
+ "rs_spi_rp2xxx",
  "rs_timer_bluepill",
+ "rs_timer_rp2xxx",
  "rs_uart_bluepill",
  "ufmt",
 ]

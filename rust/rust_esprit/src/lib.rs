@@ -171,12 +171,19 @@ pub(crate) use c_api::rn_gpio_esp32_c;
 pub(crate) use c_api::rn_gpio_rp2040_c;
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 pub(crate) use rs_i2c_bluepill as rn_i2c_c;
-#[cfg(any(feature = "rp2040", feature = "esp32"))]
+#[cfg(feature = "rp2040")]
+pub(crate) use rs_i2c_rp2xxx as rn_i2c_c;
+#[cfg(feature = "esp32")]
 pub(crate) use c_api::rn_i2c_c;
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 pub(crate) use rs_spi_bluepill as rn_spi_c;
-#[cfg(any(feature = "rp2040", feature = "esp32"))]
+#[cfg(feature = "rp2040")]
+pub(crate) use rs_spi_rp2xxx as rn_spi_c;
+#[cfg(feature = "esp32")]
 pub(crate) use c_api::rn_spi_c;
+// `rn_timer_c` stays on the C API for every target: `task.rs` uses the real C
+// helpers (`lnGetUs`, `lnDelay_C`, …), which esprit provides everywhere.
+// The `Timer` wrapper itself selects its backend in timer.rs.
 pub(crate) use c_api::rn_timer_c;
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 pub(crate) use rs_uart_bluepill as rn_serial_c;
@@ -184,19 +191,28 @@ pub(crate) use rs_uart_bluepill as rn_serial_c;
 pub(crate) use c_api::rn_serial_c;
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 pub(crate) use rs_adc_bluepill as rn_timing_adc_c;
-#[cfg(any(feature = "rp2040", feature = "esp32"))]
+#[cfg(feature = "rp2040")]
+pub(crate) use rs_adc_rp2xxx as rn_timing_adc_c;
+#[cfg(feature = "esp32")]
 pub(crate) use c_api::rn_timing_adc_c;
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 pub(crate) use rs_adc_bluepill as rn_simple_adc_c;
-#[cfg(any(feature = "rp2040", feature = "esp32"))]
+#[cfg(feature = "rp2040")]
+pub(crate) use rs_adc_rp2xxx as rn_simple_adc_c;
+#[cfg(feature = "esp32")]
 pub(crate) use c_api::rn_simple_adc_c;
 
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 pub(crate) use rs_timer_bluepill as rn_hw_stopwatch_c;
-#[cfg(any(feature = "rp2040", feature = "esp32"))]
+#[cfg(feature = "rp2040")]
+pub(crate) use rs_timer_rp2xxx as rn_hw_stopwatch_c;
+#[cfg(feature = "esp32")]
 pub(crate) use c_api::rn_hw_stopwatch_c;
 
+#[cfg(not(feature = "rp2040"))]
 pub(crate) use c_api::rn_multi_pulse_c;
+#[cfg(feature = "rp2040")]
+pub(crate) use rs_multi_pulse_rp2xxx as rn_multi_pulse_c;
 #[cfg(feature = "cdc")]
 pub(crate) use c_api::rn_usb_c;
 

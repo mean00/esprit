@@ -5,7 +5,9 @@
 
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 use rs_timer_bluepill as rt;
-#[cfg(any(feature = "rp2040", feature = "esp32"))]
+#[cfg(feature = "rp2040")]
+use rs_timer_rp2xxx as rt;
+#[cfg(feature = "esp32")]
 use crate::c_api::rn_timer_c as rt;
 
 use crate::gpio::Pin;
