@@ -22,6 +22,7 @@ rs_timer_bluepill = { path = "../bluepill/rs_timer_bluepill", optional = true }
 rs_adc_bluepill = { path = "../bluepill/rs_adc_bluepill", optional = true }
 rs_multi_pulse_bluepill = { path = "../bluepill/rs_multi_pulse_bluepill", optional = true }
 rs_uart_bluepill = { path = "../bluepill/rs_uart_bluepill", optional = true }
+rs_pinout48_bluepill = { path = "../bluepill/rs_pinout48_bluepill", optional = true }
 rs_spi_rp2xxx = { path = "../rp2xxx/rs_spi_rp2xxx", optional = true }
 rs_i2c_rp2xxx = { path = "../rp2xxx/rs_i2c_rp2xxx", optional = true }
 rs_timer_rp2xxx = { path = "../rp2xxx/rs_timer_rp2xxx", optional = true }
@@ -52,6 +53,11 @@ bluepill = [
     "dep:rs_multi_pulse_bluepill",
     "dep:rs_uart_bluepill",
 ]
+# Package of the bluepill compatible chip (CMake: USE_48PIN_PACKAGE / USE_64PIN_PACKAGE).
+# One of them is mandatory with `bluepill`; they select the pin/function mapping
+# in rs_pinout48_bluepill.
+bluepill48 = ["bluepill", "dep:rs_pinout48_bluepill", "rs_pinout48_bluepill/bluepill48"]
+bluepill64 = ["bluepill", "dep:rs_pinout48_bluepill", "rs_pinout48_bluepill/bluepill64"]
 
 # RP2040: the C++ bridges for timer / multi-pulse / timing-ADC / I2C are not
 # built on RP2xxx (esprit/rust/CMakeLists.txt), so those modules are backed by

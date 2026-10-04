@@ -1,0 +1,14 @@
+[package]
+name = "rs_pinout48_bluepill"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rs_gpio_bluepill = { path = "../rs_gpio_bluepill" }
+
+# Exactly one of these two features MUST be enabled (compile_error! otherwise).
+# They are derived from the CMake variables USE_48PIN_PACKAGE / USE_64PIN_PACKAGE
+# (bluepill compatible targets only: GD32F3 / CH32V3xx).
+[features]
+bluepill48 = []
+bluepill64 = []
