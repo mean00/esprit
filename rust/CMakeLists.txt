@@ -17,11 +17,17 @@ macro(cond_build FLAG SRC)
   endif()
 endmacro()
 
-cond_build(LN_ENABLE_SPI $lnSPI_c.cpp)
+if(NOT LN_ENABLE_RUST)
+  cond_build(LN_ENABLE_SPI lnSPI_c.cpp)
+endif()
 
 if(NOT (USE_RP2040 OR USE_RP2350))
   cond_build(LN_ENABLE_TIMING_ADC lnTiming_adc_c.cpp)
-  cond_build(LN_ENABLE_I2C lnI2C_c.cpp)
+  # When LN_ENABLE_RUST is active, the pure native Rust driver rs_i2c_bluepill
+  # provides the lni2c_* C ABI symbols, so the C++ bridge lnI2C_c.cpp must not be compiled.
+  if(NOT LN_ENABLE_RUST)
+    cond_build(LN_ENABLE_I2C lnI2C_c.cpp)
+  endif()
   target_sources(esprit_c_bindings PRIVATE ${C}/lnTimer_c.cpp ${C}/lnMultiPulse_c.cpp)
 else()
   # RP2xxx has no lnTimingAdc, but it does have the C++ lnSimpleADC driver

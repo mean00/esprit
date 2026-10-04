@@ -1,0 +1,24 @@
+[package]
+name = "rust_demo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rust_esprit = { path = "../../../../../rust/rust_esprit" }
+ws2812b = { path = "../../../../../rust/libraries/ws2812b" }
+ufmt = "*"
+
+[lib]
+name = "rust_demo"
+path = "src/lib.rs"
+crate-type = ["staticlib"]
+
+[profile.dev]
+debug = true
+lto = false
+opt-level = 0
+
+[profile.release]
+debug = true
+lto = true
+opt-level = "s"

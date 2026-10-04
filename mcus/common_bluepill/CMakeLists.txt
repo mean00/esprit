@@ -63,11 +63,15 @@ endif(LN_USE_INTERNAL_CLOCK)
 #
 
 if(LN_ENABLE_I2C)
-  target_sources(esprit_lib PRIVATE lnI2C.cpp lnI2C_impl.cpp)
+  if(NOT LN_ENABLE_RUST)
+    target_sources(esprit_lib PRIVATE lnI2C.cpp lnI2C_impl.cpp)
+  endif()
 endif(LN_ENABLE_I2C)
 
 if(LN_ENABLE_SPI)
-  target_sources(esprit_lib PRIVATE lnSPI_bp.cpp lnSPI_bp_dma.cpp)
+  if(NOT LN_ENABLE_RUST)
+    target_sources(esprit_lib PRIVATE lnSPI_bp.cpp lnSPI_bp_dma.cpp)
+  endif()
 endif(LN_ENABLE_SPI)
 
 #

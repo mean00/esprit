@@ -55,7 +55,7 @@ CH32V3_INTERRUPT *pfic = (CH32V3_INTERRUPT *)LN_PFIC_ADR;
 //
 
 #ifdef LN_ENABLE_I2C
-void i2cIrqHandler(int instance, bool error);
+extern "C" void i2cIrqHandler(int instance, bool error);
 #else
 #define i2cIrqHandler(...) deadEnd(1)
 #endif

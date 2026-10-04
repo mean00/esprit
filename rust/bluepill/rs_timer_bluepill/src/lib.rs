@@ -4,6 +4,11 @@
 #![no_std]
 
 pub mod registers;
+pub mod timer;
+pub mod dma_timer;
+
+pub use timer::{Timer, ChannelMode};
+pub use dma_timer::{DmaTimer, DmaTimerError};
 
 use registers::*;
 use rs_gpio_bluepill::lnPin;

@@ -23,3 +23,8 @@ extern "C" int scanf(const char *__restrict, ...)
 {
     return 0;
 }
+
+extern "C" __attribute__((weak)) void i2cIrqHandler(int instance, bool error)
+{
+    deadEnd(1);
+}

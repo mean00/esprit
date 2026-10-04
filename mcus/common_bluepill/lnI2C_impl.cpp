@@ -748,7 +748,7 @@ void lnTwoWire::irqTx()
  * @param instance
  * @param error
  */
-void i2cIrqHandler(int instance, bool error)
+extern "C" void i2cIrqHandler(int instance, bool error)
 {
     lnTwoWire *i = irqHandler[instance];
     xAssert(i);

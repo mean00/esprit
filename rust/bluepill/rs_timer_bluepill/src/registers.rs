@@ -1,6 +1,22 @@
 #![allow(dead_code)]
 use rs_bluepill::{TIM1_BASE, TIM2_BASE, TIM3_BASE, TIM4_BASE, TIM5_BASE};
 
+// --- Timer Control & Config Bits (GD32F3 / STM32F1) ---
+pub const TIMER_CTL0_CEN: u32 = 1 << 0;
+pub const TIMER_CTL0_OPM: u32 = 1 << 3;
+pub const TIMER_CTL0_ARPE: u32 = 1 << 7;
+
+pub const TIMER_CTL1_DMAS: u32 = 1 << 3;
+
+pub const TIMER_DIEN_CH_DMA_BASE_BIT: u32 = 9; // CH0DEN = 1<<9, CH1DEN = 1<<10, etc.
+
+pub const TIMER_CHCTL_MODE_PWM0: u32 = 0x6;
+pub const TIMER_CHCTL_MODE_FORCE_LOW: u32 = 0x4;
+pub const TIMER_CHCTL_PRELOAD_EN: u32 = 1 << 3;
+
+pub const TIMER_CHCTL2_CH0EN: u32 = 1 << 0;
+pub const TIMER_CHCTL2_CHANNEL_SHIFT: u32 = 4;
+
 #[repr(C)]
 pub struct TimerRegisters {
     pub ctl0: u32,

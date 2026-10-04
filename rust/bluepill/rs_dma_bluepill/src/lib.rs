@@ -43,12 +43,12 @@ impl DmaChannel {
             
             // 1. Disable channel before configuring
             let mut ccr = read_volatile(&mut ch_regs.ccr);
-            ccr &= !1; // Clear EN
+            ccr &= !DMA_CCR_EN;
             write_volatile(&mut ch_regs.ccr, ccr);
             
             // 2. Clear interrupt flags for this channel in IFCR
-            let shift = self.channel_idx * 4;
-            write_volatile(&mut (*regs).ifcr, 0x0F << shift); // Clear CGIF, CTCIF, CHTIF, CTEIF
+            let shift = (self.channel_idx as u32) * DMA_FLAGS_PER_CHANNEL;
+            write_volatile(&mut (*regs).ifcr, DMA_CHANNEL_CLEAR_ALL << shift);
             
             // 3. Set Peripheral and Memory addresses
             write_volatile(&mut ch_regs.cpar, peripheral_addr);
@@ -58,16 +58,57 @@ impl DmaChannel {
             write_volatile(&mut ch_regs.cndtr, length);
             
             // 5. Configure CCR: Memory increment, DIR=MemToPeriph, sizes
-            ccr = (1 << 7) | (1 << 4); // MINC (Memory Increment), DIR (Read from Memory)
+            ccr = DMA_CCR_MINC | DMA_CCR_DIR_MEM2PERIPH;
             
-            if src_16bit { ccr |= 1 << 10; } // MSIZE = 16-bit
-            if dst_16bit { ccr |= 1 << 8;  } // PSIZE = 16-bit
+            if src_16bit { ccr |= DMA_CCR_MSIZE_16BIT; }
+            if dst_16bit { ccr |= DMA_CCR_PSIZE_16BIT; }
             
             // Enable Transfer Complete Interrupt (TCIE)
-            ccr |= 1 << 1;
+            ccr |= DMA_CCR_TCIE;
             
             // Enable channel
-            ccr |= 1;
+            ccr |= DMA_CCR_EN;
+            write_volatile(&mut ch_regs.ccr, ccr);
+        }
+    }
+
+    /// Begin a circular memory-to-peripheral transfer.
+    pub fn begin_circular_tx_transfer(
+        &mut self,
+        peripheral_addr: u32,
+        memory_addr: u32,
+        length: u32,
+        src_16bit: bool,
+        dst_16bit: bool,
+    ) {
+        let regs = self.regs();
+        unsafe {
+            let ch_regs = &mut (*regs).channels[self.channel_idx];
+            
+            // 1. Disable channel before configuring
+            let mut ccr = read_volatile(&mut ch_regs.ccr);
+            ccr &= !DMA_CCR_EN;
+            write_volatile(&mut ch_regs.ccr, ccr);
+            
+            // 2. Clear interrupt flags for this channel in IFCR
+            let shift = (self.channel_idx as u32) * DMA_FLAGS_PER_CHANNEL;
+            write_volatile(&mut (*regs).ifcr, DMA_CHANNEL_CLEAR_ALL << shift);
+            
+            // 3. Set Peripheral and Memory addresses
+            write_volatile(&mut ch_regs.cpar, peripheral_addr);
+            write_volatile(&mut ch_regs.cmar, memory_addr);
+            
+            // 4. Set Length
+            write_volatile(&mut ch_regs.cndtr, length);
+            
+            // 5. Configure CCR: Circular mode, Memory increment, DIR=MemToPeriph, High Priority
+            ccr = DMA_CCR_DIR_MEM2PERIPH | DMA_CCR_CIRC | DMA_CCR_MINC | DMA_CCR_PL_HIGH;
+            
+            if src_16bit { ccr |= DMA_CCR_MSIZE_16BIT; } else { ccr |= DMA_CCR_MSIZE_8BIT; }
+            if dst_16bit { ccr |= DMA_CCR_PSIZE_16BIT; } else { ccr |= DMA_CCR_PSIZE_8BIT; }
+            
+            // Enable channel
+            ccr |= DMA_CCR_EN;
             write_volatile(&mut ch_regs.ccr, ccr);
         }
     }
@@ -77,12 +118,12 @@ impl DmaChannel {
         unsafe {
             let ch_regs = &mut (*regs).channels[self.channel_idx];
             let mut ccr = read_volatile(&mut ch_regs.ccr);
-            ccr &= !1; // Clear EN
+            ccr &= !DMA_CCR_EN;
             write_volatile(&mut ch_regs.ccr, ccr);
             
             // Clear interrupt flags
-            let shift = self.channel_idx * 4;
-            write_volatile(&mut (*regs).ifcr, 0x0F << shift);
+            let shift = (self.channel_idx as u32) * DMA_FLAGS_PER_CHANNEL;
+            write_volatile(&mut (*regs).ifcr, DMA_CHANNEL_CLEAR_ALL << shift);
         }
     }
     
@@ -90,8 +131,33 @@ impl DmaChannel {
         let regs = self.regs();
         unsafe {
             let isr = read_volatile(&mut (*regs).isr);
-            let shift = self.channel_idx * 4;
-            (isr & (1 << (shift + 1))) != 0 // TCIF bit
+            let shift = (self.channel_idx as u32) * DMA_FLAGS_PER_CHANNEL;
+            (isr & (DMA_FLAG_TCIF << shift)) != 0
+        }
+    }
+
+    pub fn clear_transfer_complete(&mut self) {
+        let regs = self.regs();
+        unsafe {
+            let shift = (self.channel_idx as u32) * DMA_FLAGS_PER_CHANNEL;
+            write_volatile(&mut (*regs).ifcr, DMA_FLAG_TCIF << shift);
+        }
+    }
+
+    pub fn is_half_transfer(&self) -> bool {
+        let regs = self.regs();
+        unsafe {
+            let isr = read_volatile(&mut (*regs).isr);
+            let shift = (self.channel_idx as u32) * DMA_FLAGS_PER_CHANNEL;
+            (isr & (DMA_FLAG_HTIF << shift)) != 0
+        }
+    }
+
+    pub fn clear_half_transfer(&mut self) {
+        let regs = self.regs();
+        unsafe {
+            let shift = (self.channel_idx as u32) * DMA_FLAGS_PER_CHANNEL;
+            write_volatile(&mut (*regs).ifcr, DMA_FLAG_HTIF << shift);
         }
     }
 }

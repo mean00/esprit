@@ -69,7 +69,6 @@ set(START_CODE ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp/rust_start.cpp)
 generate_gd32_firmware(rust_demo ${START_CODE})
 hash_gd32_firmware(rust_demo)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/)
-target_link_libraries(rust_demo PRIVATE esprit_c_bindings)
 target_link_libraries(rust_demo PRIVATE rsPowerSupply)
 
 # Summary
