@@ -101,6 +101,50 @@ impl DmaChannel {
         }
     }
 
+    /// Begin a peripheral-to-memory transfer (DIR=0).
+    pub fn begin_rx_transfer(
+        &mut self,
+        peripheral_addr: u32,
+        memory_addr: u32,
+        length: u32,
+        src_16bit: bool,
+        dst_16bit: bool,
+    ) {
+        let regs = self.regs();
+        unsafe {
+            let ch_regs = &mut (*regs).channels[self.channel_idx];
+
+            // 1. Disable channel before configuring
+            let mut ccr = read_volatile(&mut ch_regs.ccr);
+            ccr &= !DMA_CCR_EN;
+            write_volatile(&mut ch_regs.ccr, ccr);
+
+            // 2. Clear interrupt flags for this channel in IFCR
+            let shift = (self.channel_idx as u32) * DMA_FLAGS_PER_CHANNEL;
+            write_volatile(&mut (*regs).ifcr, DMA_CHANNEL_CLEAR_ALL << shift);
+
+            // 3. Set Peripheral and Memory addresses
+            write_volatile(&mut ch_regs.cpar, peripheral_addr);
+            write_volatile(&mut ch_regs.cmar, memory_addr);
+
+            // 4. Set Length
+            write_volatile(&mut ch_regs.cndtr, length);
+
+            // 5. Configure CCR: Memory increment, DIR=PeriphToMem (0), sizes
+            ccr = DMA_CCR_MINC;
+
+            if src_16bit { ccr |= DMA_CCR_PSIZE_16BIT; }
+            if dst_16bit { ccr |= DMA_CCR_MSIZE_16BIT; }
+
+            // Enable Transfer Complete Interrupt (TCIE)
+            ccr |= DMA_CCR_TCIE;
+
+            // Enable channel
+            ccr |= DMA_CCR_EN;
+            write_volatile(&mut ch_regs.ccr, ccr);
+        }
+    }
+
     /// Begin a circular memory-to-peripheral transfer.
     pub fn begin_circular_tx_transfer(
         &mut self,

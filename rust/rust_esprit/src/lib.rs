@@ -227,15 +227,12 @@ mod gpio;
 mod exti;
 mod spi;
 mod i2c;
-mod event;
 mod adc;
 #[cfg(feature = "cdc")]
 mod usb;
 #[cfg(feature = "cdc")]
 mod cdc;
-mod task;
-mod sync;
-mod queue;
+pub use rs_rtos::{event, queue, sync, task};
 mod timer;
 mod multi_pulse;
 mod serial;

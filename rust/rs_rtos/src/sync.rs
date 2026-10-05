@@ -14,7 +14,7 @@
 //! All wrappers own the underlying FreeRTOS kernel object and free it on drop.
 
 use crate::prelude::*;
-use crate::rn_freertos_c;
+use crate::c_freertos as rn_freertos_c;
 use core::ffi::c_void;
 use core::ptr::NonNull;
 use core::convert::From;

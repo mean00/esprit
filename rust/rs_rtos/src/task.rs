@@ -10,22 +10,33 @@
 //! overhead (no queue allocation needed).
 
 use crate::prelude::*;
-use crate::rn_freertos_c;
-use crate::rn_timer_c as rt;
+use crate::c_freertos as rn_freertos_c;
 use core::ffi::c_void;
+
+unsafe extern "C" {
+    fn lnDelay_C(ms: cty::c_uint);
+    #[link_name = "\u{1}_Z9lnDelayUsj"]
+    fn lnDelayUs(wait: cty::c_uint);
+    #[link_name = "\u{1}_Z7lnGetMsv"]
+    fn lnGetMs() -> cty::c_uint;
+    #[link_name = "\u{1}_Z7lnGetUsv"]
+    fn lnGetUs() -> cty::c_uint;
+    #[link_name = "\u{1}_Z9lnGetUs64v"]
+    fn lnGetUs64() -> u64;
+}
 
 // ---- time and delay ----
 
 /// Block for `ms` milliseconds.
 #[inline]
 pub fn delay_ms(ms: u32) {
-    unsafe { rt::lnDelay_C(ms) }
+    unsafe { lnDelay_C(ms) }
 }
 
 /// Block for `us` microseconds.
 #[inline]
 pub fn delay_us(us: u32) {
-    unsafe { rt::lnDelayUs(us) }
+    unsafe { lnDelayUs(us) }
 }
 
 /// Sleep (block) for the given duration.
@@ -51,7 +62,7 @@ pub fn sleep_ms(ms: u32) {
 /// (which may have lower resolution) use [`tick_count`].
 #[inline]
 pub fn time_ms() -> u32 {
-    unsafe { rt::lnGetMs() }
+    unsafe { lnGetMs() }
 }
 
 /// Return the current FreeRTOS tick count.
@@ -66,13 +77,13 @@ pub fn tick_count() -> u32 {
 /// Return a monotonic microsecond counter.
 #[inline]
 pub fn time_us() -> u32 {
-    unsafe { rt::lnGetUs() }
+    unsafe { lnGetUs() }
 }
 
 /// Return a 64‑bit monotonic microsecond counter.
 #[inline]
 pub fn time_us64() -> u64 {
-    unsafe { rt::lnGetUs64() }
+    unsafe { lnGetUs64() }
 }
 
 // ---- task handle ----
@@ -94,12 +105,12 @@ impl TaskHandle {
     ///
     /// # Safety
     /// `raw` must be a valid, non‑null task handle.
-    pub unsafe fn from_raw(raw: crate::raw::TaskHandle_t) -> Self {
+    pub unsafe fn from_raw(raw: rn_freertos_c::TaskHandle_t) -> Self {
         Self { raw }
     }
 
     /// Return the raw C handle.
-    pub fn raw(&self) -> crate::raw::TaskHandle_t {
+    pub fn raw(&self) -> rn_freertos_c::TaskHandle_t {
         self.raw
     }
 
@@ -361,13 +372,13 @@ pub struct Instant {
 impl Instant {
     /// Return a snapshot of the monotonic clock.
     pub fn now() -> Self {
-        let micros = unsafe { rt::lnGetUs64() };
+        let micros = unsafe { lnGetUs64() };
         Self { micros }
     }
 
     /// The elapsed time since this `Instant` was created.
     pub fn elapsed(&self) -> Duration {
-        Duration::from_micros(unsafe { rt::lnGetUs64() } - self.micros)
+        Duration::from_micros(unsafe { lnGetUs64() } - self.micros)
     }
 
     /// Duration between `self` and `earlier` (`self - earlier`).
@@ -463,11 +474,11 @@ pub fn get_time_us() -> u32 {
 // ---------------------------------------------------------------------------
 
 /// Kernel tick rate in Hz, taken from `FreeRTOSConfig.h` (`configTICK_RATE_HZ`).
-const TICK_RATE_HZ: u32 = crate::rn_freertos_c::configTICK_RATE_HZ_RUST;
+const TICK_RATE_HZ: u32 = crate::c_freertos::configTICK_RATE_HZ_RUST;
 
 /// Convert milliseconds to FreeRTOS ticks.
 /// `u32::MAX` is interpreted as "infinite wait" (portMAX_DELAY).
-pub(crate) fn ms_to_ticks(ms: u32) -> rn_freertos_c::TickType_t {
+pub fn ms_to_ticks(ms: u32) -> rn_freertos_c::TickType_t {
     if ms == u32::MAX {
         u32::MAX
     } else {

@@ -195,6 +195,18 @@ pub mod gpio {
     }
 }
 
+pub use rs_rtos as rtos;
+pub use rs_rtos::sync;
+pub use rs_rtos::queue;
+pub use rs_rtos::event;
+pub use rs_rtos::task;
+
+pub use rs_rtos::{
+    BinarySemaphore, CountingSemaphore, Mutex, MutexGuard, OnceLock,
+    RecursiveMutex, RecursiveMutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
+    SemaphoreGuard, Queue, EventGroup,
+};
+
 // Convenient top-level re-exports
 pub use uart::{UartTx, UartRx, UartTxHandler, UartRxHandler, UartConfig};
 pub use spi::{Spi, SpiTxHandler, SpiRxHandler, SpiConfig, SpiMode, SpiBitOrder};

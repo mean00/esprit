@@ -9,6 +9,7 @@ use registers::*;
 use rs_gpio_bluepill::Pin;
 use rs_dma_bluepill::DmaChannel;
 use rs_rcu_bluepill::{Peripheral, enable};
+use rs_esprit::BinarySemaphore;
 use core::ptr::{read_volatile, write_volatile};
 use core::ffi::c_void;
 
@@ -25,9 +26,17 @@ pub fn pin_to_adc_channel(pin: u32) -> u32 {
     }
 }
 
+unsafe extern "C" fn adc_dma_callback(half: bool, cookie: *mut core::ffi::c_void) {
+    if !half && !cookie.is_null() {
+        let sem = unsafe { &*(cookie as *const BinarySemaphore) };
+        sem.give_from_isr();
+    }
+}
+
 /// Idiomatic struct representing a DMA-driven multi-channel ADC sequencer.
 pub struct TimingAdc {
     instance: u32,
+    sem: BinarySemaphore,
 }
 
 impl TimingAdc {
@@ -37,7 +46,10 @@ impl TimingAdc {
         } else {
             enable(Peripheral::Adc1);
         }
-        Self { instance }
+        Self {
+            instance,
+            sem: BinarySemaphore::new(),
+        }
     }
 
     #[inline(always)]
@@ -101,11 +113,20 @@ impl TimingAdc {
         let mut dma = DmaChannel::new(ADC0_DMA_ENGINE, ADC0_DMA_CHANNEL_IDX);
 
         unsafe {
+            // Clear any stale semaphore token
+            self.sem.try_take();
+
             let mut ctl1 = read_volatile(&mut (*regs).ctl1);
             ctl1 |= ADC_CTL1_DMA;
             write_volatile(&mut (*regs).ctl1, ctl1);
 
-            dma.begin_tx_transfer(
+            dma.attach_callback(
+                adc_dma_callback,
+                &self.sem as *const _ as *mut core::ffi::c_void,
+            );
+
+            // ADC is Peripheral-to-Memory transfer (DIR=0)
+            dma.begin_rx_transfer(
                 &(*regs).rdata as *const _ as u32,
                 output.as_mut_ptr() as u32,
                 total_samples,
@@ -116,9 +137,11 @@ impl TimingAdc {
             ctl1 |= ADC_CTL1_SWRCST;
             write_volatile(&mut (*regs).ctl1, ctl1);
 
-            while !dma.is_transfer_complete() {}
+            // Block until DMA transfer complete interrupt triggers semaphore
+            self.sem.take();
 
             dma.end_transfer();
+            dma.detach_callback();
 
             ctl1 &= !ADC_CTL1_DMA;
             write_volatile(&mut (*regs).ctl1, ctl1);

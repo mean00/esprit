@@ -10,6 +10,8 @@ use rs_rcu_bluepill::{Peripheral, enable};
 use rs_dma_bluepill::{DmaChannel, DmaEngine};
 use core::ptr::{read_volatile, write_volatile};
 
+use rs_esprit::BinarySemaphore;
+
 struct UartConfig {
     use_dma: bool,
     speed: u32,
@@ -22,9 +24,33 @@ static mut UART_CONFIGS: [UartConfig; UART_MAX_INSTANCES] = [
     UartConfig { use_dma: false, speed: UART_DEFAULT_BAUDRATE, rx_enabled: false },
 ];
 
+unsafe extern "C" fn uart_tx_dma_callback(half: bool, cookie: *mut core::ffi::c_void) {
+    if !half && !cookie.is_null() {
+        let sem = unsafe { &*(cookie as *const BinarySemaphore) };
+        sem.give_from_isr();
+    }
+}
+
+pub(crate) fn uart_set_baudrate(instance: u32, speed: u32) -> bool {
+    let regs = UartRegisters::ptr(instance);
+    let periph = match instance {
+        UART_INSTANCE_0 => Peripheral::Uart0,
+        UART_INSTANCE_1 => Peripheral::Uart1,
+        UART_INSTANCE_2 => Peripheral::Uart2,
+        _ => Peripheral::Uart0,
+    };
+    let pclk = rs_rcu_bluepill::get_clock(periph);
+    let usartdiv = (pclk + (speed / 2)) / speed;
+    unsafe {
+        write_volatile(&mut (*regs).baud, usartdiv);
+    }
+    true
+}
+
 /// Idiomatic struct representing a UART transmitter.
 pub struct UartTx {
     pub(crate) instance: u32,
+    sem: BinarySemaphore,
 }
 
 impl UartTx {
@@ -35,7 +61,10 @@ impl UartTx {
             else if instance == UART_INSTANCE_1 { enable(Peripheral::Uart1); }
             else if instance == UART_INSTANCE_2 { enable(Peripheral::Uart2); }
         }
-        Self { instance }
+        Self {
+            instance,
+            sem: BinarySemaphore::new(),
+        }
     }
 
     #[inline(always)]
@@ -54,19 +83,7 @@ impl UartTx {
     }
 
     pub fn set_speed(&mut self, speed: u32) -> bool {
-        let regs = UartRegisters::ptr(self.instance);
-        let periph = match self.instance {
-            UART_INSTANCE_0 => Peripheral::Uart0,
-            UART_INSTANCE_1 => Peripheral::Uart1,
-            UART_INSTANCE_2 => Peripheral::Uart2,
-            _ => Peripheral::Uart0,
-        };
-        let pclk = rs_rcu_bluepill::get_clock(periph);
-        let usartdiv = (pclk + (speed / 2)) / speed;
-        unsafe {
-            write_volatile(&mut (*regs).baud, usartdiv);
-        }
-        true
+        uart_set_baudrate(self.instance, speed)
     }
 
     pub fn transmit(&mut self, buffer: &[u8]) -> bool {
@@ -75,6 +92,9 @@ impl UartTx {
 
         unsafe {
             if UART_CONFIGS[self.instance as usize].use_dma {
+                // Clear any pending/stale semaphore token
+                self.sem.try_take();
+
                 let mut ctl2 = read_volatile(&mut (*regs).ctl2);
                 ctl2 |= USART_CTL2_DMAT;
                 write_volatile(&mut (*regs).ctl2, ctl2);
@@ -86,6 +106,11 @@ impl UartTx {
                 };
                 let mut dma = DmaChannel::new(DmaEngine::Dma0, ch_idx);
 
+                dma.attach_callback(
+                    uart_tx_dma_callback,
+                    &self.sem as *const _ as *mut core::ffi::c_void,
+                );
+
                 dma.begin_tx_transfer(
                     &(*regs).data as *const _ as u32,
                     buffer.as_ptr() as u32,
@@ -94,8 +119,16 @@ impl UartTx {
                     false,
                 );
 
-                while !dma.is_transfer_complete() {}
+                // Block until DMA transfer complete interrupt triggers semaphore
+                self.sem.take();
+
                 dma.end_transfer();
+                dma.detach_callback();
+
+                // Wait for USART Transmission Complete (TC) flag before returning
+                while (read_volatile(&mut (*regs).stat) & USART_STAT_TC) == 0 {
+                    core::hint::spin_loop();
+                }
             } else {
                 for &byte in buffer {
                     while (read_volatile(&mut (*regs).stat) & USART_STAT_TBE) == 0 {}
@@ -140,8 +173,7 @@ impl UartRx {
     }
 
     pub fn set_speed(&mut self, speed: u32) -> bool {
-        let mut tx = UartTx { instance: self.instance };
-        tx.set_speed(speed)
+        uart_set_baudrate(self.instance, speed)
     }
 
     pub fn enable_rx(&mut self, enabled: bool) -> bool {

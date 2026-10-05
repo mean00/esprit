@@ -10,23 +10,24 @@
 //! a `static` or behind an `Arc`.
 
 use crate::prelude::*;
-use crate::rn_fast_event_c;
+use crate::c_fast_event as rn_fast_event_c;
 use crate::sync::Arc;
+use core::ffi::c_void;
 
 // ── Internal ref-counted handle ──────────────────────────────────────
 
 struct EventGroupInner {
-    raw: *mut crate::raw::lnfast_event_group_c,
+    raw: *mut c_void,
 }
 
 impl EventGroupInner {
     fn new() -> Self {
         let raw = unsafe { rn_fast_event_c::lnfast_event_group_create() };
         assert!(!raw.is_null(), "lnfast_event_group_create returned NULL");
-        Self { raw }
+        Self { raw: raw as *mut c_void }
     }
 
-    fn raw(&self) -> *mut crate::raw::lnfast_event_group_c {
+    fn raw(&self) -> *mut c_void {
         self.raw
     }
 }
@@ -34,7 +35,7 @@ impl EventGroupInner {
 impl Drop for EventGroupInner {
     fn drop(&mut self) {
         unsafe {
-            rn_fast_event_c::lnfast_event_group_delete(self.raw);
+            rn_fast_event_c::lnfast_event_group_delete(self.raw as *mut rn_fast_event_c::lnfast_event_group_c);
         }
     }
 }
@@ -75,8 +76,7 @@ impl EventGroup {
 
     /// Returns a pointer to the raw C object.  Advanced use only.
     #[inline]
-    /// Return the raw C handle.  Advanced use only.
-    pub fn raw(&self) -> *mut crate::raw::lnfast_event_group_c {
+    pub fn raw(&self) -> *mut c_void {
         self.inner.raw()
     }
 
@@ -84,7 +84,7 @@ impl EventGroup {
     /// It means the calling thread will be the one receiving the events
     pub fn take_ownership(&mut self) {
         unsafe {
-            rn_fast_event_c::lnfast_event_group_takeOwnership(self.inner.raw());
+            rn_fast_event_c::lnfast_event_group_takeOwnership(self.inner.raw() as *mut rn_fast_event_c::lnfast_event_group_c);
         }
     }
 
@@ -94,7 +94,7 @@ impl EventGroup {
     /// under the hood).
     pub fn set_events(&self, bits: u32) {
         unsafe {
-            rn_fast_event_c::lnfast_event_group_set_events(self.inner.raw(), bits);
+            rn_fast_event_c::lnfast_event_group_set_events(self.inner.raw() as *mut rn_fast_event_c::lnfast_event_group_c, bits);
         }
     }
 
@@ -107,14 +107,14 @@ impl EventGroup {
     /// - `timeout_ms > 0`: timeout in milliseconds.
     pub fn wait_events(&self, bits: u32, timeout_ms: i32) -> u32 {
         unsafe {
-            rn_fast_event_c::lnfast_event_group_wait_events(self.inner.raw(), bits, timeout_ms)
+            rn_fast_event_c::lnfast_event_group_wait_events(self.inner.raw() as *mut rn_fast_event_c::lnfast_event_group_c, bits, timeout_ms)
         }
     }
 
     /// Read the current event bits matching `mask` without waiting
     /// (non‑blocking, non‑mutating).
     pub fn read_events(&self, mask: u32) -> u32 {
-        unsafe { rn_fast_event_c::lnfast_event_group_read_events(self.inner.raw(), mask) }
+        unsafe { rn_fast_event_c::lnfast_event_group_read_events(self.inner.raw() as *mut rn_fast_event_c::lnfast_event_group_c, mask) }
     }
 }
 

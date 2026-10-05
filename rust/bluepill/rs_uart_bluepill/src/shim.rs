@@ -15,32 +15,66 @@ pub fn unpack_tx_handle(handle: *mut ln_serial_tx_c) -> u32 { handle as usize as
 pub fn pack_rx_handle(instance: u32) -> *mut ln_serial_rx_c { instance as usize as *mut ln_serial_rx_c }
 pub fn unpack_rx_handle(handle: *mut ln_serial_rx_c) -> u32 { handle as usize as u32 }
 
+static mut TX_INSTANCES: [Option<UartTx>; UART_MAX_INSTANCES] = [None, None, None];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn lnserial_tx_create(instance: u32, dma: bool, _buffered: bool) -> *mut ln_serial_tx_c {
-    let _tx = UartTx::new(instance, dma);
+    if (instance as usize) < UART_MAX_INSTANCES {
+        unsafe {
+            TX_INSTANCES[instance as usize] = Some(UartTx::new(instance, dma));
+        }
+    }
     pack_tx_handle(instance)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn lnserial_tx_delete(_s: *mut ln_serial_tx_c) {}
+pub extern "C" fn lnserial_tx_delete(s: *mut ln_serial_tx_c) {
+    let instance = unpack_tx_handle(s) as usize;
+    if instance < UART_MAX_INSTANCES {
+        unsafe {
+            TX_INSTANCES[instance] = None;
+        }
+    }
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn lnserial_tx_init(s: *mut ln_serial_tx_c) -> bool {
-    let mut tx = UartTx { instance: unpack_tx_handle(s) };
-    tx.init()
+    let instance = unpack_tx_handle(s) as usize;
+    if instance < UART_MAX_INSTANCES {
+        unsafe {
+            if let Some(ref mut tx) = TX_INSTANCES[instance] {
+                return tx.init();
+            }
+        }
+    }
+    false
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn lnserial_tx_set_speed(s: *mut ln_serial_tx_c, speed: u32) -> bool {
-    let mut tx = UartTx { instance: unpack_tx_handle(s) };
-    tx.set_speed(speed)
+    let instance = unpack_tx_handle(s) as usize;
+    if instance < UART_MAX_INSTANCES {
+        unsafe {
+            if let Some(ref mut tx) = TX_INSTANCES[instance] {
+                return tx.set_speed(speed);
+            }
+        }
+    }
+    false
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn lnserial_tx_transmit(s: *mut ln_serial_tx_c, size: u32, buffer: *const u8) -> bool {
-    let mut tx = UartTx { instance: unpack_tx_handle(s) };
-    let slice = unsafe { core::slice::from_raw_parts(buffer, size as usize) };
-    tx.transmit(slice)
+    let instance = unpack_tx_handle(s) as usize;
+    if instance < UART_MAX_INSTANCES {
+        unsafe {
+            if let Some(ref mut tx) = TX_INSTANCES[instance] {
+                let slice = core::slice::from_raw_parts(buffer, size as usize);
+                return tx.transmit(slice);
+            }
+        }
+    }
+    false
 }
 
 #[unsafe(no_mangle)]

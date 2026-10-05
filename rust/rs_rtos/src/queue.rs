@@ -10,7 +10,7 @@
 //! ```
 
 use crate::prelude::*;
-use crate::rn_freertos_c;
+use crate::c_freertos as rn_freertos_c;
 use core::ffi::c_void;
 
 /// A fixed-capacity queue of items of type `T`.
@@ -35,9 +35,9 @@ impl<T> Queue<T> {
     ///
     /// Panics if the underlying FreeRTOS queue cannot be created (out of heap).
     pub fn new(capacity: u32) -> Self {
-        let item_size = core::mem::size_of::<T>() as u32;
+        let item_size = core::mem::size_of::<T>() as rn_freertos_c::UBaseType_t;
         let handle = unsafe {
-            rn_freertos_c::xQueueGenericCreate(capacity, item_size, 0) // 0 = standard queue
+            rn_freertos_c::xQueueGenericCreate(capacity as rn_freertos_c::UBaseType_t, item_size, 0) // 0 = standard queue
         };
         assert!(!handle.is_null(), "Queue::new: xQueueGenericCreate returned NULL");
         Self {
@@ -157,12 +157,12 @@ impl<T> Queue<T> {
 
     /// Number of items currently in the queue.
     pub fn len(&self) -> u32 {
-        unsafe { rn_freertos_c::uxQueueMessagesWaiting(self.handle) }
+        unsafe { rn_freertos_c::uxQueueMessagesWaiting(self.handle) as u32 }
     }
 
     /// Remaining free space.
     pub fn available(&self) -> u32 {
-        unsafe { rn_freertos_c::uxQueueSpacesAvailable(self.handle) }
+        unsafe { rn_freertos_c::uxQueueSpacesAvailable(self.handle) as u32 }
     }
 
     /// Returns `true` if the queue is empty.
@@ -199,7 +199,7 @@ impl<T> Queue<T> {
     }
 
     /// Return the raw handle (advanced).
-    pub fn handle(&self) -> crate::raw::QueueHandle_t {
+    pub fn handle(&self) -> rn_freertos_c::QueueHandle_t {
         self.handle
     }
 }

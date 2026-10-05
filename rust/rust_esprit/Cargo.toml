@@ -33,6 +33,7 @@ heapless = { version = "0.7.17", features = ["ufmt-impl"] }
 cfg-if = "1.0"
 embedded-hal = { version = "1.0", optional = true }
 rs_esprit = { path = "../rs_esprit" }
+rs_rtos = { path = "../rs_rtos" }
 
 [features]
 cdc = []

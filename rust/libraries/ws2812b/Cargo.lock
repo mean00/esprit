@@ -120,6 +120,10 @@ dependencies = [
 [[package]]
 name = "rs_esprit"
 version = "0.1.0"
+dependencies = [
+ "cty",
+ "rs_rtos",
+]
 
 [[package]]
 name = "rs_exti_bluepill"
@@ -173,6 +177,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rs_rtos"
+version = "0.1.0"
+dependencies = [
+ "cfg-if",
+ "cty",
+]
+
+[[package]]
 name = "rs_spi_bluepill"
 version = "0.1.0"
 dependencies = [
@@ -220,6 +232,7 @@ dependencies = [
  "rs_multi_pulse_bluepill",
  "rs_pinout48_bluepill",
  "rs_rcu_bluepill",
+ "rs_rtos",
  "rs_spi_bluepill",
  "rs_timer_bluepill",
  "rs_uart_bluepill",

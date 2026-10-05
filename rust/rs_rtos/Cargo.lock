@@ -15,26 +15,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
 
 [[package]]
-name = "rs_bluepill"
-version = "0.1.0"
-
-[[package]]
-name = "rs_esprit"
-version = "0.1.0"
-dependencies = [
- "cty",
- "rs_rtos",
-]
-
-[[package]]
-name = "rs_gpio_bluepill"
-version = "0.1.0"
-dependencies = [
- "rs_bluepill",
- "rs_esprit",
-]
-
-[[package]]
 name = "rs_rtos"
 version = "0.1.0"
 dependencies = [
