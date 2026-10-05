@@ -166,5 +166,54 @@ impl UartRx {
     }
 }
 
+static mut UART_TX_HANDLERS: [Option<&'static dyn rs_esprit::UartTxHandler>; UART_MAX_INSTANCES] = [None, None, None];
+static mut UART_RX_HANDLERS: [Option<&'static dyn rs_esprit::UartRxHandler>; UART_MAX_INSTANCES] = [None, None, None];
+
+impl rs_esprit::UartTx for UartTx {
+    #[inline]
+    fn configure(&mut self, config: &rs_esprit::UartConfig) -> bool {
+        self.set_speed(config.baudrate)
+    }
+
+    #[inline]
+    fn transmit(&mut self, buffer: &[u8]) -> bool {
+        let res = self.transmit(buffer);
+        if res {
+            unsafe {
+                if let Some(handler) = UART_TX_HANDLERS[self.instance as usize] {
+                    handler.on_tx_complete();
+                }
+            }
+        }
+        res
+    }
+
+    #[inline]
+    fn set_tx_handler(&mut self, handler: Option<&'static dyn rs_esprit::UartTxHandler>) {
+        unsafe {
+            UART_TX_HANDLERS[self.instance as usize] = handler;
+        }
+    }
+}
+
+impl rs_esprit::UartRx for UartRx {
+    #[inline]
+    fn configure(&mut self, config: &rs_esprit::UartConfig) -> bool {
+        self.set_speed(config.baudrate)
+    }
+
+    #[inline]
+    fn enable_rx(&mut self, enabled: bool) -> bool {
+        self.enable_rx(enabled)
+    }
+
+    #[inline]
+    fn set_rx_handler(&mut self, handler: Option<&'static dyn rs_esprit::UartRxHandler>) {
+        unsafe {
+            UART_RX_HANDLERS[self.instance as usize] = handler;
+        }
+    }
+}
+
 pub mod shim;
 pub use shim::*;

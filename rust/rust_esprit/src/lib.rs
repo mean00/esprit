@@ -603,3 +603,13 @@ pub use std_shim as std;
 
 pub mod simple_adc;
 pub mod hw_stopwatch;
+
+pub use rs_esprit as hal;
+pub use rs_esprit::{
+    uart::{UartTx as HalUartTx, UartRx as HalUartRx, UartTxHandler, UartRxHandler, UartConfig},
+    spi::{Spi as HalSpi, SpiTxHandler, SpiRxHandler, SpiConfig, SpiMode as HalSpiMode, SpiBitOrder},
+    timer::{Timer as HalTimer, TimerHandler},
+    i2c::{I2c as HalI2c, I2cHandler, I2cConfig},
+    adc::{SimpleAdc as HalSimpleAdc, TimingAdc as HalTimingAdc, AdcHandler},
+    gpio::{GpioPin as HalGpioPin, GpioInterruptHandler, EdgeTrigger},
+};

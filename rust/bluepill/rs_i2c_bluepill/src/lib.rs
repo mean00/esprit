@@ -187,5 +187,52 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
     }
 }
 
+const I2C_MAX_INSTANCES: usize = 2;
+static mut I2C_HANDLERS: [Option<&'static dyn rs_esprit::I2cHandler>; I2C_MAX_INSTANCES] = [None, None];
+
+impl rs_esprit::I2c for I2c {
+    fn configure(&mut self, config: &rs_esprit::I2cConfig) -> bool {
+        self.set_speed(config.speed_hz);
+        self.set_address(config.own_address as u32);
+        true
+    }
+
+    fn write_to(&mut self, target: u16, data: &[u8]) -> bool {
+        let res = self.write_to(target as u32, data.len() as u32, data.as_ptr());
+        if res {
+            unsafe {
+                if (self.instance as usize) < I2C_MAX_INSTANCES {
+                    if let Some(handler) = I2C_HANDLERS[self.instance as usize] {
+                        handler.on_tx_complete();
+                    }
+                }
+            }
+        }
+        res
+    }
+
+    fn read_from(&mut self, target: u16, buffer: &mut [u8]) -> bool {
+        let res = self.read_from(target as u32, buffer.len() as u32, buffer.as_mut_ptr());
+        if res {
+            unsafe {
+                if (self.instance as usize) < I2C_MAX_INSTANCES {
+                    if let Some(handler) = I2C_HANDLERS[self.instance as usize] {
+                        handler.on_rx_buffer(buffer);
+                    }
+                }
+            }
+        }
+        res
+    }
+
+    fn set_handler(&mut self, handler: Option<&'static dyn rs_esprit::I2cHandler>) {
+        unsafe {
+            if (self.instance as usize) < I2C_MAX_INSTANCES {
+                I2C_HANDLERS[self.instance as usize] = handler;
+            }
+        }
+    }
+}
+
 pub mod shim;
 pub use shim::*;

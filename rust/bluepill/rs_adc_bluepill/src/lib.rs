@@ -219,5 +219,55 @@ impl SimpleAdc {
     }
 }
 
+const ADC_MAX_INSTANCES: usize = 2;
+static mut SIMPLE_ADC_HANDLERS: [Option<&'static dyn rs_esprit::AdcHandler>; ADC_MAX_INSTANCES] = [None, None];
+static mut TIMING_ADC_HANDLERS: [Option<&'static dyn rs_esprit::AdcHandler>; ADC_MAX_INSTANCES] = [None, None];
+
+impl rs_esprit::SimpleAdc for SimpleAdc {
+    fn read(&self) -> i32 {
+        let val = self.read();
+        unsafe {
+            if (self.instance as usize) < ADC_MAX_INSTANCES {
+                if let Some(handler) = SIMPLE_ADC_HANDLERS[self.instance as usize] {
+                    handler.on_conversion_complete(val as u16);
+                }
+            }
+        }
+        val
+    }
+
+    fn set_handler(&mut self, handler: Option<&'static dyn rs_esprit::AdcHandler>) {
+        unsafe {
+            if (self.instance as usize) < ADC_MAX_INSTANCES {
+                SIMPLE_ADC_HANDLERS[self.instance as usize] = handler;
+            }
+        }
+    }
+}
+
+impl rs_esprit::TimingAdc for TimingAdc {
+    fn multi_read(&mut self, nb_sample_per_channel: u32, output: &mut [u16]) -> bool {
+        let res = self.multi_read(nb_sample_per_channel, output);
+        if res {
+            unsafe {
+                if (self.instance as usize) < ADC_MAX_INSTANCES {
+                    if let Some(handler) = TIMING_ADC_HANDLERS[self.instance as usize] {
+                        handler.on_sequence_complete(output);
+                    }
+                }
+            }
+        }
+        res
+    }
+
+    fn set_handler(&mut self, handler: Option<&'static dyn rs_esprit::AdcHandler>) {
+        unsafe {
+            if (self.instance as usize) < ADC_MAX_INSTANCES {
+                TIMING_ADC_HANDLERS[self.instance as usize] = handler;
+            }
+        }
+    }
+}
+
 pub mod shim;
 pub use shim::*;

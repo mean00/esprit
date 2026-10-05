@@ -11,10 +11,21 @@ use registers::*;
 use rs_rcu_bluepill::{Peripheral, enable};
 use core::ptr::{read_volatile, write_volatile};
 
-#[derive(Clone, Copy)]
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DmaEngine {
-    Dma0, // DMA1 in STM32 terminology
-    Dma1, // DMA2 in STM32 terminology
+    Dma0 = 0, // DMA1 in STM32 terminology
+    Dma1 = 1, // DMA2 in STM32 terminology
+}
+
+unsafe extern "C" {
+    fn lnDmaAttachRawCallback(
+        dma: i32,
+        channel: i32,
+        cb: unsafe extern "C" fn(bool, *mut core::ffi::c_void),
+        cookie: *mut core::ffi::c_void,
+    );
+    fn lnDmaDetachRawCallback(dma: i32, channel: i32);
 }
 
 pub struct DmaChannel {
@@ -35,6 +46,22 @@ impl DmaChannel {
         match self.engine {
             DmaEngine::Dma0 => DmaRegisters::dma0_ptr(),
             DmaEngine::Dma1 => DmaRegisters::dma1_ptr(),
+        }
+    }
+
+    pub fn attach_callback(
+        &mut self,
+        cb: unsafe extern "C" fn(bool, *mut core::ffi::c_void),
+        cookie: *mut core::ffi::c_void,
+    ) {
+        unsafe {
+            lnDmaAttachRawCallback(self.engine as i32, self.channel_idx as i32, cb, cookie);
+        }
+    }
+
+    pub fn detach_callback(&mut self) {
+        unsafe {
+            lnDmaDetachRawCallback(self.engine as i32, self.channel_idx as i32);
         }
     }
 
@@ -103,8 +130,8 @@ impl DmaChannel {
             // 4. Set Length
             write_volatile(&mut ch_regs.cndtr, length);
             
-            // 5. Configure CCR: Circular mode, Memory increment, DIR=MemToPeriph, High Priority
-            ccr = DMA_CCR_DIR_MEM2PERIPH | DMA_CCR_CIRC | DMA_CCR_MINC | DMA_CCR_PL_HIGH;
+            // 5. Configure CCR: Circular mode, Memory increment, DIR=MemToPeriph, High Priority, TCIE + HTIE
+            ccr = DMA_CCR_DIR_MEM2PERIPH | DMA_CCR_CIRC | DMA_CCR_MINC | DMA_CCR_PL_HIGH | DMA_CCR_TCIE | DMA_CCR_HTIE;
             
             if src_16bit { ccr |= DMA_CCR_MSIZE_16BIT; } else { ccr |= DMA_CCR_MSIZE_8BIT; }
             if dst_16bit { ccr |= DMA_CCR_PSIZE_16BIT; } else { ccr |= DMA_CCR_PSIZE_8BIT; }
@@ -116,6 +143,7 @@ impl DmaChannel {
     }
     
     pub fn end_transfer(&mut self) {
+        self.detach_callback();
         let regs = self.regs();
         unsafe {
             let ch_regs = &mut (*regs).channels[self.channel_idx];

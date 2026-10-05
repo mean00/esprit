@@ -246,3 +246,31 @@ impl Timer {
         }
     }
 }
+
+static mut TIMER_HANDLERS: [Option<&'static dyn rs_esprit::TimerHandler>; TIMER_MAX_INSTANCES] = [None, None, None, None, None];
+
+impl rs_esprit::Timer for Timer {
+    #[inline]
+    fn set_frequency(&mut self, frequency_hz: u32) -> Result<u32, &'static str> {
+        self.set_frequency(frequency_hz)
+    }
+
+    #[inline]
+    fn enable(&mut self) {
+        self.enable();
+    }
+
+    #[inline]
+    fn disable(&mut self) {
+        self.disable();
+    }
+
+    #[inline]
+    fn set_handler(&mut self, handler: Option<&'static dyn rs_esprit::TimerHandler>) {
+        unsafe {
+            if (self.timer_idx as usize) < TIMER_MAX_INSTANCES {
+                TIMER_HANDLERS[self.timer_idx as usize] = handler;
+            }
+        }
+    }
+}

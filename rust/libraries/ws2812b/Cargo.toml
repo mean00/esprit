@@ -6,12 +6,15 @@ edition = "2024"
 [dependencies]
 rs_gpio_bluepill = { path = "../../bluepill/rs_gpio_bluepill", optional = true }
 rs_timer_bluepill = { path = "../../bluepill/rs_timer_bluepill", optional = true }
+rust_esprit = { path = "../../rust_esprit", default-features = false, optional = true }
 
 [features]
 default = ["bluepill"]
 bluepill = [
     "dep:rs_gpio_bluepill",
     "dep:rs_timer_bluepill",
+    "dep:rust_esprit",
+    "rust_esprit/bluepill",
 ]
-bluepill48 = ["bluepill", "rs_timer_bluepill?/bluepill48"]
-bluepill64 = ["bluepill", "rs_timer_bluepill?/bluepill64"]
+bluepill48 = ["bluepill", "rs_timer_bluepill?/bluepill48", "rust_esprit/bluepill48"]
+bluepill64 = ["bluepill", "rs_timer_bluepill?/bluepill64", "rust_esprit/bluepill64"]

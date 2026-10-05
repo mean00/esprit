@@ -98,6 +98,20 @@ impl DmaTimer {
         self.timer.enable();
     }
 
+    /// Attach an ISR callback invoked on DMA half-transfer (is_half = true) and transfer-complete (is_half = false).
+    pub fn attach_dma_callback(
+        &mut self,
+        cb: unsafe extern "C" fn(bool, *mut core::ffi::c_void),
+        cookie: *mut core::ffi::c_void,
+    ) {
+        self.dma.attach_callback(cb, cookie);
+    }
+
+    /// Detach the DMA ISR callback and disable DMA interrupts.
+    pub fn detach_dma_callback(&mut self) {
+        self.dma.detach_callback();
+    }
+
     /// Check if DMA half-transfer event occurred.
     #[inline]
     pub fn is_half_transfer(&self) -> bool {

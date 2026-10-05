@@ -10,6 +10,12 @@ pub const WS2812B_PWM_FREQUENCY_HZ: u32 = 830_000;
 /// Minimum reset / latch low duration in microseconds (>280 µs required by modern WS2812B/SK6812).
 pub const WS2812B_RESET_DELAY_US: u32 = 300;
 
+/// Maximum timeout in milliseconds to wait for a DMA frame transfer to complete.
+pub const WS2812B_DMA_TIMEOUT_MS: u32 = 100;
+
+/// Small delay in microseconds before stopping timer after DMA transfer finishes.
+pub const WS2812B_STOP_DELAY_US: u32 = 2;
+
 
 /// Size of the circular DMA ping-pong buffer in bytes (2 LEDs * 24 bytes/LED).
 pub const BUFFER_SIZE_BYTES: usize = 48;

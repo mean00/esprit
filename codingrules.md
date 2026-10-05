@@ -29,3 +29,7 @@ The drivers must be split into two distinct layers:
 We have several build targets : GD32F3, CH32V3xx, RP2040, RP2350 which must be dealt with as features.
 The GD32F3 & CH32V3xx automatically enable an internal feature called bluepill.
 When the bluepill feature is enabled, the rust driver in rust/bluepill are enabled and built
+
+## 8. Enhanced no_std
+The general code is no_std BUT it is perfectly fine to use the FreeRTOS methods, directly or indirectly
+

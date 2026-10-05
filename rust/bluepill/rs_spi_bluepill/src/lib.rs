@@ -135,5 +135,62 @@ impl Spi {
     }
 }
 
+static mut SPI_RX_HANDLERS: [Option<&'static dyn rs_esprit::SpiRxHandler>; SPI_MAX_INSTANCES] = [None, None, None];
+static mut SPI_TX_HANDLERS: [Option<&'static dyn rs_esprit::SpiTxHandler>; SPI_MAX_INSTANCES] = [None, None, None];
+
+impl rs_esprit::Spi for Spi {
+    fn configure(&mut self, config: &rs_esprit::SpiConfig) -> bool {
+        self.begin(config.data_size as u32);
+        self.set_speed(config.speed_hz);
+        let mode = match config.mode {
+            rs_esprit::SpiMode::Mode0 => spiDataMode_SPI_MODE0,
+            rs_esprit::SpiMode::Mode1 => spiDataMode_SPI_MODE1,
+            rs_esprit::SpiMode::Mode2 => spiDataMode_SPI_MODE2,
+            rs_esprit::SpiMode::Mode3 => spiDataMode_SPI_MODE3,
+        };
+        self.set_data_mode(mode);
+        let order = match config.bit_order {
+            rs_esprit::SpiBitOrder::MsbFirst => spiBitOrder_SPI_MSBFIRST,
+            rs_esprit::SpiBitOrder::LsbFirst => spiBitOrder_SPI_LSBFIRST,
+        };
+        self.set_bit_order(order);
+        true
+    }
+
+    fn transfer8(&mut self, val: u8) -> u8 {
+        let rx = self.transfer8(val);
+        unsafe {
+            if let Some(handler) = SPI_RX_HANDLERS[self.instance as usize] {
+                handler.on_rx_byte(rx);
+            }
+        }
+        rx
+    }
+
+    fn write_async(&mut self, data: &[u8]) -> bool {
+        for &byte in data {
+            self.write8(byte);
+        }
+        unsafe {
+            if let Some(handler) = SPI_TX_HANDLERS[self.instance as usize] {
+                handler.on_tx_complete();
+            }
+        }
+        true
+    }
+
+    fn set_rx_handler(&mut self, handler: Option<&'static dyn rs_esprit::SpiRxHandler>) {
+        unsafe {
+            SPI_RX_HANDLERS[self.instance as usize] = handler;
+        }
+    }
+
+    fn set_tx_handler(&mut self, handler: Option<&'static dyn rs_esprit::SpiTxHandler>) {
+        unsafe {
+            SPI_TX_HANDLERS[self.instance as usize] = handler;
+        }
+    }
+}
+
 pub mod shim;
 pub use shim::*;

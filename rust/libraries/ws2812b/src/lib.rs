@@ -10,19 +10,11 @@
 //! - Relies on [`rs_timer_bluepill::DmaTimer`] to perform all Timer and DMA configuration.
 //! - Focuses purely on protocol formatting (GRB serialization, nibble lookup, double-buffering).
 //!
-//! Follows `esprit/codingrules.md`:
-//! - **Rule 1: No Magic Numbers** (protocol constants in [`registers`]).
-//! - **Rule 2: Two-Tier Architecture** (high-level driver relying on underlying timer crate).
-//! - **Rule 3: Re-exporting Types** (re-exports [`Pin`], [`Color`], etc.).
-//! - **Rule 4: Examples Mandatory** (see `examples/basic.rs`).
-//! - **Rule 5: Scope & API Parity** (full parity with C++ `WS2812B_base` and `WS2812B_timer`).
-//! - **Rule 6: Idiomatic Rust & Legacy C++ Compatibility** (safe API + C ABI aliases).
-//! - **Rule 7: Target build** (`bluepill` feature for GD32F3 / CH32V3xx).
 
 pub mod color;
 pub mod registers;
 
-pub use color::{scale_channel, Color};
+pub use color::{Color, scale_channel};
 pub use registers::*;
 pub use rs_gpio_bluepill::Pin;
 
@@ -48,6 +40,9 @@ impl From<DmaTimerError> for Ws2812bError {
     }
 }
 
+#[cfg(feature = "bluepill")]
+use rust_esprit::BinarySemaphore;
+
 /// Aligned 48-byte buffer for DMA ping-pong transfer (2 LEDs * 24 bytes).
 #[repr(align(4))]
 struct PwmBuffer {
@@ -66,6 +61,9 @@ pub struct Ws2812b<const N: usize> {
     timer: Option<DmaTimer>,
     one_ticks: u8,
     zero_ticks: u8,
+    #[cfg(feature = "bluepill")]
+    sem: Option<BinarySemaphore>,
+    next_led: usize,
 }
 
 impl<const N: usize> Ws2812b<N> {
@@ -84,6 +82,9 @@ impl<const N: usize> Ws2812b<N> {
             timer: None,
             one_ticks: 0,
             zero_ticks: 0,
+            #[cfg(feature = "bluepill")]
+            sem: None,
+            next_led: 0,
         }
     }
 
@@ -101,7 +102,8 @@ impl<const N: usize> Ws2812b<N> {
             let rollover = timer.pwm_setup(WS2812B_PWM_FREQUENCY_HZ)?;
 
             let one = (rollover * DUTY_ONE_NUMERATOR + DUTY_ROUNDING_OFFSET) / DUTY_ONE_DENOMINATOR;
-            let zero = (rollover * DUTY_ZERO_NUMERATOR + DUTY_ROUNDING_OFFSET) / DUTY_ZERO_DENOMINATOR;
+            let zero =
+                (rollover * DUTY_ZERO_NUMERATOR + DUTY_ROUNDING_OFFSET) / DUTY_ZERO_DENOMINATOR;
 
             self.one_ticks = one as u8;
             self.zero_ticks = zero as u8;
@@ -123,6 +125,7 @@ impl<const N: usize> Ws2812b<N> {
                 self.lookup[value] = word;
             }
 
+            self.sem = Some(BinarySemaphore::new());
             self.timer = Some(timer);
             Ok(())
         }
@@ -174,6 +177,52 @@ impl<const N: usize> Ws2812b<N> {
         }
     }
 
+    /// ISR callback triggered on DMA half-transfer (`half = true`) or transfer-complete (`half = false`).
+    pub(crate) fn handle_dma_interrupt(&mut self, half: bool) {
+        // Single LED: give semaphore on half (24 bytes sent = 1 LED done)
+        if N == 1 && half {
+            if let Some(ref sem) = self.sem {
+                sem.give_from_isr();
+            }
+            self.next_led += 1;
+            return;
+        }
+
+        // More LEDs to send: write next LED into the half that was just consumed
+        if self.next_led < N {
+            // half == true -> first half was just sent, write there (false = offset 0)
+            // half == false -> second half was just sent, write there (true = offset 24)
+            let grb = get_grb_for_led(
+                &self.leds,
+                &self.led_brightness,
+                self.global_brightness,
+                self.next_led,
+            );
+            write_pwm_samples(&self.lookup, &mut self.pwm_buffer.data, !half, grb);
+            self.next_led += 1;
+            return;
+        }
+
+        // All LEDs written, last batch still being sent
+        if self.next_led == N {
+            if half {
+                self.pwm_buffer.data[0..HALF_BUFFER_BYTES].fill(0);
+            } else {
+                self.pwm_buffer.data[HALF_BUFFER_BYTES..BUFFER_SIZE_BYTES].fill(0);
+            }
+            self.next_led += 1;
+            return;
+        }
+
+        // Last batch fully sent -> signal completion
+        if self.next_led == N + 1 {
+            if let Some(ref sem) = self.sem {
+                sem.give_from_isr();
+            }
+            self.next_led += 1;
+        }
+    }
+
     /// Commit the current LED colors to the strip via Timer + DMA transfer.
     pub fn update(&mut self) {
         if N == 0 {
@@ -182,90 +231,61 @@ impl<const N: usize> Ws2812b<N> {
 
         #[cfg(feature = "bluepill")]
         {
-            let Self {
-                timer,
-                pwm_buffer,
-                leds,
-                led_brightness,
-                global_brightness,
-                lookup,
-                ..
-            } = self;
-
-            let timer = match timer.as_mut() {
-                Some(t) => t,
-                None => return,
-            };
-
-            if N == 1 {
-                let grb = get_grb_for_led(leds, led_brightness, *global_brightness, 0);
-                write_pwm_samples(lookup, &mut pwm_buffer.data, false, grb);
-                pwm_buffer.data[HALF_BUFFER_BYTES..BUFFER_SIZE_BYTES].fill(0);
-
-                timer.start_dma(pwm_buffer.data.as_ptr(), BUFFER_SIZE_BYTES);
-
-                let mut timeout: u32 = 2_000_000;
-                while !timer.is_half_transfer() && timeout > 0 {
-                    timeout -= 1;
-                }
-                timer.clear_half_transfer();
-
-                // Half transfer fired when DMA loaded byte 23 into CCR.
-                // Wait 2 µs for byte 23 to finish playing (~1.2 µs) into the trailing zeros.
-                delay_us(2);
-
-
-                timer.stop();
-                delay_us(WS2812B_RESET_DELAY_US);
+            if self.timer.is_none() || self.sem.is_none() {
                 return;
             }
 
-            // Ping-pong double buffering for N > 1 LEDs
-            let grb0 = get_grb_for_led(leds, led_brightness, *global_brightness, 0);
-            write_pwm_samples(lookup, &mut pwm_buffer.data, false, grb0);
+            self.sem.as_ref().unwrap().try_take(); // Clear any stale semaphore
 
-            let grb1 = get_grb_for_led(leds, led_brightness, *global_brightness, 1);
-            write_pwm_samples(lookup, &mut pwm_buffer.data, true, grb1);
-
-            let mut next_led = 2;
-            timer.start_dma(pwm_buffer.data.as_ptr(), BUFFER_SIZE_BYTES);
-
-            let mut waiting_for_half = true;
-            let mut timeout: u32 = 2_000_000;
-
-            while next_led <= N + 1 && timeout > 0 {
-                if waiting_for_half {
-                    if timer.is_half_transfer() {
-                        timer.clear_half_transfer();
-                        if next_led < N {
-                            let grb = get_grb_for_led(leds, led_brightness, *global_brightness, next_led);
-                            write_pwm_samples(lookup, &mut pwm_buffer.data, false, grb);
-                        } else if next_led == N {
-                            pwm_buffer.data[0..HALF_BUFFER_BYTES].fill(0);
-                        }
-                        next_led += 1;
-                        waiting_for_half = false;
-                    }
-                } else {
-                    if timer.is_transfer_complete() {
-                        timer.clear_transfer_complete();
-                        if next_led < N {
-                            let grb = get_grb_for_led(leds, led_brightness, *global_brightness, next_led);
-                            write_pwm_samples(lookup, &mut pwm_buffer.data, true, grb);
-                        } else if next_led == N {
-                            pwm_buffer.data[HALF_BUFFER_BYTES..BUFFER_SIZE_BYTES].fill(0);
-                        }
-                        next_led += 1;
-                        waiting_for_half = true;
-                    }
-                }
-                timeout -= 1;
+            if N == 1 {
+                self.next_led = 1;
+                let grb =
+                    get_grb_for_led(&self.leds, &self.led_brightness, self.global_brightness, 0);
+                write_pwm_samples(&self.lookup, &mut self.pwm_buffer.data, false, grb);
+                self.pwm_buffer.data[HALF_BUFFER_BYTES..BUFFER_SIZE_BYTES].fill(0);
+            } else {
+                self.next_led = 2;
+                let grb0 =
+                    get_grb_for_led(&self.leds, &self.led_brightness, self.global_brightness, 0);
+                write_pwm_samples(&self.lookup, &mut self.pwm_buffer.data, false, grb0);
+                let grb1 =
+                    get_grb_for_led(&self.leds, &self.led_brightness, self.global_brightness, 1);
+                write_pwm_samples(&self.lookup, &mut self.pwm_buffer.data, true, grb1);
             }
 
-            delay_us(2);
-            timer.stop();
+            let cookie = self as *mut Self as *mut core::ffi::c_void;
+            let buf_ptr = self.pwm_buffer.data.as_ptr();
+
+            {
+                let timer = self.timer.as_mut().unwrap();
+                timer.attach_dma_callback(dma_irq_trampoline::<N>, cookie);
+                timer.start_dma(buf_ptr, BUFFER_SIZE_BYTES);
+            }
+
+            // Block task on FreeRTOS semaphore until transfer completes (or timeout)
+            self.sem
+                .as_ref()
+                .unwrap()
+                .take_timeout(WS2812B_DMA_TIMEOUT_MS);
+
+            delay_us(WS2812B_STOP_DELAY_US);
+            {
+                let timer = self.timer.as_mut().unwrap();
+                timer.stop();
+                timer.detach_dma_callback();
+            }
             delay_us(WS2812B_RESET_DELAY_US);
         }
+    }
+}
+
+unsafe extern "C" fn dma_irq_trampoline<const N: usize>(
+    half: bool,
+    cookie: *mut core::ffi::c_void,
+) {
+    if !cookie.is_null() {
+        let this = unsafe { &mut *(cookie as *mut Ws2812b<N>) };
+        this.handle_dma_interrupt(half);
     }
 }
 
@@ -292,10 +312,7 @@ fn write_pwm_samples(
 ) {
     let offset = if second_half { HALF_BUFFER_BYTES } else { 0 };
     let target = unsafe {
-        core::slice::from_raw_parts_mut(
-            pwm_data.as_mut_ptr().add(offset) as *mut u32,
-            6,
-        )
+        core::slice::from_raw_parts_mut(pwm_data.as_mut_ptr().add(offset) as *mut u32, 6)
     };
 
     // Green channel (MSB first)
@@ -322,7 +339,6 @@ unsafe extern "C" {
     fn ln_delay_us(us: u32);
 }
 
-
 /// Precise microsecond delay using Esprit system timer.
 #[inline(always)]
 fn delay_us(us: u32) {
@@ -331,61 +347,5 @@ fn delay_us(us: u32) {
     }
 }
 
-
-// -----------------------------------------------------------------------------
-// Legacy C ABI Aliases (Esprit Rust Rule 6)
-// -----------------------------------------------------------------------------
-
-/// Concrete instance handle for C interoperability (supports up to 64 LEDs).
-pub struct Ws2812bCInstance {
-    inner: Ws2812b<64>,
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ws2812b_create(pin: u32) -> *mut Ws2812bCInstance {
-    let _pin = Pin::from(pin);
-    // For no_std without global allocator, caller can manage instance storage
-    core::ptr::null_mut()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ws2812b_begin(handle: *mut Ws2812bCInstance) -> bool {
-    if handle.is_null() {
-        return false;
-    }
-    unsafe { (*handle).inner.begin().is_ok() }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ws2812b_set_global_brightness(handle: *mut Ws2812bCInstance, brightness: u8) {
-    if !handle.is_null() {
-        unsafe { (*handle).inner.set_global_brightness(brightness) }
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ws2812b_set_color(handle: *mut Ws2812bCInstance, r: u8, g: u8, b: u8) {
-    if !handle.is_null() {
-        unsafe { (*handle).inner.set_color(r, g, b) }
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ws2812b_set_led_color(
-    handle: *mut Ws2812bCInstance,
-    led: u32,
-    r: u8,
-    g: u8,
-    b: u8,
-) {
-    if !handle.is_null() {
-        unsafe { (*handle).inner.set_led_color(led as usize, r, g, b) }
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ws2812b_update(handle: *mut Ws2812bCInstance) {
-    if !handle.is_null() {
-        unsafe { (*handle).inner.update() }
-    }
-}
+pub mod shim;
+pub use shim::*;

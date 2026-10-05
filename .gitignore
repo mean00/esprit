@@ -29,3 +29,5 @@ rust/rnArduino/target
 rust/rust_esprit/target/
 *.old
 rust/bluepill/rs*bluepill/target/
+rust/libraries/*/target/
+rust/rs_esprit/target/

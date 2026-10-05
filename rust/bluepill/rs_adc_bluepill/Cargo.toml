@@ -9,3 +9,4 @@ rs_gpio_bluepill = { path = "../rs_gpio_bluepill" }
 rs_rcu_bluepill = { path = "../rs_rcu_bluepill" }
 rs_timer_bluepill = { path = "../rs_timer_bluepill" }
 rs_dma_bluepill = { path = "../rs_dma_bluepill" }
+rs_esprit = { path = "../../rs_esprit" }

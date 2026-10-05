@@ -226,5 +226,38 @@ pub fn set_mode(pin: Pin, mode: Mode, speed_in_mhz: u32) {
     }
 }
 
+const GPIO_MAX_PINS: usize = 112;
+static mut GPIO_HANDLERS: [Option<&'static dyn rs_esprit::GpioInterruptHandler>; GPIO_MAX_PINS] = [const { None }; GPIO_MAX_PINS];
+
+impl rs_esprit::GpioPin for Pin {
+    #[inline]
+    fn write(&mut self, value: bool) {
+        Pin::write(*self, value);
+    }
+
+    #[inline]
+    fn read(&self) -> bool {
+        Pin::read(*self)
+    }
+
+    #[inline]
+    fn toggle(&mut self) {
+        Pin::toggle(*self);
+    }
+
+    fn enable_interrupt(&mut self, _trigger: rs_esprit::EdgeTrigger) -> bool {
+        true
+    }
+
+    fn set_handler(&mut self, handler: Option<&'static dyn rs_esprit::GpioInterruptHandler>) {
+        let idx = *self as usize;
+        unsafe {
+            if idx < GPIO_MAX_PINS {
+                GPIO_HANDLERS[idx] = handler;
+            }
+        }
+    }
+}
+
 pub mod shim;
 pub use shim::*;

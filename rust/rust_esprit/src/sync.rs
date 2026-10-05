@@ -715,6 +715,16 @@ impl BinarySemaphore {
         ret != 0
     }
 
+    /// Give the semaphore from an ISR.
+    /// Returns `true` if the operation was successful.
+    pub fn give_from_isr(&self) -> bool {
+        let mut higher_priority_task_woken: rn_freertos_c::BaseType_t = 0;
+        let ret = unsafe {
+            rn_freertos_c::xQueueGiveFromISR(self.handle, &mut higher_priority_task_woken)
+        };
+        ret != 0
+    }
+
     /// Take the semaphore, blocking until it becomes available.
     pub fn take(&self) {
         let ret = unsafe { rn_freertos_c::xQueueSemaphoreTake(self.handle, u32::MAX) };
