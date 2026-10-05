@@ -20,6 +20,9 @@
 #define z1(x) LN_IRQ_DMA1_Channel##x
 
 static lnDMA *_lnDmas[2][7] = {{NULL, NULL, NULL, NULL, NULL, NULL, NULL}, {NULL, NULL, NULL, NULL, NULL, NULL, NULL}};
+typedef void (*lnDmaRawCallback_t)(bool half, void *cookie);
+static lnDmaRawCallback_t _dmaRawCallbacks[2][7] = {{NULL, NULL, NULL, NULL, NULL, NULL, NULL}, {NULL, NULL, NULL, NULL, NULL, NULL, NULL}};
+static void *_dmaRawCookies[2][7] = {{NULL, NULL, NULL, NULL, NULL, NULL, NULL}, {NULL, NULL, NULL, NULL, NULL, NULL, NULL}};
 static const LnIRQ _dmaIrqs[2][7] = {
     {z0(0), z0(1), z0(2), z0(3), z0(4), z0(5), z0(6)},
     {z1(0), z1(1), z1(2), z1(3), z1(4), LN_IRQ_NONE, LN_IRQ_NONE}}; // Warning DMA CHANNEL5/6 is not available
@@ -524,10 +527,31 @@ void dmaIrqHandler(int dma, int channel)
 
     dm->INTC = (status << 1) << (4 * channel); // clear pending only
 
+    if (_dmaRawCallbacks[dma][channel])
+    {
+        bool isHalf = (status & DMA_HALF_INTERRUPT) != 0;
+        _dmaRawCallbacks[dma][channel](isHalf, _dmaRawCookies[dma][channel]);
+        return;
+    }
+
     // the interrupt itself will be acked in invokeCallback
     lnDMA *la = _lnDmas[dma][channel];
     xAssert(la);
     la->invokeCallback(status);
+}
+
+extern "C" void lnDmaAttachRawCallback(int dma, int channel, lnDmaRawCallback_t cb, void *cookie)
+{
+    _dmaRawCallbacks[dma][channel] = cb;
+    _dmaRawCookies[dma][channel] = cookie;
+    lnEnableInterrupt(_dmaIrqs[dma][channel]);
+}
+
+extern "C" void lnDmaDetachRawCallback(int dma, int channel)
+{
+    lnDisableInterrupt(_dmaIrqs[dma][channel]);
+    _dmaRawCallbacks[dma][channel] = NULL;
+    _dmaRawCookies[dma][channel] = NULL;
 }
 
 // EOF

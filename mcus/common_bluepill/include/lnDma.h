@@ -86,3 +86,8 @@ class lnDMA
 
     int _sourceWidth, _targetWidth;
 };
+
+extern "C" {
+void lnDmaAttachRawCallback(int dma, int channel, void (*cb)(bool half, void *cookie), void *cookie);
+void lnDmaDetachRawCallback(int dma, int channel);
+}
