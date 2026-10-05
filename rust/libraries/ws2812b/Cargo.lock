@@ -114,6 +114,7 @@ name = "rs_dma_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_esprit",
  "rs_rcu_bluepill",
 ]
 

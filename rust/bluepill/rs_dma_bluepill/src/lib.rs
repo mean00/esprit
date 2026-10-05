@@ -9,7 +9,31 @@ pub use shim::*;
 
 use registers::*;
 use rs_rcu_bluepill::{Peripheral, enable};
+use rs_esprit::BinarySemaphore;
 use core::ptr::{read_volatile, write_volatile};
+
+pub trait DmaTransferHandler: Send + Sync {
+    fn on_transfer_complete(&self);
+    fn on_half_complete(&self) {}
+}
+
+unsafe extern "C" fn dma_sem_trampoline(half: bool, cookie: *mut core::ffi::c_void) {
+    if !half && !cookie.is_null() {
+        let sem = unsafe { &*(cookie as *const BinarySemaphore) };
+        sem.give_from_isr();
+    }
+}
+
+unsafe extern "C" fn dma_handler_trampoline<H: DmaTransferHandler>(half: bool, cookie: *mut core::ffi::c_void) {
+    if !cookie.is_null() {
+        let handler = unsafe { &*(cookie as *const H) };
+        if half {
+            handler.on_half_complete();
+        } else {
+            handler.on_transfer_complete();
+        }
+    }
+}
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,6 +73,31 @@ impl DmaChannel {
         }
     }
 
+    /// Attach a binary semaphore to be awakened from the DMA interrupt when transfer completes.
+    pub fn attach_completion_semaphore(&mut self, sem: &BinarySemaphore) {
+        unsafe {
+            lnDmaAttachRawCallback(
+                self.engine as i32,
+                self.channel_idx as i32,
+                dma_sem_trampoline,
+                sem as *const BinarySemaphore as *mut core::ffi::c_void,
+            );
+        }
+    }
+
+    /// Attach a typed handler trait implementing `DmaTransferHandler`.
+    pub fn attach_handler<H: DmaTransferHandler + 'static>(&mut self, handler: &'static H) {
+        unsafe {
+            lnDmaAttachRawCallback(
+                self.engine as i32,
+                self.channel_idx as i32,
+                dma_handler_trampoline::<H>,
+                handler as *const H as *mut core::ffi::c_void,
+            );
+        }
+    }
+
+    /// Attach a raw C-style callback function with cookie.
     pub fn attach_callback(
         &mut self,
         cb: unsafe extern "C" fn(bool, *mut core::ffi::c_void),

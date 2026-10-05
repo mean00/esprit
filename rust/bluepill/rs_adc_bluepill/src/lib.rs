@@ -26,13 +26,6 @@ pub fn pin_to_adc_channel(pin: u32) -> u32 {
     }
 }
 
-unsafe extern "C" fn adc_dma_callback(half: bool, cookie: *mut core::ffi::c_void) {
-    if !half && !cookie.is_null() {
-        let sem = unsafe { &*(cookie as *const BinarySemaphore) };
-        sem.give_from_isr();
-    }
-}
-
 /// Idiomatic struct representing a DMA-driven multi-channel ADC sequencer.
 pub struct TimingAdc {
     instance: u32,
@@ -120,10 +113,7 @@ impl TimingAdc {
             ctl1 |= ADC_CTL1_DMA;
             write_volatile(&mut (*regs).ctl1, ctl1);
 
-            dma.attach_callback(
-                adc_dma_callback,
-                &self.sem as *const _ as *mut core::ffi::c_void,
-            );
+            dma.attach_completion_semaphore(&self.sem);
 
             // ADC is Peripheral-to-Memory transfer (DIR=0)
             dma.begin_rx_transfer(

@@ -24,13 +24,6 @@ static mut UART_CONFIGS: [UartConfig; UART_MAX_INSTANCES] = [
     UartConfig { use_dma: false, speed: UART_DEFAULT_BAUDRATE, rx_enabled: false },
 ];
 
-unsafe extern "C" fn uart_tx_dma_callback(half: bool, cookie: *mut core::ffi::c_void) {
-    if !half && !cookie.is_null() {
-        let sem = unsafe { &*(cookie as *const BinarySemaphore) };
-        sem.give_from_isr();
-    }
-}
-
 pub(crate) fn uart_set_baudrate(instance: u32, speed: u32) -> bool {
     let regs = UartRegisters::ptr(instance);
     let periph = match instance {
@@ -106,10 +99,7 @@ impl UartTx {
                 };
                 let mut dma = DmaChannel::new(DmaEngine::Dma0, ch_idx);
 
-                dma.attach_callback(
-                    uart_tx_dma_callback,
-                    &self.sem as *const _ as *mut core::ffi::c_void,
-                );
+                dma.attach_completion_semaphore(&self.sem);
 
                 dma.begin_tx_transfer(
                     &(*regs).data as *const _ as u32,
