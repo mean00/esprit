@@ -55,7 +55,7 @@ extern "C"
 /**
 
 */
-void lnDelayUs(uint32_t wait)
+extern "C" void lnDelayUs(uint32_t wait)
 {
     uint64_t target = lnGetUs() + wait;
     while (1)
@@ -66,6 +66,10 @@ void lnDelayUs(uint32_t wait)
         __asm__("nop" ::);
     }
 }
+
+// C++ ABI compatibility aliases for both Clang ('j') and GCC ('m')
+extern "C" void _Z9lnDelayUsj(uint32_t wait) __attribute__((weak, alias("lnDelayUs")));
+extern "C" void _Z9lnDelayUsm(uint32_t wait) __attribute__((weak, alias("lnDelayUs")));
 
 // The millisecond timebase (lnGetMs / lnGetMs_c) and the FreeRTOS tick hook
 // that feeds it are NOT common code: under ESP-IDF (LN_ESPRESSIF) the hook is

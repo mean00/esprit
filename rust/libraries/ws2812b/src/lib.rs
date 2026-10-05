@@ -335,15 +335,14 @@ fn write_pwm_samples(
 }
 
 unsafe extern "C" {
-    #[link_name = "\u{1}_Z9lnDelayUsj"]
-    fn ln_delay_us(us: u32);
+    fn lnDelayUs(us: u32);
 }
 
 /// Precise microsecond delay using Esprit system timer.
 #[inline(always)]
 fn delay_us(us: u32) {
     unsafe {
-        ln_delay_us(us);
+        lnDelayUs(us);
     }
 }
 
