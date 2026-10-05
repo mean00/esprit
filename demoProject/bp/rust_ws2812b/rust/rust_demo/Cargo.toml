@@ -3,6 +3,10 @@ name = "rust_demo"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["bluepill48"]
+bluepill48 = ["rust_esprit/bluepill48", "ws2812b/bluepill48"]
+
 [dependencies]
 rust_esprit = { path = "../../../../../rust/rust_esprit" }
 ws2812b = { path = "../../../../../rust/libraries/ws2812b" }

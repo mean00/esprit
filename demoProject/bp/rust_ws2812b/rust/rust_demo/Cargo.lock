@@ -91,6 +91,7 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_dma_bluepill",
+ "rs_esprit",
  "rs_gpio_bluepill",
  "rs_rcu_bluepill",
  "rs_timer_bluepill",
@@ -101,6 +102,7 @@ name = "rs_afio_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_rcu_bluepill",
 ]
 
 [[package]]
@@ -116,6 +118,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "rs_esprit"
+version = "0.1.0"
+
+[[package]]
 name = "rs_exti_bluepill"
 version = "0.1.0"
 dependencies = [
@@ -129,6 +135,7 @@ name = "rs_gpio_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_esprit",
 ]
 
 [[package]]
@@ -136,6 +143,7 @@ name = "rs_i2c_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_esprit",
  "rs_gpio_bluepill",
  "rs_rcu_bluepill",
 ]
@@ -145,6 +153,15 @@ name = "rs_multi_pulse_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_gpio_bluepill",
+]
+
+[[package]]
+name = "rs_pinout48_bluepill"
+version = "0.1.0"
+dependencies = [
+ "rs_afio_bluepill",
+ "rs_dma_bluepill",
  "rs_gpio_bluepill",
 ]
 
@@ -160,6 +177,7 @@ name = "rs_spi_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_esprit",
  "rs_gpio_bluepill",
  "rs_rcu_bluepill",
 ]
@@ -168,10 +186,11 @@ dependencies = [
 name = "rs_timer_bluepill"
 version = "0.1.0"
 dependencies = [
- "rs_afio_bluepill",
  "rs_bluepill",
  "rs_dma_bluepill",
+ "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_pinout48_bluepill",
  "rs_rcu_bluepill",
 ]
 
@@ -179,7 +198,9 @@ dependencies = [
 name = "rs_uart_bluepill"
 version = "0.1.0"
 dependencies = [
+ "rs_bluepill",
  "rs_dma_bluepill",
+ "rs_esprit",
  "rs_gpio_bluepill",
  "rs_rcu_bluepill",
 ]
@@ -201,10 +222,12 @@ dependencies = [
  "cty",
  "heapless",
  "rs_adc_bluepill",
+ "rs_esprit",
  "rs_exti_bluepill",
  "rs_gpio_bluepill",
  "rs_i2c_bluepill",
  "rs_multi_pulse_bluepill",
+ "rs_pinout48_bluepill",
  "rs_rcu_bluepill",
  "rs_spi_bluepill",
  "rs_timer_bluepill",
@@ -298,4 +321,5 @@ version = "0.1.0"
 dependencies = [
  "rs_gpio_bluepill",
  "rs_timer_bluepill",
+ "rust_esprit",
 ]

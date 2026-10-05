@@ -6,6 +6,9 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+default = ["bluepill48"]
+bluepill48 = ["rust_esprit/bluepill48"]
+rp2040 = ["rust_esprit/rp2040"]
 
 [dependencies]
 cty = "0.2.2"
