@@ -125,3 +125,90 @@ pub extern "C" fn ln_hw_stopwatch_wait(sw: *mut c_void, ticks: u16) {
         }
     }
 }
+
+// --- C ABI Compatibility Shims for lnDelayTimer ---
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ln_delay_timer_c {
+    pub dummy: *mut c_void,
+}
+
+static mut SHIM_DELAY_TIMERS: [Option<DelayTimer>; TIMER_MAX_INSTANCES] = [None, None, None, None, None];
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_create(timer: i32, _channel: i32) -> *mut ln_delay_timer_c {
+    let idx = timer as usize;
+    if idx == 0 || idx >= TIMER_MAX_INSTANCES {
+        return core::ptr::null_mut();
+    }
+    match DelayTimer::new(timer as u32) {
+        Ok(dt) => unsafe {
+            SHIM_DELAY_TIMERS[idx] = Some(dt);
+            SHIM_DELAY_TIMERS[idx].as_mut().unwrap() as *mut DelayTimer as *mut ln_delay_timer_c
+        },
+        Err(_) => core::ptr::null_mut(),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_delete(timer: *mut ln_delay_timer_c) {
+    if !timer.is_null() {
+        let dt = unsafe { &mut *(timer as *mut DelayTimer) };
+        let idx = dt.timer_idx() as usize;
+        if idx < TIMER_MAX_INSTANCES {
+            unsafe {
+                SHIM_DELAY_TIMERS[idx] = None;
+            }
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_arm(timer: *mut ln_delay_timer_c, delay_us: i32) {
+    if !timer.is_null() {
+        let dt = unsafe { &mut *(timer as *mut DelayTimer) };
+        dt.arm(delay_us as u32);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_set_interrupt(
+    timer: *mut ln_delay_timer_c,
+    handler: DelayTimerCallback,
+    cookie: *mut c_void,
+) {
+    if !timer.is_null() {
+        let dt = unsafe { &mut *(timer as *mut DelayTimer) };
+        dt.set_interrupt(handler, cookie);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_enable_interrupt(timer: *mut ln_delay_timer_c) {
+    if !timer.is_null() {
+        let dt = unsafe { &mut *(timer as *mut DelayTimer) };
+        dt.enable_interrupt();
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_disable_interrupt(timer: *mut ln_delay_timer_c) {
+    if !timer.is_null() {
+        let dt = unsafe { &mut *(timer as *mut DelayTimer) };
+        dt.disable_interrupt();
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_irq(timer: *mut ln_delay_timer_c) {
+    if !timer.is_null() {
+        let dt = unsafe { &mut *(timer as *mut DelayTimer) };
+        dt.on_irq();
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_interrupt_handler(timer: i32) {
+    delay_timer_interrupt_handler(timer as usize);
+}

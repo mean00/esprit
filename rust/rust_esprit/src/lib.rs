@@ -326,7 +326,7 @@ pub use task::{
     current, delay_ms, delay_us, sleep, sleep_ms, spawn, spawn_raw, tick_count, time_ms, time_us,
     time_us64, yield_now, Duration, Instant, TaskEntry, TaskHandle,
 };
-pub use timer::Timer;
+pub use timer::{DelayTimer, Timer};
 #[cfg(feature = "cdc")]
 pub use cdc::{Cdc, CdcEvent, CdcEventHandler};
 #[cfg(feature = "cdc")]

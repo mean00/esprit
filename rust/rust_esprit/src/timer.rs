@@ -58,3 +58,85 @@ impl Drop for Timer {
         unsafe { rt::ln_timer_delete(self.inner) }
     }
 }
+
+/// A hardware microsecond delay timer with update interrupt callback.
+///
+/// Wraps the platform `DelayTimer` driver / C++ `lnDelayTimer`.
+///
+/// # Example
+///
+/// ```ignore
+/// use rust_esprit::DelayTimer;
+///
+/// let mut dt = DelayTimer::new(1).expect("Timer 1 available");
+/// dt.set_interrupt(Some(my_callback), core::ptr::null_mut());
+/// dt.arm(500); // 500 µs
+/// ```
+pub struct DelayTimer {
+    inner: *mut rt::ln_delay_timer_c,
+}
+
+unsafe impl Send for DelayTimer {}
+unsafe impl Sync for DelayTimer {}
+
+impl DelayTimer {
+    /// Create a new DelayTimer instance on a hardware timer index (1..=4).
+    pub fn new(timer: u32) -> Result<Self, &'static str> {
+        let inner = unsafe { rt::ln_delay_timer_create(timer as i32, 0) };
+        if inner.is_null() {
+            Err("Failed to create delay timer: instance unavailable or invalid index")
+        } else {
+            Ok(DelayTimer { inner })
+        }
+    }
+
+    /// Create a new DelayTimer instance on a hardware timer index and channel (for API parity).
+    pub fn new_with_channel(timer: u32, channel: u32) -> Result<Self, &'static str> {
+        let inner = unsafe { rt::ln_delay_timer_create(timer as i32, channel as i32) };
+        if inner.is_null() {
+            Err("Failed to create delay timer: instance unavailable or invalid index")
+        } else {
+            Ok(DelayTimer { inner })
+        }
+    }
+
+    /// Arm the timer to expire after `duration_us` microseconds and trigger the interrupt.
+    pub fn arm(&mut self, duration_us: u32) {
+        unsafe {
+            rt::ln_delay_timer_arm(self.inner, duration_us as i32);
+        }
+    }
+
+    /// Set the interrupt callback and cookie pointer.
+    pub fn set_interrupt(
+        &mut self,
+        handler: Option<unsafe extern "C" fn(cookie: *mut core::ffi::c_void)>,
+        cookie: *mut core::ffi::c_void,
+    ) {
+        unsafe {
+            rt::ln_delay_timer_set_interrupt(self.inner, handler, cookie);
+        }
+    }
+
+    /// Enable the hardware timer update interrupt in NVIC/PFIC and DIEN.
+    pub fn enable_interrupt(&mut self) {
+        unsafe {
+            rt::ln_delay_timer_enable_interrupt(self.inner);
+        }
+    }
+
+    /// Disable the hardware timer update interrupt.
+    pub fn disable_interrupt(&mut self) {
+        unsafe {
+            rt::ln_delay_timer_disable_interrupt(self.inner);
+        }
+    }
+}
+
+impl Drop for DelayTimer {
+    fn drop(&mut self) {
+        unsafe {
+            rt::ln_delay_timer_delete(self.inner);
+        }
+    }
+}

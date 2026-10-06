@@ -411,3 +411,26 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn lnDelay_C(ms: cty::c_uint);
 }
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ln_delay_timer_c {
+    pub dummy: *mut cty::c_void,
+}
+
+pub type DelayTimerCallback = Option<unsafe extern "C" fn(cookie: *mut cty::c_void)>;
+
+unsafe extern "C" {
+    pub fn ln_delay_timer_create(timer: cty::c_int, channel: cty::c_int) -> *mut ln_delay_timer_c;
+    pub fn ln_delay_timer_delete(timer: *mut ln_delay_timer_c);
+    pub fn ln_delay_timer_arm(timer: *mut ln_delay_timer_c, delay_us: cty::c_int);
+    pub fn ln_delay_timer_set_interrupt(
+        timer: *mut ln_delay_timer_c,
+        handler: DelayTimerCallback,
+        cookie: *mut cty::c_void,
+    );
+    pub fn ln_delay_timer_enable_interrupt(timer: *mut ln_delay_timer_c);
+    pub fn ln_delay_timer_disable_interrupt(timer: *mut ln_delay_timer_c);
+    pub fn ln_delay_timer_irq(timer: *mut ln_delay_timer_c);
+    pub fn ln_delay_timer_interrupt_handler(timer: cty::c_int);
+}

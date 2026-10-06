@@ -24,6 +24,13 @@ pub const TIMER_HANDLE_CHANNEL_SHIFT: u32 = 8;
 pub const TIMER_HANDLE_MASK: u32 = 0xFF;
 pub const PWM_HALF_DUTY_DIVISOR: u32 = 2;
 
+pub const HZ_PER_MHZ: u32 = 1_000_000;
+pub const TIMER_PRESCALER_SHIFT: u32 = 16;
+pub const TIMER_PRESCALER_MASK: u32 = 0xFFFF;
+
+/// Esprit LnIRQ index for TIMER1 (starts at 28)
+pub const LN_IRQ_TIMER1: u32 = 28;
+
 // --- Timer Control & Config Bits (GD32F3 / STM32F1) ---
 pub const TIMER_CTL0_CEN: u32 = 1 << 0;
 pub const TIMER_CTL0_UDIS: u32 = 1 << 1;
@@ -33,10 +40,14 @@ pub const TIMER_CTL0_DIR: u32 = 1 << 4;
 pub const TIMER_CTL0_CAM: u32 = 3 << 5;
 pub const TIMER_CTL0_ARPE: u32 = 1 << 7;
 pub const TIMER_CTL0_CKDIV: u32 = 3 << 8;
+pub const TIMER_CTL0_SPM: u32 = 1 << 3; // Single Pulse Mode
+pub const TIMER_CTL0_UPS: u32 = 1 << 2; // Update source: only counter overflow/underflow generates update interrupt
 
 pub const TIMER_CTL1_DMAS: u32 = 1 << 3;
-
 pub const TIMER_DIEN_CH_DMA_BASE_BIT: u32 = 9; // CH0DEN = 1<<9, CH1DEN = 1<<10, etc.
+
+pub const TIMER_DMAINTEN_UPIE: u32 = 1 << 0; // Update interrupt enable
+pub const TIMER_INTF_UPIF: u32 = 1 << 0;     // Update interrupt flag
 
 pub const TIMER_CHCTL_MODE_FORCE_LOW: u32 = 0x4;
 pub const TIMER_CHCTL_MODE_PWM0: u32 = 0x6;

@@ -91,3 +91,59 @@ pub extern "C" fn ln_hw_stopwatch_wait(sw: *mut c_void, ticks: u16) {
 pub extern "C" fn ln_hw_stopwatch_destroy(sw: *mut c_void) {
     unimplemented!("ln_hw_stopwatch_destroy is not supported on RP2040 / RP2350")
 }
+
+// ---------------------------------------------------------------------------
+//  Delay Timer (DelayTimer C ABI stubs)
+// ---------------------------------------------------------------------------
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ln_delay_timer_c {
+    pub dummy: *mut c_void,
+}
+
+pub type DelayTimerCallback = Option<unsafe extern "C" fn(cookie: *mut c_void)>;
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_create(timer: i32, channel: i32) -> *mut ln_delay_timer_c {
+    unimplemented!("ln_delay_timer_create is not supported on RP2040 / RP2350")
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_delete(timer: *mut ln_delay_timer_c) {
+    unimplemented!("ln_delay_timer_delete is not supported on RP2040 / RP2350")
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_arm(timer: *mut ln_delay_timer_c, delay_us: i32) {
+    unimplemented!("ln_delay_timer_arm is not supported on RP2040 / RP2350")
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_set_interrupt(
+    timer: *mut ln_delay_timer_c,
+    handler: DelayTimerCallback,
+    cookie: *mut c_void,
+) {
+    unimplemented!("ln_delay_timer_set_interrupt is not supported on RP2040 / RP2350")
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_enable_interrupt(timer: *mut ln_delay_timer_c) {
+    unimplemented!("ln_delay_timer_enable_interrupt is not supported on RP2040 / RP2350")
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_disable_interrupt(timer: *mut ln_delay_timer_c) {
+    unimplemented!("ln_delay_timer_disable_interrupt is not supported on RP2040 / RP2350")
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_irq(timer: *mut ln_delay_timer_c) {
+    unimplemented!("ln_delay_timer_irq is not supported on RP2040 / RP2350")
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_delay_timer_interrupt_handler(timer: i32) {
+    unimplemented!("ln_delay_timer_interrupt_handler is not supported on RP2040 / RP2350")
+}
