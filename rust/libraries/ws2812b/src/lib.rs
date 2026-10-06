@@ -179,19 +179,10 @@ impl<const N: usize> Ws2812b<N> {
 
     /// ISR callback triggered on DMA half-transfer (`half = true`) or transfer-complete (`half = false`).
     pub(crate) fn handle_dma_interrupt(&mut self, half: bool) {
-        // Single LED: give semaphore on half (24 bytes sent = 1 LED done)
-        if N == 1 && half {
-            if let Some(ref sem) = self.sem {
-                sem.give_from_isr();
-            }
-            self.next_led += 1;
-            return;
-        }
-
         // More LEDs to send: write next LED into the half that was just consumed
         if self.next_led < N {
-            // half == true -> first half was just sent, write there (false = offset 0)
-            // half == false -> second half was just sent, write there (true = offset 24)
+            // half == true -> first half (bytes 0..23) was just sent, write next LED there
+            // half == false -> second half (bytes 24..47) was just sent, write next LED there
             let grb = get_grb_for_led(
                 &self.leds,
                 &self.led_brightness,
@@ -203,19 +194,22 @@ impl<const N: usize> Ws2812b<N> {
             return;
         }
 
-        // All LEDs written, last batch still being sent
+        // All LEDs written: zero the half that was just consumed to provide trailing low silence
         if self.next_led == N {
-            if half {
-                self.pwm_buffer.data[0..HALF_BUFFER_BYTES].fill(0);
-            } else {
-                self.pwm_buffer.data[HALF_BUFFER_BYTES..BUFFER_SIZE_BYTES].fill(0);
-            }
+            let offset = if !half { HALF_BUFFER_BYTES } else { 0 };
+            self.pwm_buffer.data[offset..offset + HALF_BUFFER_BYTES].fill(0);
             self.next_led += 1;
             return;
         }
 
-        // Last batch fully sent -> signal completion
+        // Trailing zero half has also finished: stop timer immediately from ISR and signal completion
         if self.next_led == N + 1 {
+            #[cfg(feature = "bluepill")]
+            {
+                if let Some(ref mut timer) = self.timer {
+                    timer.stop();
+                }
+            }
             if let Some(ref sem) = self.sem {
                 sem.give_from_isr();
             }
@@ -268,7 +262,6 @@ impl<const N: usize> Ws2812b<N> {
                 .unwrap()
                 .take_timeout(WS2812B_DMA_TIMEOUT_MS);
 
-            delay_us(WS2812B_STOP_DELAY_US);
             {
                 let timer = self.timer.as_mut().unwrap();
                 timer.stop();

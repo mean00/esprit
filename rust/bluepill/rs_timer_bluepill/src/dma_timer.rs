@@ -86,11 +86,7 @@ impl DmaTimer {
         self.timer.set_dma_on_compare_event(true);
         self.timer.set_channel_mode(self.channel, ChannelMode::Pwm0);
 
-        // Preload CNT = CAR - 1.
-        // At CNT = CAR - 1, CNT >= CHCV (rollover / 2), so output is LOW.
-        // On the next clock cycle (~10 ns), CNT rolls over to 0, triggering the
-        // update event. DMAS routes this update event to DMA, immediately loading
-        // data[0] into CHCV and starting the first PWM pulse with proper timing.
+        // Disable timer, preload CNT = CAR - 1 to trigger immediate rollover into byte 0
         self.timer.disable();
         let car = self.timer.auto_reload();
         self.timer.set_counter(car.saturating_sub(1));
