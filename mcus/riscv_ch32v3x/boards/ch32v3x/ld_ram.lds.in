@@ -116,24 +116,12 @@ SECTIONS
     . = ALIGN(4);
     PROVIDE( _eilm = . );
 
-  .lalign         :
-  {
-    . = ALIGN(4);
-    PROVIDE( _data_lma = . );
-  } >rom AT>rom 
- 
   .dalign         :
   {
     . = ALIGN(4);
     PROVIDE( _data = . );
   } >ram AT>rom 
   
-  
-  .vma_section : 
-  {
-    . = ALIGN(4);
-    PROVIDE( _data_lma = .);
-  } > rom
   .data          :
   {
     PROVIDE( _data_begin = .);
@@ -154,6 +142,7 @@ SECTIONS
     *(.srodata .srodata.*)
     PROVIDE( _data_end = .); 
   } >ram AT>rom 
+  PROVIDE( _data_lma = LOADADDR(.data) ); 
   
   .bss            (NOLOAD) :
   {

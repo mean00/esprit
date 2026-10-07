@@ -115,12 +115,6 @@ SECTIONS
     . = ALIGN(4);
     PROVIDE( _eilm = . );
 
-  .lalign         :
-  {
-    . = ALIGN(4);
-    PROVIDE( _data_lma = . );
-  } >rom AT>rom 
-
   .dalign         :
   {
     . = ALIGN(4);
@@ -146,6 +140,7 @@ SECTIONS
     *(.srodata.cst2)
     *(.srodata .srodata.*)
   } >ram AT>rom 
+  PROVIDE( _data_lma = LOADADDR(.data) );
 
   . = ALIGN(4);
   PROVIDE( _edata = . );

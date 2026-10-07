@@ -162,12 +162,6 @@ SECTIONS
         . = ALIGN(4);
       } > REGION_TEXT
 
-      .vma_section : 
-      {
-         . = ALIGN(4);
-    	    _data_lma = .;
-      } > rom
-     
     /*
      * Ro image to be copied from flash to ram
      */                    
@@ -186,6 +180,7 @@ SECTIONS
             . = ALIGN(4);
             PROVIDE( _data_end= .); /* mark copy section start in ram */
           } > REGION_DATA AT> REGION_RODATA
+        _data_lma = LOADADDR(.data);
     	.tbss  :
       {
           . = ALIGN(4);
