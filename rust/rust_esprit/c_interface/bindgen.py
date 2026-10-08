@@ -44,6 +44,9 @@ JUNK_BLOCKLIST: List[str] = [
 def _run_rustgen(header: str, output: str, extra_dir: str = "",
                  extra_dir2: str = "", blocklist: bool = False,
                  blocklist_items: Optional[List[str]] = None,
+                 allowlist_functions: Optional[List[str]] = None,
+                 allowlist_types: Optional[List[str]] = None,
+                 allowlist_vars: Optional[List[str]] = None,
                  lang: str = "c++", verbose: bool = False,
                  reference_mcu: bool = True) -> None:
     """Run rustgen.py to generate a single binding file."""
@@ -71,6 +74,12 @@ def _run_rustgen(header: str, output: str, extra_dir: str = "",
         cmd.append("--blocklist")
     for item in (blocklist_items or []):
         cmd += ["--blocklist-item", item]
+    for fn in (allowlist_functions or []):
+        cmd += ["--allowlist-function", fn]
+    for t in (allowlist_types or []):
+        cmd += ["--allowlist-type", t]
+    for v in (allowlist_vars or []):
+        cmd += ["--allowlist-var", v]
     if verbose:
         cmd.append("--verbose")
 
@@ -210,13 +219,27 @@ def main() -> None:
     # FreeRTOS bindings
     if verbose:
         print("  [C]   lnFreeRTOS_c.h")
+    freertos_functions = [
+        "xTask.*", "vTask.*", "pcTask.*", "uxTask.*", "ulTask.*",
+        "xQueue.*", "vQueue.*", "uxQueue.*", "vPort.*", "Logger_chars",
+    ]
+    freertos_types = [
+        "TaskHandle_t", "QueueHandle_t", "SemaphoreHandle_t", "TickType_t",
+        "BaseType_t", "UBaseType_t", "eNotifyAction", "TaskFunction_t",
+        "TaskHookFunction_t", "QueueDefinition", "tskTaskControlBlock",
+    ]
+    freertos_vars = [
+        "configTICK_RATE_HZ_RUST",
+    ]
     _run_rustgen(
         header=os.path.join(pwd, "lnFreeRTOS_c.h"),
         output=os.path.join(dest, "rn_freertos_c.rs"),
         extra_dir=os.path.join(pwd, "..", "..", "..", "freertos_config"),
         extra_dir2=os.path.join(pwd, "..", "..", "..", "FreeRTOS"),
         lang="c++",
-        blocklist_items=JUNK_BLOCKLIST,
+        allowlist_functions=freertos_functions,
+        allowlist_types=freertos_types,
+        allowlist_vars=freertos_vars,
         verbose=verbose,
     )
 

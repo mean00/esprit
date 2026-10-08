@@ -21,13 +21,7 @@ unsafe extern "C" {
         cb: lnExtiCallback,
         cookie: *mut cty::c_void,
     );
-}
-unsafe extern "C" {
     pub fn lnExtiDetachInterrupt_c(pin: lnPin);
-}
-unsafe extern "C" {
     pub fn lnExtiEnableInterrupt_c(pin: lnPin);
-}
-unsafe extern "C" {
     pub fn lnExtiDisableInterrupt_c(pin: lnPin);
 }

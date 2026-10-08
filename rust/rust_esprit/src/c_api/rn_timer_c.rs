@@ -4,67 +4,6 @@
 
 pub use crate::pin_types::lnPin;
 
-pub const __SSP_FORTIFY_LEVEL: u32 = 0;
-pub const __int20: u32 = 2;
-pub const __int20__: u32 = 2;
-pub type __int8_t = cty::c_schar;
-pub type __uint8_t = cty::c_uchar;
-pub type __int16_t = cty::c_short;
-pub type __uint16_t = cty::c_ushort;
-pub type __int32_t = cty::c_int;
-pub type __uint32_t = cty::c_uint;
-pub type __int64_t = cty::c_longlong;
-pub type __uint64_t = cty::c_ulonglong;
-pub type __int_least8_t = cty::c_schar;
-pub type __uint_least8_t = cty::c_uchar;
-pub type __int_least16_t = cty::c_short;
-pub type __uint_least16_t = cty::c_ushort;
-pub type __int_least32_t = cty::c_int;
-pub type __uint_least32_t = cty::c_uint;
-pub type __int_least64_t = cty::c_longlong;
-pub type __uint_least64_t = cty::c_ulonglong;
-pub type __intmax_t = cty::c_longlong;
-pub type __uintmax_t = cty::c_ulonglong;
-pub type __intptr_t = cty::c_int;
-pub type __uintptr_t = cty::c_uint;
-pub type intmax_t = __intmax_t;
-pub type uintmax_t = __uintmax_t;
-pub type int_least8_t = __int_least8_t;
-pub type uint_least8_t = __uint_least8_t;
-pub type int_least16_t = __int_least16_t;
-pub type uint_least16_t = __uint_least16_t;
-pub type int_least32_t = __int_least32_t;
-pub type uint_least32_t = __uint_least32_t;
-pub type int_least64_t = __int_least64_t;
-pub type uint_least64_t = __uint_least64_t;
-pub type int_fast8_t = cty::c_schar;
-pub type uint_fast8_t = cty::c_uchar;
-pub type int_fast16_t = cty::c_short;
-pub type uint_fast16_t = cty::c_ushort;
-pub type int_fast32_t = cty::c_int;
-pub type uint_fast32_t = cty::c_uint;
-pub type int_fast64_t = cty::c_longlong;
-pub type uint_fast64_t = cty::c_ulonglong;
-unsafe extern "C" {
-    #[link_name = "\u{1}_Z7lnGetUsv"]
-    pub fn lnGetUs() -> cty::c_uint;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_Z9lnGetUs64v"]
-    pub fn lnGetUs64() -> u64;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_Z9lnDelayUsj"]
-    pub fn lnDelayUs(wait: cty::c_uint);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_Z7lnDelayj"]
-    pub fn lnDelay(wait: cty::c_uint);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_Z7lnGetMsv"]
-    pub fn lnGetMs() -> cty::c_uint;
-}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct lnDMA {
@@ -85,50 +24,6 @@ pub struct lnTimer {
     pub vtable_: *const lnTimer__bindgen_vtable,
     pub _timer: cty::c_uint,
     pub _channel: cty::c_uint,
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimer10setPwmModeEj"]
-    pub fn lnTimer_setPwmMode(this: *mut lnTimer, ratio100: cty::c_uint);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimer15setPwmFrequencyEj"]
-    pub fn lnTimer_setPwmFrequency(this: *mut lnTimer, fqInHz: cty::c_uint);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimer15setChannelRatioEj"]
-    pub fn lnTimer_setChannelRatio(this: *mut lnTimer, ratio100: cty::c_uint);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimer10singleShotEjb"]
-    pub fn lnTimer_singleShot(this: *mut lnTimer, durationMs: cty::c_uint, up: bool);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimer13setForceStateEb"]
-    pub fn lnTimer_setForceState(this: *mut lnTimer, forceHigh: bool);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimer7disableEv"]
-    pub fn lnTimer_disable(this: *mut lnTimer);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimer6enableEv"]
-    pub fn lnTimer_enable(this: *mut lnTimer);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimer16setTickFrequencyEj"]
-    pub fn lnTimer_setTickFrequency(this: *mut lnTimer, fqInHz: cty::c_uint);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimer7setModeE11lnTimerMode"]
-    pub fn lnTimer_setMode(this: *mut lnTimer, mode: lnTimerMode);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimerC1Ejj"]
-    pub fn lnTimer_lnTimer(this: *mut lnTimer, timer: cty::c_uint, channel: cty::c_uint);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimerC1E5lnPin"]
-    pub fn lnTimer_lnTimer1(this: *mut lnTimer, pin: lnPin);
 }
 impl lnTimer {
     #[inline]
@@ -180,23 +75,11 @@ impl lnTimer {
         __bindgen_tmp.assume_init()
     }
 }
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN7lnTimerD1Ev"]
-    pub fn lnTimer_lnTimer_destructor(this: *mut lnTimer);
-}
 #[repr(C)]
 #[derive(Debug)]
 pub struct lnAdcTimer {
     pub _base: lnTimer,
     pub _actualPwmFrequency: cty::c_int,
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN10lnAdcTimer15setPwmFrequencyEi"]
-    pub fn lnAdcTimer_setPwmFrequency(this: *mut lnAdcTimer, fqInHz: cty::c_int);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN10lnAdcTimer15getPwmFrequencyEv"]
-    pub fn lnAdcTimer_getPwmFrequency(this: *mut lnAdcTimer) -> cty::c_int;
 }
 impl lnAdcTimer {
     #[inline]
@@ -212,10 +95,6 @@ impl lnAdcTimer {
 #[derive(Debug)]
 pub struct lnSquareSignal {
     pub _base: lnTimer,
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN14lnSquareSignal12setFrequencyEj"]
-    pub fn lnSquareSignal_setFrequency(this: *mut lnSquareSignal, fqInHz: cty::c_uint);
 }
 impl lnSquareSignal {
     #[inline]
@@ -238,39 +117,6 @@ pub struct lnDmaTimer {
     pub _rollover: cty::c_int,
     pub _dma: *mut lnDMA,
     pub _bits: cty::c_int,
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN10lnDmaTimer8pwmSetupEi"]
-    pub fn lnDmaTimer_pwmSetup(this: *mut lnDmaTimer, frequency: cty::c_int) -> bool;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN10lnDmaTimer8rolloverEv"]
-    pub fn lnDmaTimer_rollover(this: *mut lnDmaTimer) -> cty::c_int;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN10lnDmaTimer17attachDmaCallbackEP18lnDmaTimerCallback"]
-    pub fn lnDmaTimer_attachDmaCallback(this: *mut lnDmaTimer, cb: *mut lnDmaTimerCallback)
-    -> bool;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN10lnDmaTimer5startEiPh"]
-    pub fn lnDmaTimer_start(this: *mut lnDmaTimer, nbSample: cty::c_int, data: *mut u8) -> bool;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN10lnDmaTimer4stopEv"]
-    pub fn lnDmaTimer_stop(this: *mut lnDmaTimer);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN10lnDmaTimer16setTickFrequencyEi"]
-    pub fn lnDmaTimer_setTickFrequency(this: *mut lnDmaTimer, fq: cty::c_int) -> bool;
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN10lnDmaTimer12dmaInterruptEb"]
-    pub fn lnDmaTimer_dmaInterrupt(this: *mut lnDmaTimer, h: bool);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN10lnDmaTimerC1Ei5lnPin"]
-    pub fn lnDmaTimer_lnDmaTimer(this: *mut lnDmaTimer, bits: cty::c_int, pin: lnPin);
 }
 impl lnDmaTimer {
     #[inline]
@@ -308,52 +154,12 @@ impl lnDmaTimer {
         __bindgen_tmp.assume_init()
     }
 }
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN10lnDmaTimerD1Ev"]
-    pub fn lnDmaTimer_lnDmaTimer_destructor(this: *mut lnDmaTimer);
-}
 #[repr(C)]
 #[derive(Debug)]
 pub struct lnDelayTimer {
     pub _base: lnTimer,
     pub _handler: lnTimerIrq,
     pub _cookie: *mut cty::c_void,
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN12lnDelayTimer3armEi"]
-    pub fn lnDelayTimer_arm(this: *mut lnDelayTimer, delayUs: cty::c_int);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN12lnDelayTimer12setInterruptEPFvPvES0_"]
-    pub fn lnDelayTimer_setInterrupt(
-        this: *mut lnDelayTimer,
-        handler: lnTimerIrq,
-        cookie: *mut cty::c_void,
-    );
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN12lnDelayTimer16interruptHandlerEi"]
-    pub fn lnDelayTimer_interruptHandler(timer: cty::c_int);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN12lnDelayTimer3irqEv"]
-    pub fn lnDelayTimer_irq(this: *mut lnDelayTimer);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN12lnDelayTimer15enableInterruptEv"]
-    pub fn lnDelayTimer_enableInterrupt(this: *mut lnDelayTimer);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN12lnDelayTimer16disableInterruptEv"]
-    pub fn lnDelayTimer_disableInterrupt(this: *mut lnDelayTimer);
-}
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN12lnDelayTimerC1Eii"]
-    pub fn lnDelayTimer_lnDelayTimer(
-        this: *mut lnDelayTimer,
-        timer: cty::c_int,
-        channel: cty::c_int,
-    );
 }
 impl lnDelayTimer {
     #[inline]
@@ -387,50 +193,97 @@ impl lnDelayTimer {
         __bindgen_tmp.assume_init()
     }
 }
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN12lnDelayTimerD1Ev"]
-    pub fn lnDelayTimer_lnDelayTimer_destructor(this: *mut lnDelayTimer);
-}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ln_timer_c {
     pub dummy: *mut cty::c_void,
 }
 unsafe extern "C" {
-    pub fn ln_timer_create(timer: cty::c_uint, channel: cty::c_uint) -> *mut ln_timer_c;
-}
-unsafe extern "C" {
-    pub fn ln_timer_create_from_pin(pin: lnPin) -> *mut ln_timer_c;
-}
-unsafe extern "C" {
-    pub fn ln_timer_delete(timer: *mut ln_timer_c);
-}
-unsafe extern "C" {
-    pub fn ln_timer_single_shot(timer: *mut ln_timer_c, durationMs: cty::c_uint, up: bool);
-}
-unsafe extern "C" {
-    pub fn lnDelay_C(ms: cty::c_uint);
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ln_delay_timer_c {
-    pub dummy: *mut cty::c_void,
-}
-
-pub type DelayTimerCallback = Option<unsafe extern "C" fn(cookie: *mut cty::c_void)>;
-
-unsafe extern "C" {
-    pub fn ln_delay_timer_create(timer: cty::c_int, channel: cty::c_int) -> *mut ln_delay_timer_c;
-    pub fn ln_delay_timer_delete(timer: *mut ln_delay_timer_c);
-    pub fn ln_delay_timer_arm(timer: *mut ln_delay_timer_c, delay_us: cty::c_int);
-    pub fn ln_delay_timer_set_interrupt(
-        timer: *mut ln_delay_timer_c,
-        handler: DelayTimerCallback,
+    #[link_name = "\u{1}_Z7lnGetUsv"]
+    pub fn lnGetUs() -> cty::c_uint;
+    #[link_name = "\u{1}_Z9lnGetUs64v"]
+    pub fn lnGetUs64() -> u64;
+    pub fn lnDelayUs(wait: cty::c_uint);
+    #[link_name = "\u{1}_Z7lnDelayj"]
+    pub fn lnDelay(wait: cty::c_uint);
+    #[link_name = "\u{1}_Z7lnGetMsv"]
+    pub fn lnGetMs() -> cty::c_uint;
+    #[link_name = "\u{1}_ZN7lnTimer10setPwmModeEj"]
+    pub fn lnTimer_setPwmMode(this: *mut lnTimer, ratio100: cty::c_uint);
+    #[link_name = "\u{1}_ZN7lnTimer15setPwmFrequencyEj"]
+    pub fn lnTimer_setPwmFrequency(this: *mut lnTimer, fqInHz: cty::c_uint);
+    #[link_name = "\u{1}_ZN7lnTimer15setChannelRatioEj"]
+    pub fn lnTimer_setChannelRatio(this: *mut lnTimer, ratio100: cty::c_uint);
+    #[link_name = "\u{1}_ZN7lnTimer10singleShotEjb"]
+    pub fn lnTimer_singleShot(this: *mut lnTimer, durationMs: cty::c_uint, up: bool);
+    #[link_name = "\u{1}_ZN7lnTimer13setForceStateEb"]
+    pub fn lnTimer_setForceState(this: *mut lnTimer, forceHigh: bool);
+    #[link_name = "\u{1}_ZN7lnTimer7disableEv"]
+    pub fn lnTimer_disable(this: *mut lnTimer);
+    #[link_name = "\u{1}_ZN7lnTimer6enableEv"]
+    pub fn lnTimer_enable(this: *mut lnTimer);
+    #[link_name = "\u{1}_ZN7lnTimer16setTickFrequencyEj"]
+    pub fn lnTimer_setTickFrequency(this: *mut lnTimer, fqInHz: cty::c_uint);
+    #[link_name = "\u{1}_ZN7lnTimer7setModeE11lnTimerMode"]
+    pub fn lnTimer_setMode(this: *mut lnTimer, mode: lnTimerMode);
+    #[link_name = "\u{1}_ZN7lnTimerC1Ejj"]
+    pub fn lnTimer_lnTimer(this: *mut lnTimer, timer: cty::c_uint, channel: cty::c_uint);
+    #[link_name = "\u{1}_ZN7lnTimerC1E5lnPin"]
+    pub fn lnTimer_lnTimer1(this: *mut lnTimer, pin: lnPin);
+    #[link_name = "\u{1}_ZN7lnTimerD1Ev"]
+    pub fn lnTimer_lnTimer_destructor(this: *mut lnTimer);
+    #[link_name = "\u{1}_ZN10lnAdcTimer15setPwmFrequencyEi"]
+    pub fn lnAdcTimer_setPwmFrequency(this: *mut lnAdcTimer, fqInHz: cty::c_int);
+    #[link_name = "\u{1}_ZN10lnAdcTimer15getPwmFrequencyEv"]
+    pub fn lnAdcTimer_getPwmFrequency(this: *mut lnAdcTimer) -> cty::c_int;
+    #[link_name = "\u{1}_ZN14lnSquareSignal12setFrequencyEj"]
+    pub fn lnSquareSignal_setFrequency(this: *mut lnSquareSignal, fqInHz: cty::c_uint);
+    #[link_name = "\u{1}_ZN10lnDmaTimer8pwmSetupEi"]
+    pub fn lnDmaTimer_pwmSetup(this: *mut lnDmaTimer, frequency: cty::c_int) -> bool;
+    #[link_name = "\u{1}_ZN10lnDmaTimer8rolloverEv"]
+    pub fn lnDmaTimer_rollover(this: *mut lnDmaTimer) -> cty::c_int;
+    #[link_name = "\u{1}_ZN10lnDmaTimer17attachDmaCallbackEP18lnDmaTimerCallback"]
+    pub fn lnDmaTimer_attachDmaCallback(this: *mut lnDmaTimer, cb: *mut lnDmaTimerCallback)
+    -> bool;
+    #[link_name = "\u{1}_ZN10lnDmaTimer5startEiPh"]
+    pub fn lnDmaTimer_start(this: *mut lnDmaTimer, nbSample: cty::c_int, data: *mut u8) -> bool;
+    #[link_name = "\u{1}_ZN10lnDmaTimer4stopEv"]
+    pub fn lnDmaTimer_stop(this: *mut lnDmaTimer);
+    #[link_name = "\u{1}_ZN10lnDmaTimer16setTickFrequencyEi"]
+    pub fn lnDmaTimer_setTickFrequency(this: *mut lnDmaTimer, fq: cty::c_int) -> bool;
+    #[link_name = "\u{1}_ZN10lnDmaTimer12dmaInterruptEb"]
+    pub fn lnDmaTimer_dmaInterrupt(this: *mut lnDmaTimer, h: bool);
+    #[link_name = "\u{1}_ZN10lnDmaTimerC1Ei5lnPin"]
+    pub fn lnDmaTimer_lnDmaTimer(this: *mut lnDmaTimer, bits: cty::c_int, pin: lnPin);
+    #[link_name = "\u{1}_ZN10lnDmaTimerD1Ev"]
+    pub fn lnDmaTimer_lnDmaTimer_destructor(this: *mut lnDmaTimer);
+    #[link_name = "\u{1}_ZN12lnDelayTimer3armEi"]
+    pub fn lnDelayTimer_arm(this: *mut lnDelayTimer, delayUs: cty::c_int);
+    #[link_name = "\u{1}_ZN12lnDelayTimer12setInterruptEPFvPvES0_"]
+    pub fn lnDelayTimer_setInterrupt(
+        this: *mut lnDelayTimer,
+        handler: lnTimerIrq,
         cookie: *mut cty::c_void,
     );
-    pub fn ln_delay_timer_enable_interrupt(timer: *mut ln_delay_timer_c);
-    pub fn ln_delay_timer_disable_interrupt(timer: *mut ln_delay_timer_c);
-    pub fn ln_delay_timer_irq(timer: *mut ln_delay_timer_c);
-    pub fn ln_delay_timer_interrupt_handler(timer: cty::c_int);
+    #[link_name = "\u{1}_ZN12lnDelayTimer16interruptHandlerEi"]
+    pub fn lnDelayTimer_interruptHandler(timer: cty::c_int);
+    #[link_name = "\u{1}_ZN12lnDelayTimer3irqEv"]
+    pub fn lnDelayTimer_irq(this: *mut lnDelayTimer);
+    #[link_name = "\u{1}_ZN12lnDelayTimer15enableInterruptEv"]
+    pub fn lnDelayTimer_enableInterrupt(this: *mut lnDelayTimer);
+    #[link_name = "\u{1}_ZN12lnDelayTimer16disableInterruptEv"]
+    pub fn lnDelayTimer_disableInterrupt(this: *mut lnDelayTimer);
+    #[link_name = "\u{1}_ZN12lnDelayTimerC1Eii"]
+    pub fn lnDelayTimer_lnDelayTimer(
+        this: *mut lnDelayTimer,
+        timer: cty::c_int,
+        channel: cty::c_int,
+    );
+    #[link_name = "\u{1}_ZN12lnDelayTimerD1Ev"]
+    pub fn lnDelayTimer_lnDelayTimer_destructor(this: *mut lnDelayTimer);
+    pub fn ln_timer_create(timer: cty::c_uint, channel: cty::c_uint) -> *mut ln_timer_c;
+    pub fn ln_timer_create_from_pin(pin: lnPin) -> *mut ln_timer_c;
+    pub fn ln_timer_delete(timer: *mut ln_timer_c);
+    pub fn ln_timer_single_shot(timer: *mut ln_timer_c, durationMs: cty::c_uint, up: bool);
+    pub fn lnDelay_C(ms: cty::c_uint);
 }

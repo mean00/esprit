@@ -31,3 +31,5 @@ rust/rust_esprit/target/
 rust/bluepill/rs*bluepill/target/
 rust/libraries/*/target/
 rust/rs_esprit/target/
+rust/rs_rtos/target/
+rust/wrapped/*/target/

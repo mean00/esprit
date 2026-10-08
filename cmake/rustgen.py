@@ -84,6 +84,16 @@ def main() -> None:
                         help="Blocklist lnPin type and inject use crate::pin_types::lnPin")
     parser.add_argument("--blocklist-item", action="append", default=[],
                         help="Blocklist item by name or regex (repeatable)")
+    parser.add_argument("--allowlist-function", action="append", default=[],
+                        help="Allowlist functions matching regex (repeatable)")
+    parser.add_argument("--allowlist-type", action="append", default=[],
+                        help="Allowlist types matching regex (repeatable)")
+    parser.add_argument("--allowlist-var", action="append", default=[],
+                        help="Allowlist variables/constants matching regex (repeatable)")
+    parser.add_argument("--allowlist-item", action="append", default=[],
+                        help="Allowlist items matching regex (repeatable)")
+    parser.add_argument("--raw-line", action="append", default=[],
+                        help="Raw lines of Rust code to insert (repeatable)")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Show detailed progress")
     args = parser.parse_args()
@@ -145,6 +155,7 @@ def main() -> None:
             "--use-core",
             "--no-doc-comments",
             "--no-layout-tests",
+            "--merge-extern-blocks",
             tmp_header,
             "--ctypes-prefix", "cty",
             "--rustified-enum", "ln.*",
@@ -166,13 +177,32 @@ def main() -> None:
             # Additional libc macro noise
             "__.*VISIBLE", "__OBSOLETE_.*", "__GNU.*", "___int.*", "__INT.*",
             "__FAST.*", "__LEAST.*", "__int.*_defined", "__SCHAR_.*", "__LONG_.*",
-            "__have_.*", "__RAND_MAX", "__bool_true_false_are_defined", "true_", "false_"
+            "__have_.*", "__RAND_MAX", "__bool_true_false_are_defined", "true_", "false_",
+
+            # Toolchain stdint / compiler noise
+            "__int.*", "__uint.*", "int_.*", "uint_.*", "intmax_t", "uintmax_t",
+            "intptr_t", "uintptr_t", "__SSP_.*", "__int20.*",
         ]
         for junk in global_junk:
             bindgen_args += ["--blocklist-item", junk]
 
         for item in args.blocklist_item:
             bindgen_args += ["--blocklist-item", item]
+
+        for fn in args.allowlist_function:
+            bindgen_args += ["--allowlist-function", fn]
+
+        for t in args.allowlist_type:
+            bindgen_args += ["--allowlist-type", t]
+
+        for v in args.allowlist_var:
+            bindgen_args += ["--allowlist-var", v]
+
+        for it in args.allowlist_item:
+            bindgen_args += ["--allowlist-item", it]
+
+        for rl in args.raw_line:
+            bindgen_args += ["--raw-line", rl]
 
         tmp_output = output + ".tmp"
         bindgen_args += ["-o", tmp_output]
