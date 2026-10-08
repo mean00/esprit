@@ -143,6 +143,7 @@ version = "0.1.0"
 dependencies = [
  "rs_afio_bluepill",
  "rs_bluepill",
+ "rs_esprit",
  "rs_gpio_bluepill",
 ]
 
@@ -167,14 +168,6 @@ dependencies = [
 [[package]]
 name = "rs_i2c_rp2xxx"
 version = "0.1.0"
-
-[[package]]
-name = "rs_i2c_wrapped"
-version = "0.1.0"
-dependencies = [
- "cty",
- "rs_esprit",
-]
 
 [[package]]
 name = "rs_multi_pulse_bluepill"
@@ -227,14 +220,6 @@ name = "rs_spi_rp2xxx"
 version = "0.1.0"
 
 [[package]]
-name = "rs_spi_wrapped"
-version = "0.1.0"
-dependencies = [
- "cty",
- "rs_esprit",
-]
-
-[[package]]
 name = "rs_timer_bluepill"
 version = "0.1.0"
 dependencies = [
@@ -284,7 +269,6 @@ dependencies = [
  "rs_gpio_bluepill",
  "rs_i2c_bluepill",
  "rs_i2c_rp2xxx",
- "rs_i2c_wrapped",
  "rs_multi_pulse_bluepill",
  "rs_multi_pulse_rp2xxx",
  "rs_pinout48_bluepill",
@@ -292,7 +276,6 @@ dependencies = [
  "rs_rtos",
  "rs_spi_bluepill",
  "rs_spi_rp2xxx",
- "rs_spi_wrapped",
  "rs_timer_bluepill",
  "rs_timer_rp2xxx",
  "rs_uart_bluepill",

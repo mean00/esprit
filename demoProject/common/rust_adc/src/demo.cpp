@@ -1,4 +1,4 @@
-#include "lnArduino.h"
+#include "esprit.h"
 
 extern "C" void user_init();
 
@@ -8,5 +8,6 @@ void setup() {
 }
 
 void loop() {
-    lnDelay(1000);
+    lnDelayMs(1000);
 }
+

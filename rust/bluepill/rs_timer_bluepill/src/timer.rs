@@ -275,7 +275,19 @@ impl rs_esprit::Timer for Timer {
     }
 
     #[inline]
-    fn single_shot(&mut self, duration_ms: u32, up: bool) {
-        self.single_shot(duration_ms, up);
+    fn single_shot(&mut self, duration_ms: u32, _up: bool) {
+        unsafe {
+            let mut ctl0 = read_volatile(&mut (*self.regs).ctl0);
+            ctl0 &= !TIMER_CTL0_CEN;
+            write_volatile(&mut (*self.regs).ctl0, ctl0);
+
+            write_volatile(&mut (*self.regs).psc, TIMER_PRESCALER_1MS_72MHZ);
+            write_volatile(&mut (*self.regs).car, duration_ms);
+
+            ctl0 |= TIMER_CTL0_OPM;
+            ctl0 |= TIMER_CTL0_CEN;
+            write_volatile(&mut (*self.regs).ctl0, ctl0);
+        }
     }
 }
+

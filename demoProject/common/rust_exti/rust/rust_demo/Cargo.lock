@@ -143,6 +143,7 @@ version = "0.1.0"
 dependencies = [
  "rs_afio_bluepill",
  "rs_bluepill",
+ "rs_esprit",
  "rs_gpio_bluepill",
 ]
 
