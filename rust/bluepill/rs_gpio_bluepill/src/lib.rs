@@ -245,6 +245,50 @@ impl rs_esprit::GpioPin for Pin {
         Pin::toggle(*self);
     }
 
+    fn set_mode(&mut self, mode: rs_esprit::GpioMode) {
+        let m = match mode {
+            rs_esprit::GpioMode::Floating => Mode::Floating,
+            rs_esprit::GpioMode::InputFloating => Mode::InputFloating,
+            rs_esprit::GpioMode::InputPullUp => Mode::InputPullup,
+            rs_esprit::GpioMode::InputPullDown => Mode::InputPulldown,
+            rs_esprit::GpioMode::Output => Mode::Output,
+            rs_esprit::GpioMode::OutputOpenDrain => Mode::OutputOpenDrain,
+            rs_esprit::GpioMode::AlternatePushPull => Mode::AlternatePushPull,
+            rs_esprit::GpioMode::AlternateOpenDrain => Mode::AlternateOpenDrain,
+            rs_esprit::GpioMode::Pwm => Mode::Pwm,
+            rs_esprit::GpioMode::Adc => Mode::AdcMode,
+            rs_esprit::GpioMode::Dac => Mode::DacMode,
+            rs_esprit::GpioMode::Uart => Mode::Uart,
+            rs_esprit::GpioMode::Spi => Mode::SpiMode,
+            rs_esprit::GpioMode::UartAlt => Mode::UartAlt,
+        };
+        Pin::set_mode(*self, m, 0);
+    }
+
+    fn set_mode_speed(&mut self, mode: rs_esprit::GpioMode, speed_mhz: u32) {
+        let m = match mode {
+            rs_esprit::GpioMode::Floating => Mode::Floating,
+            rs_esprit::GpioMode::InputFloating => Mode::InputFloating,
+            rs_esprit::GpioMode::InputPullUp => Mode::InputPullup,
+            rs_esprit::GpioMode::InputPullDown => Mode::InputPulldown,
+            rs_esprit::GpioMode::Output => Mode::Output,
+            rs_esprit::GpioMode::OutputOpenDrain => Mode::OutputOpenDrain,
+            rs_esprit::GpioMode::AlternatePushPull => Mode::AlternatePushPull,
+            rs_esprit::GpioMode::AlternateOpenDrain => Mode::AlternateOpenDrain,
+            rs_esprit::GpioMode::Pwm => Mode::Pwm,
+            rs_esprit::GpioMode::Adc => Mode::AdcMode,
+            rs_esprit::GpioMode::Dac => Mode::DacMode,
+            rs_esprit::GpioMode::Uart => Mode::Uart,
+            rs_esprit::GpioMode::Spi => Mode::SpiMode,
+            rs_esprit::GpioMode::UartAlt => Mode::UartAlt,
+        };
+        Pin::set_mode(*self, m, speed_mhz);
+    }
+
+    fn open_drain_close(&mut self, close: bool) {
+        open_drain_close(*self, close);
+    }
+
     fn enable_interrupt(&mut self, _trigger: rs_esprit::EdgeTrigger) -> bool {
         true
     }

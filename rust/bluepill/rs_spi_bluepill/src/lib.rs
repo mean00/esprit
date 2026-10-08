@@ -190,6 +190,36 @@ impl rs_esprit::Spi for Spi {
             SPI_TX_HANDLERS[self.instance as usize] = handler;
         }
     }
+
+    fn set_speed(&mut self, speed_hz: u32) {
+        self.set_speed(speed_hz);
+    }
+
+    fn set_dma_mode(&mut self, enable: bool) {
+        self.set_dma_mode(enable);
+    }
+
+    fn set_ssel(&mut self, ssel: i32) {
+        self.set_ssel(ssel);
+    }
+
+    fn wait_done(&mut self) -> bool {
+        self.wait_for_completion()
+    }
+
+    fn write_slice8(&mut self, data: &[u8]) -> bool {
+        for &byte in data {
+            self.write8(byte);
+        }
+        true
+    }
+
+    fn write_slice16(&mut self, data: &[u16]) -> bool {
+        for &val in data {
+            self.write16(val);
+        }
+        true
+    }
 }
 
 pub mod shim;

@@ -1,0 +1,31 @@
+#![allow(dead_code)]
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+#![allow(unsafe_op_in_unsafe_fn)]
+
+pub type lnPin = cty::c_int;
+
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum lnEdge {
+    LN_EDGE_NONE = 0,
+    LN_EDGE_RISING = 1,
+    LN_EDGE_FALLING = 2,
+    LN_EDGE_BOTH = 3,
+}
+
+pub type lnExtiCallback =
+    ::core::option::Option<unsafe extern "C" fn(pin: lnPin, cookie: *mut cty::c_void)>;
+
+unsafe extern "C" {
+    pub fn lnExtiAttachInterrupt_c(
+        pin: lnPin,
+        edge: lnEdge,
+        cb: lnExtiCallback,
+        cookie: *mut cty::c_void,
+    );
+    pub fn lnExtiDetachInterrupt_c(pin: lnPin);
+    pub fn lnExtiEnableInterrupt_c(pin: lnPin);
+    pub fn lnExtiDisableInterrupt_c(pin: lnPin);
+}

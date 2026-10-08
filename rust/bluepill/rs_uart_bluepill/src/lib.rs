@@ -198,6 +198,11 @@ impl rs_esprit::UartTx for UartTx {
     }
 
     #[inline]
+    fn set_speed(&mut self, baudrate: u32) -> bool {
+        self.set_speed(baudrate)
+    }
+
+    #[inline]
     fn transmit(&mut self, buffer: &[u8]) -> bool {
         let res = self.transmit(buffer);
         if res {
@@ -208,6 +213,15 @@ impl rs_esprit::UartTx for UartTx {
             }
         }
         res
+    }
+
+    #[inline]
+    fn transmit_no_block(&mut self, buffer: &[u8]) -> i32 {
+        if self.transmit(buffer) {
+            buffer.len() as i32
+        } else {
+            -1
+        }
     }
 
     #[inline]
@@ -222,6 +236,11 @@ impl rs_esprit::UartRx for UartRx {
     #[inline]
     fn configure(&mut self, config: &rs_esprit::UartConfig) -> bool {
         self.set_speed(config.baudrate)
+    }
+
+    #[inline]
+    fn set_speed(&mut self, baudrate: u32) -> bool {
+        self.set_speed(baudrate)
     }
 
     #[inline]

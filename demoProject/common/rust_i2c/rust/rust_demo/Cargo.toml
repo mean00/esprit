@@ -1,0 +1,29 @@
+[package]
+name = "rust_demo"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["bluepill48"]
+bluepill48 = ["rust_esprit/bluepill48"]
+rp2040 = ["rust_esprit/rp2040"]
+
+[dependencies]
+cty = "0.2.2"
+rust_esprit = { path = "../../esprit/rust/rust_esprit" }
+ufmt = "*"
+
+[lib]
+name = "rust_demo"
+path = "src/lib.rs"
+crate-type = ["staticlib"]
+
+[profile.dev]
+debug = true
+lto = false
+opt-level = 0
+
+[profile.release]
+debug = true
+lto = true
+opt-level = 0

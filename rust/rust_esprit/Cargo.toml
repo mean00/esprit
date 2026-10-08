@@ -23,6 +23,13 @@ rs_adc_bluepill = { path = "../bluepill/rs_adc_bluepill", optional = true }
 rs_multi_pulse_bluepill = { path = "../bluepill/rs_multi_pulse_bluepill", optional = true }
 rs_uart_bluepill = { path = "../bluepill/rs_uart_bluepill", optional = true }
 rs_pinout48_bluepill = { path = "../bluepill/rs_pinout48_bluepill", optional = true }
+rs_spi_wrapped = { path = "../wrapped/rs_spi_wrapped", optional = true }
+rs_i2c_wrapped = { path = "../wrapped/rs_i2c_wrapped", optional = true }
+rs_timer_wrapped = { path = "../wrapped/rs_timer_wrapped", optional = true }
+rs_gpio_wrapped = { path = "../wrapped/rs_gpio_wrapped", optional = true }
+rs_exti_wrapped = { path = "../wrapped/rs_exti_wrapped", optional = true }
+rs_uart_wrapped = { path = "../wrapped/rs_uart_wrapped", optional = true }
+rs_adc_wrapped = { path = "../wrapped/rs_adc_wrapped", optional = true }
 rs_spi_rp2xxx = { path = "../rp2xxx/rs_spi_rp2xxx", optional = true }
 rs_i2c_rp2xxx = { path = "../rp2xxx/rs_i2c_rp2xxx", optional = true }
 rs_timer_rp2xxx = { path = "../rp2xxx/rs_timer_rp2xxx", optional = true }
@@ -74,7 +81,24 @@ rp2040 = [
 # RP2350 shares the complete RP2xxx code path (bindings, cfgs and stubs).
 rp2350 = ["rp2040"]
 
-esp32 = []
+esp32 = [
+    "dep:rs_spi_wrapped",
+    "dep:rs_i2c_wrapped",
+    "dep:rs_timer_wrapped",
+    "dep:rs_gpio_wrapped",
+    "dep:rs_exti_wrapped",
+    "dep:rs_uart_wrapped",
+    "dep:rs_adc_wrapped",
+]
+wrapped = [
+    "dep:rs_spi_wrapped",
+    "dep:rs_i2c_wrapped",
+    "dep:rs_timer_wrapped",
+    "dep:rs_gpio_wrapped",
+    "dep:rs_exti_wrapped",
+    "dep:rs_uart_wrapped",
+    "dep:rs_adc_wrapped",
+]
 
 default = ["bluepill"]
 

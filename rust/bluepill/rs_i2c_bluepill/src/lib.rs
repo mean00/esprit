@@ -232,6 +232,44 @@ impl rs_esprit::I2c for I2c {
             }
         }
     }
+
+    fn set_speed(&mut self, speed_hz: u32) {
+        self.set_speed(speed_hz);
+    }
+
+    fn set_address(&mut self, address: u32) {
+        self.set_address(address);
+    }
+
+    fn set_dma_mode(&mut self, enable: bool) {
+        self.set_dma_mode(enable);
+    }
+
+    fn begin(&mut self, target: u8) -> bool {
+        self.begin(target as u32)
+    }
+
+    fn write(&mut self, data: &[u8]) -> bool {
+        self.write(data.len() as u32, data.as_ptr())
+    }
+
+    fn read(&mut self, buffer: &mut [u8]) -> bool {
+        self.read(buffer.len() as u32, buffer.as_mut_ptr())
+    }
+
+    fn multi_write_to(&mut self, target: u8, chunks: &[&[u8]]) -> bool {
+        let nb = chunks.len();
+        if nb == 0 || nb > 3 {
+            return false;
+        }
+        let mut lengths: [u32; 3] = [0, 0, 0];
+        let mut ptrs: [*const u8; 3] = [core::ptr::null(), core::ptr::null(), core::ptr::null()];
+        for i in 0..nb {
+            lengths[i] = chunks[i].len() as u32;
+            ptrs[i] = chunks[i].as_ptr();
+        }
+        self.multi_write_to(target as u32, nb as u32, lengths.as_ptr(), ptrs.as_mut_ptr())
+    }
 }
 
 pub mod shim;

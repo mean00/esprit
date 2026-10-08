@@ -117,5 +117,37 @@ impl Exti {
     }
 }
 
+impl rs_esprit::Exti for Exti {
+    fn attach_interrupt(
+        &mut self,
+        pin: u32,
+        edge: rs_esprit::EdgeTrigger,
+        cb: Option<unsafe extern "C" fn(pin: i32, cookie: *mut core::ffi::c_void)>,
+        cookie: *mut core::ffi::c_void,
+    ) {
+        let e = match edge {
+            rs_esprit::EdgeTrigger::None => Edge::None,
+            rs_esprit::EdgeTrigger::Rising => Edge::Rising,
+            rs_esprit::EdgeTrigger::Falling => Edge::Falling,
+            rs_esprit::EdgeTrigger::Both => Edge::Both,
+        };
+        let p = Pin::from(pin);
+        let callback: Callback = unsafe { core::mem::transmute(cb) };
+        attach_interrupt(p, e, callback, cookie);
+    }
+
+    fn detach_interrupt(&mut self, pin: u32) {
+        detach_interrupt(Pin::from(pin));
+    }
+
+    fn enable_interrupt(&mut self, pin: u32) {
+        enable_interrupt(Pin::from(pin));
+    }
+
+    fn disable_interrupt(&mut self, pin: u32) {
+        disable_interrupt(Pin::from(pin));
+    }
+}
+
 pub mod shim;
 pub use shim::*;

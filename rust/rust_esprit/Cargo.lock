@@ -115,6 +115,14 @@ name = "rs_adc_rp2xxx"
 version = "0.1.0"
 
 [[package]]
+name = "rs_adc_wrapped"
+version = "0.1.0"
+dependencies = [
+ "cty",
+ "rs_esprit",
+]
+
+[[package]]
 name = "rs_afio_bluepill"
 version = "0.1.0"
 dependencies = [
@@ -149,7 +157,16 @@ version = "0.1.0"
 dependencies = [
  "rs_afio_bluepill",
  "rs_bluepill",
+ "rs_esprit",
  "rs_gpio_bluepill",
+]
+
+[[package]]
+name = "rs_exti_wrapped"
+version = "0.1.0"
+dependencies = [
+ "cty",
+ "rs_esprit",
 ]
 
 [[package]]
@@ -157,6 +174,14 @@ name = "rs_gpio_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_esprit",
+]
+
+[[package]]
+name = "rs_gpio_wrapped"
+version = "0.1.0"
+dependencies = [
+ "cty",
  "rs_esprit",
 ]
 
@@ -173,6 +198,14 @@ dependencies = [
 [[package]]
 name = "rs_i2c_rp2xxx"
 version = "0.1.0"
+
+[[package]]
+name = "rs_i2c_wrapped"
+version = "0.1.0"
+dependencies = [
+ "cty",
+ "rs_esprit",
+]
 
 [[package]]
 name = "rs_multi_pulse_bluepill"
@@ -225,6 +258,14 @@ name = "rs_spi_rp2xxx"
 version = "0.1.0"
 
 [[package]]
+name = "rs_spi_wrapped"
+version = "0.1.0"
+dependencies = [
+ "cty",
+ "rs_esprit",
+]
+
+[[package]]
 name = "rs_timer_bluepill"
 version = "0.1.0"
 dependencies = [
@@ -241,6 +282,14 @@ name = "rs_timer_rp2xxx"
 version = "0.1.0"
 
 [[package]]
+name = "rs_timer_wrapped"
+version = "0.1.0"
+dependencies = [
+ "cty",
+ "rs_esprit",
+]
+
+[[package]]
 name = "rs_uart_bluepill"
 version = "0.1.0"
 dependencies = [
@@ -249,6 +298,14 @@ dependencies = [
  "rs_esprit",
  "rs_gpio_bluepill",
  "rs_rcu_bluepill",
+]
+
+[[package]]
+name = "rs_uart_wrapped"
+version = "0.1.0"
+dependencies = [
+ "cty",
+ "rs_esprit",
 ]
 
 [[package]]
@@ -261,11 +318,15 @@ dependencies = [
  "heapless",
  "rs_adc_bluepill",
  "rs_adc_rp2xxx",
+ "rs_adc_wrapped",
  "rs_esprit",
  "rs_exti_bluepill",
+ "rs_exti_wrapped",
  "rs_gpio_bluepill",
+ "rs_gpio_wrapped",
  "rs_i2c_bluepill",
  "rs_i2c_rp2xxx",
+ "rs_i2c_wrapped",
  "rs_multi_pulse_bluepill",
  "rs_multi_pulse_rp2xxx",
  "rs_pinout48_bluepill",
@@ -273,9 +334,12 @@ dependencies = [
  "rs_rtos",
  "rs_spi_bluepill",
  "rs_spi_rp2xxx",
+ "rs_spi_wrapped",
  "rs_timer_bluepill",
  "rs_timer_rp2xxx",
+ "rs_timer_wrapped",
  "rs_uart_bluepill",
+ "rs_uart_wrapped",
  "ufmt",
 ]
 

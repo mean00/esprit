@@ -50,12 +50,21 @@ pub mod uart {
 
     pub trait UartTx {
         fn configure(&mut self, config: &UartConfig) -> bool;
+        fn set_speed(&mut self, baudrate: u32) -> bool;
         fn transmit(&mut self, buffer: &[u8]) -> bool;
+        fn transmit_no_block(&mut self, buffer: &[u8]) -> i32 {
+            if self.transmit(buffer) {
+                buffer.len() as i32
+            } else {
+                -1
+            }
+        }
         fn set_tx_handler(&mut self, handler: Option<&'static dyn UartTxHandler>);
     }
 
     pub trait UartRx {
         fn configure(&mut self, config: &UartConfig) -> bool;
+        fn set_speed(&mut self, baudrate: u32) -> bool;
         fn enable_rx(&mut self, enabled: bool) -> bool;
         fn set_rx_handler(&mut self, handler: Option<&'static dyn UartRxHandler>);
     }
@@ -110,6 +119,49 @@ pub mod spi {
         fn write_async(&mut self, data: &[u8]) -> bool;
         fn set_rx_handler(&mut self, handler: Option<&'static dyn SpiRxHandler>);
         fn set_tx_handler(&mut self, handler: Option<&'static dyn SpiTxHandler>);
+
+        // Synchronous / blocking block operations
+        fn write_slice8(&mut self, data: &[u8]) -> bool {
+            for &byte in data {
+                self.transfer8(byte);
+            }
+            true
+        }
+        fn write_slice16(&mut self, data: &[u16]) -> bool {
+            for &word in data {
+                self.transfer8((word >> 8) as u8);
+                self.transfer8(word as u8);
+            }
+            true
+        }
+        fn fill8(&mut self, count: u32, val: u8) -> bool {
+            for _ in 0..count {
+                self.transfer8(val);
+            }
+            true
+        }
+        fn fill16(&mut self, count: u32, val: u16) -> bool {
+            for _ in 0..count {
+                self.transfer8((val >> 8) as u8);
+                self.transfer8(val as u8);
+            }
+            true
+        }
+        fn transfer_exact(&mut self, tx: &[u8], rx: &mut [u8]) -> bool {
+            if tx.len() != rx.len() {
+                return false;
+            }
+            for (t, r) in tx.iter().zip(rx.iter_mut()) {
+                *r = self.transfer8(*t);
+            }
+            true
+        }
+        fn set_speed(&mut self, speed_hz: u32);
+        fn set_dma_mode(&mut self, enable: bool);
+        fn set_ssel(&mut self, ssel: i32);
+        fn wait_done(&mut self) -> bool {
+            true
+        }
     }
 }
 
@@ -123,6 +175,18 @@ pub mod timer {
         fn enable(&mut self);
         fn disable(&mut self);
         fn set_handler(&mut self, handler: Option<&'static dyn TimerHandler>);
+        fn single_shot(&mut self, duration_ms: u32, up: bool);
+    }
+
+    pub trait DelayTimer {
+        fn arm(&mut self, duration_us: u32);
+        fn set_interrupt(
+            &mut self,
+            handler: Option<unsafe extern "C" fn(cookie: *mut core::ffi::c_void)>,
+            cookie: *mut core::ffi::c_void,
+        );
+        fn enable_interrupt(&mut self);
+        fn disable_interrupt(&mut self);
     }
 }
 
@@ -154,6 +218,14 @@ pub mod i2c {
         fn write_to(&mut self, target: u16, data: &[u8]) -> bool;
         fn read_from(&mut self, target: u16, buffer: &mut [u8]) -> bool;
         fn set_handler(&mut self, handler: Option<&'static dyn I2cHandler>);
+
+        fn set_speed(&mut self, speed_hz: u32);
+        fn set_address(&mut self, address: u32);
+        fn set_dma_mode(&mut self, enable: bool);
+        fn begin(&mut self, target: u8) -> bool;
+        fn write(&mut self, data: &[u8]) -> bool;
+        fn read(&mut self, buffer: &mut [u8]) -> bool;
+        fn multi_write_to(&mut self, target: u8, chunks: &[&[u8]]) -> bool;
     }
 }
 
@@ -169,6 +241,7 @@ pub mod adc {
     }
 
     pub trait TimingAdc {
+        fn set_source(&mut self, timer: u32, channel: u32, fq: u32, pins: &[u32]) -> bool;
         fn multi_read(&mut self, nb_sample_per_channel: u32, output: &mut [u16]) -> bool;
         fn set_handler(&mut self, handler: Option<&'static dyn AdcHandler>);
     }
@@ -177,9 +250,29 @@ pub mod adc {
 pub mod gpio {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub enum EdgeTrigger {
+        None,
         Rising,
         Falling,
         Both,
+    }
+
+    #[repr(u32)]
+    #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+    pub enum GpioMode {
+        Floating = 0,
+        InputFloating = 1,
+        InputPullUp = 2,
+        InputPullDown = 3,
+        Output = 4,
+        OutputOpenDrain = 5,
+        AlternatePushPull = 6,
+        AlternateOpenDrain = 7,
+        Pwm = 8,
+        Adc = 9,
+        Dac = 10,
+        Uart = 11,
+        Spi = 12,
+        UartAlt = 13,
     }
 
     pub trait GpioInterruptHandler: Sync {
@@ -190,8 +283,30 @@ pub mod gpio {
         fn write(&mut self, value: bool);
         fn read(&self) -> bool;
         fn toggle(&mut self);
+        fn is_high(&self) -> bool {
+            self.read()
+        }
+        fn is_low(&self) -> bool {
+            !self.read()
+        }
+        fn set_mode(&mut self, mode: GpioMode);
+        fn set_mode_speed(&mut self, mode: GpioMode, speed_mhz: u32);
+        fn open_drain_close(&mut self, close: bool);
         fn enable_interrupt(&mut self, trigger: EdgeTrigger) -> bool;
         fn set_handler(&mut self, handler: Option<&'static dyn GpioInterruptHandler>);
+    }
+
+    pub trait Exti {
+        fn attach_interrupt(
+            &mut self,
+            pin: u32,
+            edge: EdgeTrigger,
+            callback: Option<unsafe extern "C" fn(pin: i32, cookie: *mut core::ffi::c_void)>,
+            cookie: *mut core::ffi::c_void,
+        );
+        fn detach_interrupt(&mut self, pin: u32);
+        fn enable_interrupt(&mut self, pin: u32);
+        fn disable_interrupt(&mut self, pin: u32);
     }
 }
 
@@ -210,7 +325,7 @@ pub use rs_rtos::{
 // Convenient top-level re-exports
 pub use uart::{UartTx, UartRx, UartTxHandler, UartRxHandler, UartConfig};
 pub use spi::{Spi, SpiTxHandler, SpiRxHandler, SpiConfig, SpiMode, SpiBitOrder};
-pub use timer::{Timer, TimerHandler};
+pub use timer::{Timer, TimerHandler, DelayTimer};
 pub use i2c::{I2c, I2cHandler, I2cConfig};
 pub use adc::{SimpleAdc, TimingAdc, AdcHandler};
-pub use gpio::{GpioPin, GpioInterruptHandler, EdgeTrigger};
+pub use gpio::{GpioPin, GpioInterruptHandler, EdgeTrigger, GpioMode, Exti};

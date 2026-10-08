@@ -1,0 +1,70 @@
+#![allow(dead_code)]
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+#![allow(unsafe_op_in_unsafe_fn)]
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ln_serial_tx_c {
+    pub dummy: *mut cty::c_void,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ln_serial_rx_c {
+    pub dummy: *mut cty::c_void,
+}
+
+pub type ln_serial_event_cb =
+    ::core::option::Option<unsafe extern "C" fn(cookie: *mut cty::c_void, event: cty::c_int)>;
+
+unsafe extern "C" {
+    pub fn lnserial_tx_create(
+        instance: cty::c_uint,
+        dma: bool,
+        buffered: bool,
+    ) -> *mut ln_serial_tx_c;
+    pub fn lnserial_tx_delete(s: *mut ln_serial_tx_c);
+    pub fn lnserial_tx_init(s: *mut ln_serial_tx_c) -> bool;
+    pub fn lnserial_tx_set_speed(s: *mut ln_serial_tx_c, speed: cty::c_uint) -> bool;
+    pub fn lnserial_tx_transmit(
+        s: *mut ln_serial_tx_c,
+        size: cty::c_uint,
+        buffer: *const u8,
+    ) -> bool;
+    pub fn lnserial_tx_raw_write(
+        s: *mut ln_serial_tx_c,
+        size: cty::c_uint,
+        buffer: *const u8,
+    ) -> bool;
+
+    pub fn lnserial_rx_create(
+        instance: cty::c_uint,
+        rxBufferSize: cty::c_uint,
+        dma: bool,
+    ) -> *mut ln_serial_rx_c;
+    pub fn lnserial_rx_delete(s: *mut ln_serial_rx_c);
+    pub fn lnserial_rx_init(s: *mut ln_serial_rx_c) -> bool;
+    pub fn lnserial_rx_set_speed(s: *mut ln_serial_rx_c, speed: cty::c_uint) -> bool;
+    pub fn lnserial_rx_transmit(
+        s: *mut ln_serial_rx_c,
+        size: cty::c_uint,
+        buffer: *const u8,
+    ) -> bool;
+    pub fn lnserial_rx_transmit_no_block(
+        s: *mut ln_serial_rx_c,
+        size: cty::c_uint,
+        buffer: *const u8,
+    ) -> cty::c_int;
+    pub fn lnserial_rx_enable_rx(s: *mut ln_serial_rx_c, enabled: bool) -> bool;
+    pub fn lnserial_rx_purge_rx(s: *mut ln_serial_rx_c);
+    pub fn lnserial_rx_read(s: *mut ln_serial_rx_c, max: cty::c_uint, to: *mut u8) -> cty::c_int;
+    pub fn lnserial_rx_set_callback(
+        s: *mut ln_serial_rx_c,
+        cb: ln_serial_event_cb,
+        cookie: *mut cty::c_void,
+    );
+    pub fn lnserial_rx_get_read_pointer(s: *mut ln_serial_rx_c, to: *mut *mut u8) -> cty::c_int;
+    pub fn lnserial_rx_consume(s: *mut ln_serial_rx_c, n: cty::c_uint);
+}

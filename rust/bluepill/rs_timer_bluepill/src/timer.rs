@@ -273,4 +273,9 @@ impl rs_esprit::Timer for Timer {
             }
         }
     }
+
+    #[inline]
+    fn single_shot(&mut self, duration_ms: u32, up: bool) {
+        self.single_shot(duration_ms, up);
+    }
 }

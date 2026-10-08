@@ -162,6 +162,32 @@ impl DelayTimer {
     }
 }
 
+impl rs_esprit::DelayTimer for DelayTimer {
+    #[inline]
+    fn arm(&mut self, duration_us: u32) {
+        self.arm(duration_us);
+    }
+
+    #[inline]
+    fn set_interrupt(
+        &mut self,
+        handler: Option<unsafe extern "C" fn(cookie: *mut core::ffi::c_void)>,
+        cookie: *mut core::ffi::c_void,
+    ) {
+        self.set_interrupt(handler, cookie);
+    }
+
+    #[inline]
+    fn enable_interrupt(&mut self) {
+        self.enable_interrupt();
+    }
+
+    #[inline]
+    fn disable_interrupt(&mut self) {
+        self.disable_interrupt();
+    }
+}
+
 impl Drop for DelayTimer {
     fn drop(&mut self) {
         self.timer.disable();

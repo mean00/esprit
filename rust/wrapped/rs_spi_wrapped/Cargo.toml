@@ -1,0 +1,8 @@
+[package]
+name = "rs_spi_wrapped"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rs_esprit = { path = "../../rs_esprit" }
+cty = "0.2.2"

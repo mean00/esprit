@@ -1,0 +1,46 @@
+#![allow(dead_code)]
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+#![allow(unsafe_op_in_unsafe_fn)]
+
+pub type lnPin = cty::c_int;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ln_timing_adc_c {
+    pub dummy: *mut cty::c_void,
+}
+
+pub type ln_timing_adc_async_callback_t =
+    ::core::option::Option<unsafe extern "C" fn(arg1: *mut cty::c_void)>;
+
+unsafe extern "C" {
+    pub fn ln_timing_adc_create(instance: cty::c_int) -> *mut ln_timing_adc_c;
+    pub fn ln_timing_adc_delete(in_: *mut ln_timing_adc_c) -> bool;
+    pub fn ln_timing_adc_set_source(
+        instance: *mut ln_timing_adc_c,
+        timer: cty::c_uint,
+        channel: cty::c_uint,
+        fq: cty::c_uint,
+        nbPins: cty::c_uint,
+        pin: *const lnPin,
+    ) -> bool;
+    pub fn ln_timing_adc_multi_read(
+        instance: *mut ln_timing_adc_c,
+        nbSamplePerChannel: cty::c_uint,
+        output: *mut u16,
+    ) -> bool;
+    pub fn ln_timing_adc_async_read(
+        instance: *mut ln_timing_adc_c,
+        nbSamplePerChannel: cty::c_uint,
+        output: *mut u16,
+        cb: ln_timing_adc_async_callback_t,
+        ctx: *mut cty::c_void,
+    ) -> bool;
+
+    pub fn ln_simple_adc_create(instance: u32, pin: u32) -> *mut cty::c_void;
+    pub fn ln_simple_adc_set_smpt(adc: *mut cty::c_void, smpt: u32);
+    pub fn ln_simple_adc_read(adc: *mut cty::c_void) -> i32;
+    pub fn ln_simple_adc_destroy(adc: *mut cty::c_void);
+}

@@ -259,6 +259,15 @@ impl rs_esprit::SimpleAdc for SimpleAdc {
 }
 
 impl rs_esprit::TimingAdc for TimingAdc {
+    fn set_source(&mut self, timer: u32, channel: u32, fq: u32, pins: &[u32]) -> bool {
+        let count = pins.len().min(16);
+        let mut pin_objs = [Pin::PA0; 16];
+        for i in 0..count {
+            pin_objs[i] = Pin::from(pins[i]);
+        }
+        self.set_source(timer, channel, fq, &pin_objs[..count])
+    }
+
     fn multi_read(&mut self, nb_sample_per_channel: u32, output: &mut [u16]) -> bool {
         let res = self.multi_read(nb_sample_per_channel, output);
         if res {
