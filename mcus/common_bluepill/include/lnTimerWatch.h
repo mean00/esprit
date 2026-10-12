@@ -36,8 +36,21 @@ class lnTimerWatch
     {
         while ((uint16_t)(_t->CNT - _start_tick) < target_ticks)
         {
-            asm("nop");
+            __asm__ volatile("" ::: "memory");
         }
+    }
+
+    /**
+     * @brief Blocks until target_ticks have elapsed since the last start() (alias for wait).
+     */
+    inline LN_ALWAYS_INLINE void waitOffset(uint16_t target_ticks)
+    {
+        wait(target_ticks);
+    }
+
+    inline volatile uint32_t *cntAddress() const
+    {
+        return &(_t->CNT);
     }
 
     /**
