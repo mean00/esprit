@@ -1,5 +1,6 @@
 #![no_std]
 #![allow(dead_code)]
+#![feature(min_adt_const_params)]
 
 //! # WS2812B Timer + DMA Driver for Esprit
 //!
@@ -49,9 +50,8 @@ struct PwmBuffer {
     data: [u8; BUFFER_SIZE_BYTES],
 }
 
-/// Safe, zero-allocation WS2812B LED strip driver with compile-time fixed capacity `N`.
-pub struct Ws2812b<const N: usize> {
-    pin: Pin,
+/// Safe, zero-allocation WS2812B LED strip driver with compile-time fixed capacity `N` and pin `PIN`.
+pub struct Ws2812b<const N: usize, const PIN: Pin = { Pin::PB4 }> {
     leds: [Color; N],
     led_brightness: [u8; N],
     global_brightness: u8,
@@ -66,11 +66,11 @@ pub struct Ws2812b<const N: usize> {
     next_led: usize,
 }
 
-impl<const N: usize> Ws2812b<N> {
-    /// Create a new WS2812B driver instance controlling `N` LEDs on `pin`.
-    pub fn new(pin: Pin) -> Self {
+impl<const N: usize, const PIN: Pin> Ws2812b<N, PIN> {
+    /// Create a new WS2812B driver instance controlling `N` LEDs.
+    #[inline]
+    pub const fn new() -> Self {
         Self {
-            pin,
             leds: [Color::BLACK; N],
             led_brightness: [DEFAULT_BRIGHTNESS; N],
             global_brightness: DEFAULT_BRIGHTNESS,
@@ -88,6 +88,18 @@ impl<const N: usize> Ws2812b<N> {
         }
     }
 
+    /// Backward-compatible constructor accepting `pin`.
+    #[inline]
+    pub const fn with_pin(_pin: Pin) -> Self {
+        Self::new()
+    }
+
+    /// Return the pin configured for this driver.
+    #[inline]
+    pub const fn pin(&self) -> Pin {
+        PIN
+    }
+
     /// Return the number of LEDs managed by this driver.
     #[inline]
     pub const fn num_leds(&self) -> usize {
@@ -95,10 +107,11 @@ impl<const N: usize> Ws2812b<N> {
     }
 
     /// Initialise the hardware timer and pre-compute the PWM lookup table.
+    #[inline]
     pub fn begin(&mut self) -> Result<(), Ws2812bError> {
         #[cfg(feature = "bluepill")]
         {
-            let mut timer = DmaTimer::new(self.pin)?;
+            let mut timer = DmaTimer::for_pin::<PIN>()?;
             let rollover = timer.pwm_setup(WS2812B_PWM_FREQUENCY_HZ)?;
 
             let one = (rollover * DUTY_ONE_NUMERATOR + DUTY_ROUNDING_OFFSET) / DUTY_ONE_DENOMINATOR;
@@ -252,7 +265,7 @@ impl<const N: usize> Ws2812b<N> {
 
             {
                 let timer = self.timer.as_mut().unwrap();
-                timer.attach_dma_callback(dma_irq_trampoline::<N>, cookie);
+                timer.attach_dma_callback(dma_irq_trampoline::<N, PIN>, cookie);
                 timer.start_dma(buf_ptr, BUFFER_SIZE_BYTES);
             }
 
@@ -272,12 +285,12 @@ impl<const N: usize> Ws2812b<N> {
     }
 }
 
-unsafe extern "C" fn dma_irq_trampoline<const N: usize>(
+unsafe extern "C" fn dma_irq_trampoline<const N: usize, const PIN: Pin>(
     half: bool,
     cookie: *mut core::ffi::c_void,
 ) {
     if !cookie.is_null() {
-        let this = unsafe { &mut *(cookie as *mut Ws2812b<N>) };
+        let this = unsafe { &mut *(cookie as *mut Ws2812b<N, PIN>) };
         this.handle_dma_interrupt(half);
     }
 }
