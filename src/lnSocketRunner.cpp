@@ -135,7 +135,10 @@ void socketRunner::process_events(uint32_t events)
  */
 void socketRunner::disconnectClient()
 {
-    _current_connection->disconnectClient();
+    if (_current_connection)
+    {
+        _current_connection->disconnectClient();
+    }
 }
 
 /**
