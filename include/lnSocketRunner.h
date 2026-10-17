@@ -40,6 +40,10 @@ class socketRunner
     {
         return _shift;
     }
+    bool isConnected() const
+    {
+        return _connected;
+    }
     /*
      *
      *
