@@ -115,29 +115,21 @@ mod prelude {
     pub use core::str;
     pub use core::time::Duration;
 
-    // bare-metal + fake_std run on an embedded target: core + alloc.
-    #[cfg(not(feature = "external_std"))]
-    pub use core::alloc::{GlobalAlloc, Layout};
-    #[cfg(not(feature = "external_std"))]
-    pub use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
-    #[cfg(not(feature = "external_std"))]
-    pub use alloc::boxed::Box;
-    #[cfg(not(feature = "external_std"))]
-    pub use alloc::string::String;
-    #[cfg(not(feature = "external_std"))]
-    pub use alloc::vec::Vec;
-
-    // external_std: a real `std` is provided by the embedding framework.
-    #[cfg(feature = "external_std")]
-    pub use std::alloc::{GlobalAlloc, Layout};
-    #[cfg(feature = "external_std")]
-    pub use std::boxed::Box;
-    #[cfg(feature = "external_std")]
-    pub use std::string::String;
-    #[cfg(feature = "external_std")]
-    pub use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
-    #[cfg(feature = "external_std")]
-    pub use std::vec::Vec;
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "external_std")] {
+            pub use std::alloc::{GlobalAlloc, Layout};
+            pub use std::boxed::Box;
+            pub use std::string::String;
+            pub use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+            pub use std::vec::Vec;
+        } else {
+            pub use alloc::boxed::Box;
+            pub use alloc::string::String;
+            pub use alloc::vec::Vec;
+            pub use core::alloc::{GlobalAlloc, Layout};
+            pub use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+        }
+    }
 }
 
 // `size_t` moved into `raw` (see the `raw` module below).
@@ -161,58 +153,42 @@ pub(crate) use c_api::rn_debug_c;
 pub(crate) use c_api::rn_exti_c;
 pub(crate) use c_api::rn_fast_event_c;
 pub(crate) use c_api::rn_freertos_c;
-#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
-pub(crate) use c_api::rn_gpio_bp_c;
-#[cfg(feature = "esp32")]
-pub(crate) use c_api::rn_gpio_esp32_c;
-#[cfg(feature = "rp2040")]
-pub(crate) use c_api::rn_gpio_rp2040_c;
-#[cfg(all(not(any(feature = "rp2040", feature = "esp32", feature = "wrapped")), feature = "bluepill"))]
-pub(crate) use rs_i2c_bluepill as rn_i2c_c;
-#[cfg(feature = "rp2040")]
-pub(crate) use rs_i2c_rp2xxx as rn_i2c_c;
-#[cfg(any(feature = "esp32", feature = "wrapped"))]
-pub(crate) use rs_i2c_wrapped as rn_i2c_c;
-#[cfg(all(not(any(feature = "rp2040", feature = "esp32", feature = "wrapped")), feature = "bluepill"))]
-pub(crate) use rs_spi_bluepill as rn_spi_c;
-#[cfg(feature = "rp2040")]
-pub(crate) use rs_spi_rp2xxx as rn_spi_c;
-#[cfg(any(feature = "esp32", feature = "wrapped"))]
-pub(crate) use rs_spi_wrapped as rn_spi_c;
 // `rn_timer_c` stays on the C API for every target: `task.rs` uses the real C
 // helpers (`lnGetUs`, `lnDelay_C`, …), which esprit provides everywhere.
 // The `Timer` wrapper itself selects its backend in timer.rs.
 pub(crate) use c_api::rn_timer_c;
-#[cfg(all(not(any(feature = "rp2040", feature = "esp32", feature = "wrapped")), feature = "bluepill"))]
-pub(crate) use rs_uart_bluepill as rn_serial_c;
-#[cfg(feature = "rp2040")]
-pub(crate) use c_api::rn_serial_c;
-#[cfg(any(feature = "esp32", feature = "wrapped"))]
-pub(crate) use rs_uart_wrapped as rn_serial_c;
-#[cfg(all(not(any(feature = "rp2040", feature = "esp32", feature = "wrapped")), feature = "bluepill"))]
-pub(crate) use rs_adc_bluepill as rn_timing_adc_c;
-#[cfg(feature = "rp2040")]
-pub(crate) use rs_adc_rp2xxx as rn_timing_adc_c;
-#[cfg(any(feature = "esp32", feature = "wrapped"))]
-pub(crate) use rs_adc_wrapped as rn_timing_adc_c;
-#[cfg(all(not(any(feature = "rp2040", feature = "esp32", feature = "wrapped")), feature = "bluepill"))]
-pub(crate) use rs_adc_bluepill as rn_simple_adc_c;
-#[cfg(feature = "rp2040")]
-pub(crate) use rs_adc_rp2xxx as rn_simple_adc_c;
-#[cfg(any(feature = "esp32", feature = "wrapped"))]
-pub(crate) use rs_adc_wrapped as rn_simple_adc_c;
 
-#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
-pub(crate) use rs_timer_bluepill as rn_hw_stopwatch_c;
-#[cfg(feature = "rp2040")]
-pub(crate) use rs_timer_rp2xxx as rn_hw_stopwatch_c;
-#[cfg(feature = "esp32")]
-pub(crate) use c_api::rn_hw_stopwatch_c;
-
-#[cfg(not(feature = "rp2040"))]
-pub(crate) use c_api::rn_multi_pulse_c;
-#[cfg(feature = "rp2040")]
-pub(crate) use rs_multi_pulse_rp2xxx as rn_multi_pulse_c;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "rp2040")] {
+        pub(crate) use c_api::rn_gpio_rp2040_c;
+        pub(crate) use rs_i2c_rp2xxx as rn_i2c_c;
+        pub(crate) use rs_spi_rp2xxx as rn_spi_c;
+        pub(crate) use c_api::rn_serial_c;
+        pub(crate) use rs_adc_rp2xxx as rn_timing_adc_c;
+        pub(crate) use rs_adc_rp2xxx as rn_simple_adc_c;
+        pub(crate) use rs_timer_rp2xxx as rn_hw_stopwatch_c;
+        pub(crate) use rs_multi_pulse_rp2xxx as rn_multi_pulse_c;
+    } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
+        #[cfg(feature = "esp32")]
+        pub(crate) use c_api::rn_gpio_esp32_c;
+        pub(crate) use rs_i2c_wrapped as rn_i2c_c;
+        pub(crate) use rs_spi_wrapped as rn_spi_c;
+        pub(crate) use rs_uart_wrapped as rn_serial_c;
+        pub(crate) use rs_adc_wrapped as rn_timing_adc_c;
+        pub(crate) use rs_adc_wrapped as rn_simple_adc_c;
+        pub(crate) use c_api::rn_hw_stopwatch_c;
+        pub(crate) use c_api::rn_multi_pulse_c;
+    } else {
+        pub(crate) use c_api::rn_gpio_bp_c;
+        pub(crate) use rs_i2c_bluepill as rn_i2c_c;
+        pub(crate) use rs_spi_bluepill as rn_spi_c;
+        pub(crate) use c_api::rn_serial_c;
+        pub(crate) use rs_adc_bluepill as rn_timing_adc_c;
+        pub(crate) use rs_adc_bluepill as rn_simple_adc_c;
+        pub(crate) use rs_timer_bluepill as rn_hw_stopwatch_c;
+        pub(crate) use c_api::rn_multi_pulse_c;
+    }
+}
 
 // ---------------------------------------------------------------------------
 //  Private implementation modules
@@ -252,24 +228,27 @@ pub mod raw {
     // ---- GPIO ----
     /// Canonical pin enum (the same type as the crate-root `Pin`).
     pub use crate::pin_types::lnPin;
-    #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
-    pub use rs_gpio_bluepill::{
-        lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
-        lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
-        lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
-    };
-    #[cfg(feature = "rp2040")]
-    pub use crate::rn_gpio_rp2040_c::{
-        lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
-        lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
-        lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
-    };
-    #[cfg(feature = "esp32")]
-    pub use crate::rn_gpio_esp32_c::{
-        lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
-        lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
-        lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
-    };
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "rp2040")] {
+            pub use crate::rn_gpio_rp2040_c::{
+                lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
+                lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
+                lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
+            };
+        } else if #[cfg(feature = "esp32")] {
+            pub use crate::rn_gpio_esp32_c::{
+                lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
+                lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
+                lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
+            };
+        } else {
+            pub use rs_gpio_bluepill::{
+                lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
+                lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
+                lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
+            };
+        }
+    }
 
     // ---- FreeRTOS core types ----
     pub use crate::rn_freertos_c::{
@@ -320,8 +299,10 @@ pub use task::{
 };
 pub use timer::{DelayTimer, Timer};
 #[cfg(feature = "cdc")]
+#[allow(deprecated)]
 pub use rs_tinyusb::{
-    Cdc, CdcEvent, CdcEventHandler, CdcPort, LineState, Usb, UsbError, UsbEvent, UsbEventHandler,
+    Cdc, CdcAcm, CdcEvent, CdcEventHandler, CdcPort, LineState, Usb, UsbBus, UsbError, UsbEvent,
+    UsbEventHandler,
 };
 #[cfg(feature = "embedded-hal")]
 pub use hal::Delay;
@@ -362,9 +343,6 @@ pub use i2c::I2cBus;
 pub use spi::SpiBus;
 #[allow(deprecated)]
 pub use serial::{SerialRxTx, SerialTxOnly};
-#[cfg(feature = "cdc")]
-#[allow(deprecated)]
-pub use rs_tinyusb::{CdcAcm, UsbBus};
 
 // ---------------------------------------------------------------------------
 //  Interrupt control
@@ -426,7 +404,6 @@ cfg_if! {
         }
 
         // Panic handler (fake_std is also no_std on embedded target)
-        #[cfg(not(feature = "external_std"))]
         #[panic_handler]
         fn panic(_info: &core::panic::PanicInfo) -> ! {
             unsafe { deadEnd(55) }
