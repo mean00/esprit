@@ -59,6 +59,26 @@ int lnUsbCDC::writeAvailable()
     return tud_cdc_n_write_available(_instance);
 }
 
+int lnUsbCDC::readAvailable() const
+{
+    return (int)tud_cdc_n_available(_instance);
+}
+
+bool lnUsbCDC::isConnected() const
+{
+    return tud_cdc_n_connected(_instance);
+}
+
+bool lnUsbCDC::peek(uint8_t *ch) const
+{
+    return tud_cdc_n_peek(_instance, ch);
+}
+
+uint8_t lnUsbCDC::getLineState() const
+{
+    return tud_cdc_n_get_line_state(_instance);
+}
+
 /**
  */
 int lnUsbCDC::write(const uint8_t *buffer, int size)

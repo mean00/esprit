@@ -41,9 +41,10 @@ cfg-if = "1.0"
 embedded-hal = { version = "1.0", optional = true }
 rs_esprit = { path = "../rs_esprit" }
 rs_rtos = { path = "../rs_rtos" }
+rs_tinyusb = { path = "../rs_tinyusb", optional = true }
 
 [features]
-cdc = []
+cdc = ["dep:rs_tinyusb"]
 embedded-hal = ["dep:embedded-hal"]
 
 # GD32 / CH32 (Bluepill): enables the pure-Rust peripheral backends.

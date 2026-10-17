@@ -24,6 +24,10 @@ class lnUsbCDC
     void flush();
     void clear_input_buffers();
     int writeAvailable();
+    int readAvailable() const;
+    bool isConnected() const;
+    bool peek(uint8_t *ch) const;
+    uint8_t getLineState() const;
     void setEventHandler(lnUsbCDCEventsHandler *h, void *cookie)
     {
         _eventHandler = h;

@@ -198,14 +198,15 @@ def main() -> None:
         output=os.path.join(dest, "rn_spi_c.rs"),
         extra_dir=pwd, verbose=verbose,
     )
+    tinyusb_dest = os.path.realpath(os.path.join(pwd, "..", "..", "rs_tinyusb", "src"))
     gen_c(
         header=os.path.join(pwd, "lnCDC_c.h"),
-        output=os.path.join(dest, "rn_cdc_c.rs"),
+        output=os.path.join(tinyusb_dest, "c_cdc.rs"),
         extra_dir=pwd, verbose=verbose,
     )
     gen_c(
         header=os.path.join(pwd, "lnUSB_c.h"),
-        output=os.path.join(dest, "rn_usb_c.rs"),
+        output=os.path.join(tinyusb_dest, "c_usb.rs"),
         extra_dir=pwd, verbose=verbose,
     )
     gen_c(

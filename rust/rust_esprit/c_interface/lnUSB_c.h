@@ -1,5 +1,6 @@
 #pragma once
 #include "stdint.h"
+#include "stdbool.h"
 
 typedef void lnUsbStackEventHandler(void *cookie, int event);
 
@@ -17,5 +18,9 @@ void lnusb_setConfiguration(lnusb_c *inst);
 void lnusb_setEventHandler(lnusb_c *inst, const void *cookie, lnUsbStackEventHandler *const ev);
 void lnusb_start(lnusb_c *inst);
 void lnusb_stop(lnusb_c *inst);
+
+bool lnusb_is_mounted(void);
+bool lnusb_is_suspended(void);
+bool lnusb_is_ready(void);
 
 // EOF

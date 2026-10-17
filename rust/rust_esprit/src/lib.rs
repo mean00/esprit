@@ -157,8 +157,6 @@ pub(crate) mod c_api;
 // Re-export the C‑FFI modules internally so that existing code (e.g.
 // `crate::rn_freertos_c::xQueueCreateMutex(...)`) continues to work.
 // These are **internal** bindings, not part of the public API.
-#[cfg(feature = "cdc")]
-pub(crate) use c_api::rn_cdc_c;
 pub(crate) use c_api::rn_debug_c;
 pub(crate) use c_api::rn_exti_c;
 pub(crate) use c_api::rn_fast_event_c;
@@ -215,8 +213,6 @@ pub(crate) use c_api::rn_hw_stopwatch_c;
 pub(crate) use c_api::rn_multi_pulse_c;
 #[cfg(feature = "rp2040")]
 pub(crate) use rs_multi_pulse_rp2xxx as rn_multi_pulse_c;
-#[cfg(feature = "cdc")]
-pub(crate) use c_api::rn_usb_c;
 
 // ---------------------------------------------------------------------------
 //  Private implementation modules
@@ -230,10 +226,6 @@ mod exti;
 mod spi;
 mod i2c;
 mod adc;
-#[cfg(feature = "cdc")]
-mod usb;
-#[cfg(feature = "cdc")]
-mod cdc;
 pub use rs_rtos::{event, queue, sync, task};
 mod timer;
 mod multi_pulse;
@@ -299,9 +291,7 @@ pub mod raw {
     pub use crate::rn_serial_c::{ln_serial_event_cb, ln_serial_rx_c, ln_serial_tx_c};
     pub use crate::rn_exti_c::lnEdge;
     #[cfg(feature = "cdc")]
-    pub use crate::rn_cdc_c::lncdc_c;
-    #[cfg(feature = "cdc")]
-    pub use crate::rn_usb_c::{lnUsbStackEventHandler, lnusb_c};
+    pub use rs_tinyusb::raw::*;
 }
 
 // ---------------------------------------------------------------------------
@@ -330,9 +320,9 @@ pub use task::{
 };
 pub use timer::{DelayTimer, Timer};
 #[cfg(feature = "cdc")]
-pub use cdc::{Cdc, CdcEvent, CdcEventHandler};
-#[cfg(feature = "cdc")]
-pub use usb::{Usb, UsbEvent, UsbEventHandler};
+pub use rs_tinyusb::{
+    Cdc, CdcEvent, CdcEventHandler, CdcPort, LineState, Usb, UsbError, UsbEvent, UsbEventHandler,
+};
 #[cfg(feature = "embedded-hal")]
 pub use hal::Delay;
 
@@ -374,10 +364,7 @@ pub use spi::SpiBus;
 pub use serial::{SerialRxTx, SerialTxOnly};
 #[cfg(feature = "cdc")]
 #[allow(deprecated)]
-pub use cdc::CdcAcm;
-#[cfg(feature = "cdc")]
-#[allow(deprecated)]
-pub use usb::UsbBus;
+pub use rs_tinyusb::{CdcAcm, UsbBus};
 
 // ---------------------------------------------------------------------------
 //  Interrupt control

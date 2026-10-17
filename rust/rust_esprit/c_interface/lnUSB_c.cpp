@@ -89,4 +89,21 @@ void lnusb_stop(lnusb_c *inst)
     WRAPME(inst)->stop();
 }
 
+#include "tusb.h"
+
+bool lnusb_is_mounted(void)
+{
+    return tud_mounted();
+}
+
+bool lnusb_is_suspended(void)
+{
+    return tud_suspended();
+}
+
+bool lnusb_is_ready(void)
+{
+    return tud_ready();
+}
+
 // EOF
