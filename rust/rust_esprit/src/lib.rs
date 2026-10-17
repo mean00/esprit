@@ -182,7 +182,7 @@ cfg_if::cfg_if! {
         pub(crate) use c_api::rn_gpio_bp_c;
         pub(crate) use rs_i2c_bluepill as rn_i2c_c;
         pub(crate) use rs_spi_bluepill as rn_spi_c;
-        pub(crate) use c_api::rn_serial_c;
+        pub(crate) use rs_uart_bluepill as rn_serial_c;
         pub(crate) use rs_adc_bluepill as rn_timing_adc_c;
         pub(crate) use rs_adc_bluepill as rn_simple_adc_c;
         pub(crate) use rs_timer_bluepill as rn_hw_stopwatch_c;
@@ -306,6 +306,34 @@ pub use rs_tinyusb::{
 };
 #[cfg(feature = "embedded-hal")]
 pub use hal::Delay;
+
+// ---------------------------------------------------------------------------
+//  Hardware-specific backend re-exports
+// ---------------------------------------------------------------------------
+#[cfg(feature = "bluepill")]
+pub mod bluepill {
+    //! Low-level Bluepill (GD32F3 / CH32V3) peripheral driver crates.
+    pub use rs_adc_bluepill as adc;
+    pub use rs_afio_bluepill as afio;
+    pub use rs_dma_bluepill as dma;
+    pub use rs_exti_bluepill as exti;
+    pub use rs_gpio_bluepill as gpio;
+    pub use rs_i2c_bluepill as i2c;
+    pub use rs_multi_pulse_bluepill as multi_pulse;
+    pub use rs_rcu_bluepill as rcu;
+    pub use rs_spi_bluepill as spi;
+    pub use rs_timer_bluepill as timer;
+    pub use rs_uart_bluepill as uart;
+    #[cfg(feature = "bluepill48")]
+    pub use rs_pinout48_bluepill as pinout;
+}
+
+#[cfg(feature = "bluepill")]
+pub use {
+    rs_adc_bluepill, rs_afio_bluepill, rs_dma_bluepill, rs_exti_bluepill, rs_gpio_bluepill,
+    rs_i2c_bluepill, rs_multi_pulse_bluepill, rs_rcu_bluepill, rs_spi_bluepill,
+    rs_timer_bluepill, rs_uart_bluepill,
+};
 
 // ---------------------------------------------------------------------------
 //  Deprecated legacy aliases

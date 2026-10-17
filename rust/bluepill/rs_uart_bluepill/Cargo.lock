@@ -62,6 +62,7 @@ dependencies = [
 name = "rs_uart_bluepill"
 version = "0.1.0"
 dependencies = [
+ "cty",
  "rs_bluepill",
  "rs_dma_bluepill",
  "rs_esprit",

@@ -42,7 +42,11 @@ pub const USART_CTL2_DMAT: u32 = 1 << 7;     // DMA enable transmitter
 // --- Configuration Constants ---
 pub const UART_DEFAULT_BAUDRATE: u32 = 115200;
 pub const UART0_DMA_TX_CHANNEL: usize = 3;     // DMA0 Channel 3 for USART0 TX
+pub const UART0_DMA_RX_CHANNEL: usize = 4;     // DMA0 Channel 4 for USART0 RX
 pub const UART1_DMA_TX_CHANNEL: usize = 6;     // DMA0 Channel 6 for USART1 TX
+pub const UART1_DMA_RX_CHANNEL: usize = 5;     // DMA0 Channel 5 for USART1 RX
+pub const UART2_DMA_TX_CHANNEL: usize = 1;     // DMA0 Channel 1 for USART2 TX
+pub const UART2_DMA_RX_CHANNEL: usize = 2;     // DMA0 Channel 2 for USART2 RX
 
 #[repr(C)]
 pub struct UartRegisters {

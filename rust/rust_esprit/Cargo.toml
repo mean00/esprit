@@ -22,6 +22,8 @@ rs_timer_bluepill = { path = "../bluepill/rs_timer_bluepill", optional = true }
 rs_adc_bluepill = { path = "../bluepill/rs_adc_bluepill", optional = true }
 rs_multi_pulse_bluepill = { path = "../bluepill/rs_multi_pulse_bluepill", optional = true }
 rs_uart_bluepill = { path = "../bluepill/rs_uart_bluepill", optional = true }
+rs_dma_bluepill = { path = "../bluepill/rs_dma_bluepill", optional = true }
+rs_afio_bluepill = { path = "../bluepill/rs_afio_bluepill", optional = true }
 rs_pinout48_bluepill = { path = "../bluepill/rs_pinout48_bluepill", optional = true }
 rs_spi_wrapped = { path = "../wrapped/rs_spi_wrapped", optional = true }
 rs_i2c_wrapped = { path = "../wrapped/rs_i2c_wrapped", optional = true }
@@ -62,6 +64,8 @@ bluepill = [
     "dep:rs_adc_bluepill",
     "dep:rs_multi_pulse_bluepill",
     "dep:rs_uart_bluepill",
+    "dep:rs_dma_bluepill",
+    "dep:rs_afio_bluepill",
 ]
 # Package of the bluepill compatible chip (CMake: USE_48PIN_PACKAGE / USE_64PIN_PACKAGE).
 # One of them is mandatory with `bluepill`; they select the pin/function mapping
