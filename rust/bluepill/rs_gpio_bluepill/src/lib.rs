@@ -1,5 +1,6 @@
 #![allow(unused_variables, unused_imports, unused_parens)]
 #![allow(non_camel_case_types, non_snake_case, dead_code)]
+#![feature(min_adt_const_params)]
 
 #![no_std]
 
@@ -34,7 +35,7 @@ pub enum Mode {
 }
 
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, core::marker::ConstParamTy)]
 pub enum Pin {
     PA0 = 0, PA1 = 1, PA2 = 2, PA3 = 3, PA4 = 4, PA5 = 5, PA6 = 6, PA7 = 7,
     PA8 = 8, PA9 = 9, PA10 = 10, PA11 = 11, PA12 = 12, PA13 = 13, PA14 = 14, PA15 = 15,

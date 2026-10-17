@@ -7,7 +7,7 @@ use crate::registers::*;
 use crate::timer::{ChannelMode, Timer};
 use rs_dma_bluepill::{DmaChannel, DmaEngine};
 use rs_gpio_bluepill::Pin;
-use rs_pinout48_bluepill::setup_timer_pin;
+use rs_pinout48_bluepill::{PinTimerConfig, setup_timer_pin, setup_timer_pin_hardware};
 
 /// Error type for DmaTimer initialization.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -27,10 +27,34 @@ pub struct DmaTimer {
 }
 
 impl DmaTimer {
+    /// Create a new `DmaTimer` for the given GPIO pin with compile-time constant resolution.
+    ///
+    /// The pin mapping is evaluated at compile-time, allowing the compiler to dead-code
+    /// eliminate peripheral tables when PIN is constant.
+    #[inline]
+    pub fn for_pin<const PIN: Pin>() -> Result<Self, DmaTimerError> {
+        let (timer_idx, channel, dma_engine, dma_channel_idx, needs_remap) =
+            PinTimerConfig::<PIN>::MAPPING.ok_or(DmaTimerError::PinNotSupported)?;
+
+        setup_timer_pin_hardware(PIN, needs_remap);
+
+        let timer = Timer::new(timer_idx).map_err(|_| DmaTimerError::InvalidChannel)?;
+        let dma = DmaChannel::new(dma_engine, dma_channel_idx);
+
+        Ok(Self {
+            timer,
+            channel,
+            pin: PIN,
+            dma,
+            rollover: 0,
+        })
+    }
+
     /// Create a new `DmaTimer` for the given GPIO pin.
     ///
     /// Automatically resolves the pin to its corresponding Timer peripheral,
     /// Channel, DMA engine, and DMA channel using `rs_pinout48_bluepill`.
+    #[inline]
     pub fn new(pin: Pin) -> Result<Self, DmaTimerError> {
         let (timer_idx, channel, dma_engine, dma_channel_idx) =
             setup_timer_pin(pin).ok_or(DmaTimerError::PinNotSupported)?;
@@ -56,6 +80,7 @@ impl DmaTimer {
     /// Configure the pin and timer for PWM output at `frequency_hz`.
     ///
     /// Returns the timer rollover period on success.
+    #[inline]
     pub fn pwm_setup(&mut self, frequency_hz: u32) -> Result<u32, DmaTimerError> {
         // Configure timer via its high-level API
         self.timer.disable();
@@ -73,6 +98,7 @@ impl DmaTimer {
     }
 
     /// Start a circular DMA transfer from the memory buffer to the timer compare register.
+    #[inline]
     pub fn start_dma(&mut self, data: *const u8, length: usize) {
         let periph_addr = self.timer.channel_compare_reg_addr(self.channel);
         let mem_addr = data as usize as u32;
@@ -139,6 +165,7 @@ impl DmaTimer {
     }
 
     /// Stop Timer and DMA, forcing the output channel low.
+    #[inline]
     pub fn stop(&mut self) {
         self.timer.disable();
         self.timer.set_channel_output(self.channel, false);

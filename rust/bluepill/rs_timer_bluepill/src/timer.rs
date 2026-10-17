@@ -25,6 +25,7 @@ pub struct Timer {
 
 impl Timer {
     /// Initialise a hardware timer by index (0 = TIM1, 1 = TIM2, 2 = TIM3, 3 = TIM4, 4 = TIM5).
+    #[inline]
     pub fn new(timer_idx: u32) -> Result<Self, &'static str> {
         let periph = match timer_idx {
             TIMER_INSTANCE_0 => Peripheral::Timer0,
@@ -120,6 +121,7 @@ impl Timer {
     ///
     /// Computes and sets prescaler=0 and auto-reload = (clock / freq) - 1.
     /// Returns the period (rollover count = CAR + 1).
+    #[inline]
     pub fn set_frequency(&mut self, frequency_hz: u32) -> Result<u32, &'static str> {
         let periph = match self.timer_idx {
             TIMER_INSTANCE_0 => Peripheral::Timer0,
@@ -145,6 +147,7 @@ impl Timer {
     }
 
     /// Set the compare mode (PWM0, PWM1, ForceLow) on a given channel (0..3).
+    #[inline]
     pub fn set_channel_mode(&mut self, channel: u32, mode: ChannelMode) {
         let mode_val = match mode {
             ChannelMode::Pwm0 => TIMER_CHCTL_MODE_PWM0,
@@ -186,6 +189,7 @@ impl Timer {
     }
 
     /// Set compare value (CCRx / CHCVx) for a channel.
+    #[inline]
     pub fn set_channel_compare(&mut self, channel: u32, value: u32) {
         unsafe {
             match channel {
@@ -199,6 +203,7 @@ impl Timer {
     }
 
     /// Enable or disable output on a channel in CHCTL2 (CCER).
+    #[inline]
     pub fn set_channel_output(&mut self, channel: u32, enabled: bool) {
         let bit = TIMER_CHCTL2_CH0EN << (channel * TIMER_CHCTL2_CHANNEL_SHIFT);
         unsafe {
@@ -213,6 +218,7 @@ impl Timer {
     }
 
     /// Enable or disable DMA request on a channel compare event (DIEN).
+    #[inline]
     pub fn enable_channel_dma(&mut self, channel: u32, enabled: bool) {
         let bit = 1 << (TIMER_DIEN_CH_DMA_BASE_BIT + channel);
         unsafe {
@@ -227,6 +233,7 @@ impl Timer {
     }
 
     /// Set DMA request source to capture/compare event (DMAS bit in CTL1).
+    #[inline]
     pub fn set_dma_on_compare_event(&mut self, enabled: bool) {
         unsafe {
             let mut ctl1 = read_volatile(&mut (*self.regs).ctl1);
@@ -240,6 +247,7 @@ impl Timer {
     }
 
     /// Return the peripheral memory address of the compare register (CHCVx).
+    #[inline]
     pub fn channel_compare_reg_addr(&self, channel: u32) -> u32 {
         unsafe {
             core::ptr::addr_of_mut!((*self.regs).chcv0) as usize as u32 + (channel * TIMER_REG_OFFSET_BYTES)

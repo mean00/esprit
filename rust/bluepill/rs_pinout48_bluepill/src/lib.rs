@@ -1,4 +1,5 @@
 #![allow(non_camel_case_types, non_snake_case)]
+#![feature(min_adt_const_params)]
 #![cfg_attr(not(test), no_std)]
 
 //! Pin -> peripheral function mapping for bluepill compatible MCUs (GD32F3 / CH32V3xx).
@@ -213,7 +214,8 @@ static TIMER_DMA_TABLE: [(u8, u8, DmaChannel); 18] = [
 // --- Public API ---
 
 /// True if the pin physically exists in the selected package.
-pub fn pin_exists(pin: Pin) -> bool {
+#[inline]
+pub const fn pin_exists(pin: Pin) -> bool {
     let value = pin as u32;
     let port = value / PINS_PER_PORT;
     let bit = value % PINS_PER_PORT;
@@ -232,58 +234,108 @@ pub fn pin_exists(pin: Pin) -> bool {
 }
 
 /// Function mapping of a pin. `None` if the pin does not exist in the selected package.
-pub fn pin_info(pin: Pin) -> Option<PinInfo> {
+#[inline]
+pub const fn pin_info(pin: Pin) -> Option<PinInfo> {
     if !pin_exists(pin) {
         return None;
     }
-    Some(PIN_TABLE.get(pin as usize).copied().unwrap_or(NONE))
+    let idx = pin as usize;
+    if idx < TABLE_PINS {
+        Some(PIN_TABLE[idx])
+    } else {
+        None
+    }
 }
 
 /// ADC channel connected to the pin.
+#[inline]
 pub fn adc_channel(pin: Pin) -> Option<u8> {
     pin_info(pin).and_then(|i| i.adc)
 }
 
 /// Timer channel connected to the pin.
-pub fn timer_channel(pin: Pin) -> Option<TimerChannel> {
-    pin_info(pin).and_then(|i| i.timer)
+#[inline]
+pub const fn timer_channel(pin: Pin) -> Option<TimerChannel> {
+    match pin_info(pin) {
+        Some(i) => i.timer,
+        None => None,
+    }
 }
 
 /// DAC channel connected to the pin.
+#[inline]
 pub fn dac_channel(pin: Pin) -> Option<u8> {
     pin_info(pin).and_then(|i| i.dac)
 }
 
 /// I2C instance/role connected to the pin.
+#[inline]
 pub fn i2c_pin(pin: Pin) -> Option<I2cPin> {
     pin_info(pin).and_then(|i| i.i2c)
 }
 
 /// SPI instance/role connected to the pin.
+#[inline]
 pub fn spi_pin(pin: Pin) -> Option<SpiPin> {
     pin_info(pin).and_then(|i| i.spi)
 }
 
 /// UART instance/role connected to the pin.
+#[inline]
 pub fn uart_pin(pin: Pin) -> Option<UartPin> {
     pin_info(pin).and_then(|i| i.uart)
 }
 
 /// DMA engine/channel serving a timer channel.
-pub fn timer_dma(timer: u8, channel: u8) -> Option<DmaChannel> {
-    TIMER_DMA_TABLE.iter().find(|e| e.0 == timer && e.1 == channel).map(|e| e.2)
+#[inline]
+pub const fn timer_dma(timer: u8, channel: u8) -> Option<DmaChannel> {
+    let mut i = 0;
+    while i < TIMER_DMA_TABLE.len() {
+        let entry = &TIMER_DMA_TABLE[i];
+        if entry.0 == timer && entry.1 == channel {
+            return Some(entry.2);
+        }
+        i += 1;
+    }
+    None
 }
 
-/// Setup a pin for timer PWM output and resolve its Timer and DMA assignments.
-///
-/// Automatically handles GPIO configuration (Pwm mode, 50MHz) and AFIO remapping
-/// / JTAG pin release if required by the board pinout.
-/// Returns `Some((timer_idx, channel_idx, dma_engine, dma_channel_idx))` on success.
-pub fn setup_timer_pin(pin: Pin) -> Option<(u32, u32, rs_dma_bluepill::DmaEngine, usize)> {
-    let t_chan = timer_channel(pin)?;
-    let dma = timer_dma(t_chan.timer, t_chan.channel)?;
+/// Compile-time constant resolution of a pin to its (timer, channel, dma_engine, dma_channel, needs_remap).
+#[inline]
+pub const fn timer_pin_const_mapping(pin: Pin) -> Option<(u32, u32, rs_dma_bluepill::DmaEngine, usize, bool)> {
+    let t_chan = match timer_channel(pin) {
+        Some(t) => t,
+        None => return None,
+    };
+    let dma = match timer_dma(t_chan.timer, t_chan.channel) {
+        Some(d) => d,
+        None => return None,
+    };
+    let dma_engine = match dma.engine {
+        registers::DMA_ENGINE0 => rs_dma_bluepill::DmaEngine::Dma0,
+        _ => rs_dma_bluepill::DmaEngine::Dma1,
+    };
+    Some((
+        t_chan.timer as u32,
+        t_chan.channel as u32,
+        dma_engine,
+        dma.channel as usize,
+        t_chan.needs_remap,
+    ))
+}
 
-    if t_chan.needs_remap {
+/// Associated constant resolution of pin mappings.
+pub struct PinTimerConfig<const PIN: Pin>;
+
+impl<const PIN: Pin> PinTimerConfig<PIN> {
+    pub const MAPPING: Option<(u32, u32, rs_dma_bluepill::DmaEngine, usize, bool)> =
+        timer_pin_const_mapping(PIN);
+}
+
+/// Configure the hardware AFIO and GPIO pins for timer PWM output.
+#[inline]
+pub fn setup_timer_pin_hardware(pin: Pin, needs_remap: bool) {
+    if needs_remap {
         // PB4 and PB5 need JTAG pins released and Timer 2 (TIM3) partially remapped
         if pin == Pin::PB4 || pin == Pin::PB5 {
             rs_afio_bluepill::release_jtag_pins();
@@ -292,18 +344,18 @@ pub fn setup_timer_pin(pin: Pin) -> Option<(u32, u32, rs_dma_bluepill::DmaEngine
     }
 
     rs_gpio_bluepill::set_mode(pin, rs_gpio_bluepill::Mode::Pwm, 50);
+}
 
-    let dma_engine = match dma.engine {
-        registers::DMA_ENGINE0 => rs_dma_bluepill::DmaEngine::Dma0,
-        _ => rs_dma_bluepill::DmaEngine::Dma1,
-    };
-
-    Some((
-        t_chan.timer as u32,
-        t_chan.channel as u32,
-        dma_engine,
-        dma.channel as usize,
-    ))
+/// Setup a pin for timer PWM output and resolve its Timer and DMA assignments.
+///
+/// Automatically handles GPIO configuration (Pwm mode, 50MHz) and AFIO remapping
+/// / JTAG pin release if required by the board pinout.
+/// Returns `Some((timer_idx, channel_idx, dma_engine, dma_channel_idx))` on success.
+#[inline]
+pub fn setup_timer_pin(pin: Pin) -> Option<(u32, u32, rs_dma_bluepill::DmaEngine, usize)> {
+    let (timer, channel, dma_engine, dma_channel, needs_remap) = timer_pin_const_mapping(pin)?;
+    setup_timer_pin_hardware(pin, needs_remap);
+    Some((timer, channel, dma_engine, dma_channel))
 }
 
 /// Idiomatic struct interface for query-based pinout and peripheral mapping.
