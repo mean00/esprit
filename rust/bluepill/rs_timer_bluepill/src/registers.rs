@@ -18,7 +18,10 @@ pub const TIMER_CHANNEL_1: u32 = 1;
 pub const TIMER_CHANNEL_2: u32 = 2;
 pub const TIMER_CHANNEL_3: u32 = 3;
 
-pub const TIMER_REG_OFFSET_BYTES: u32 = 4;
+/// Byte distance between consecutive channel compare registers (CHCV0, CHCV1, ...),
+/// derived from [`TimerRegisters`] so the struct stays the single source of truth.
+pub const TIMER_REG_OFFSET_BYTES: u32 =
+    (core::mem::offset_of!(TimerRegisters, chcv1) - core::mem::offset_of!(TimerRegisters, chcv0)) as u32;
 pub const TIMER_PRESCALER_1MS_72MHZ: u32 = 71999;
 pub const TIMER_HANDLE_CHANNEL_SHIFT: u32 = 8;
 pub const TIMER_HANDLE_MASK: u32 = 0xFF;
@@ -84,6 +87,15 @@ pub struct TimerRegisters {
     pub dmacfg: u32,
     pub dmatb: u32,
 }
+
+// channel_compare_reg_addr() computes CHCVx as CHCV0 + channel * TIMER_REG_OFFSET_BYTES, which is
+// only valid while the four compare registers are evenly spaced.
+const _: () = assert!(
+    core::mem::offset_of!(TimerRegisters, chcv3) - core::mem::offset_of!(TimerRegisters, chcv0)
+        == 3 * TIMER_REG_OFFSET_BYTES as usize
+        && core::mem::offset_of!(TimerRegisters, chcv2) - core::mem::offset_of!(TimerRegisters, chcv1)
+            == TIMER_REG_OFFSET_BYTES as usize
+);
 
 impl TimerRegisters {
     pub fn ptr(timer_idx: u32) -> *mut Self {
