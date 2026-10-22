@@ -473,8 +473,9 @@ pub fn get_time_us() -> u32 {
 //  Internal helpers
 // ---------------------------------------------------------------------------
 
-/// Kernel tick rate in Hz, taken from `FreeRTOSConfig.h` (`configTICK_RATE_HZ`).
-const TICK_RATE_HZ: u32 = crate::c_freertos::configTICK_RATE_HZ_RUST;
+/// Kernel tick rate in Hz (`configTICK_RATE_HZ` / `CONFIG_FREERTOS_HZ`), from
+/// `crate::kernel`: it belongs to the kernel we link, not to the CPU.
+const TICK_RATE_HZ: u32 = crate::kernel::TICK_RATE_HZ;
 
 /// Convert milliseconds to FreeRTOS ticks.
 /// `u32::MAX` is interpreted as "infinite wait" (portMAX_DELAY).

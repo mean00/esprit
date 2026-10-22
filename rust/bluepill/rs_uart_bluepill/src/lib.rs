@@ -25,6 +25,17 @@ unsafe extern "C" {
         pvTimerID: *mut c_void,
         pxCallbackFunction: unsafe extern "C" fn(xTimer: *mut c_void),
     ) -> *mut c_void;
+    /// Same as `xTimerCreate()`, with the `Timer_t` taken from `pxTimerBuffer`
+    /// instead of `pvPortMalloc` (`FreeRTOS/timers.c:370`; it tags the timer
+    /// `tmrSTATUS_IS_STATICALLY_ALLOCATED`, so `xTimerDelete()` only unlinks it).
+    fn xTimerCreateStatic(
+        pcTimerName: *const cty::c_char,
+        xTimerPeriodInTicks: u32,
+        uxAutoReload: u32,
+        pvTimerID: *mut c_void,
+        pxCallbackFunction: unsafe extern "C" fn(xTimer: *mut c_void),
+        pxTimerBuffer: *mut TimerStorage,
+    ) -> *mut c_void;
     fn xTimerGenericCommandFromTask(
         xTimer: *mut c_void,
         xCommandID: i32,
@@ -37,6 +48,46 @@ unsafe extern "C" {
     fn vPortEnterCritical();
     fn vPortExitCritical();
 }
+
+/// `sizeof(StaticTimer_t)` of the kernel we are built against, i.e.
+/// `FREERTOS_SIZEOF_StaticTimer_t` in the generated `<build>/freertos_struct.h`
+/// (the same way `esprit/rust/rs_rtos/src/kernel/esprit/generated.rs` carries
+/// `STATIC_QUEUE_BYTES`).
+const STATIC_TIMER_BYTES: usize = 44;
+
+/// Words needed for that many bytes.  A 32-bit alignment is all the control
+/// block needs: a `ListItem_t`, a `TickType_t`, two `UBaseType_t` and a flag.
+const STATIC_TIMER_WORDS: usize = STATIC_TIMER_BYTES / core::mem::size_of::<u32>();
+
+/// A trailing partial word would mean the storage is smaller than the object the
+/// kernel writes into it, so refuse to compile.
+const _: () = assert!(
+    STATIC_TIMER_BYTES.is_multiple_of(core::mem::size_of::<u32>()),
+    "STATIC_TIMER_BYTES is not a whole number of u32 words"
+);
+
+/// Storage for one statically created timer (`.bss`).
+#[repr(C)]
+struct TimerStorage {
+    words: [u32; STATIC_TIMER_WORDS],
+}
+
+impl TimerStorage {
+    /// Zeroed storage: the *Static() API expects uninitialised memory and sets
+    /// up everything it needs.
+    const fn new() -> Self {
+        Self {
+            words: [0; STATIC_TIMER_WORDS],
+        }
+    }
+}
+
+/// The RX poll timers of the three UART instances, one `.bss` slot each
+/// (malloc_used.md §8.1 S3b).  This cannot live inside `UartRx`: `new()` returns
+/// the struct by value and it is then moved into `RX_INSTANCES[]`, so a pointer
+/// to its own field would dangle - the kernel keeps the address it was given.
+static mut TIMER_STORAGE: [TimerStorage; UART_MAX_INSTANCES] =
+    [TimerStorage::new(), TimerStorage::new(), TimerStorage::new()];
 
 #[inline]
 pub(crate) unsafe fn xTimerStart(timer: *mut c_void, ticks_to_wait: u32) -> i32 {
@@ -253,13 +304,20 @@ impl UartRx {
             None
         };
 
+        // Static timer storage, one slot per UART instance (S3b): the RX poll
+        // timer used to be a pvPortMalloc block that lived as long as the UART.
+        assert!(
+            (instance as usize) < UART_MAX_INSTANCES,
+            "uart_rx: instance out of range"
+        );
         let timer = unsafe {
-            xTimerCreate(
+            xTimerCreateStatic(
                 b"uart_rx\0".as_ptr() as *const cty::c_char,
                 20,
                 1,
                 instance as usize as *mut c_void,
                 uart_rx_timer_cb,
+                core::ptr::addr_of_mut!(TIMER_STORAGE[instance as usize]),
             )
         };
 

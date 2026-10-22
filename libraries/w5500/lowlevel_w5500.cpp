@@ -79,6 +79,9 @@ static const uint8_t socket_rxsize[8] = {4, 4, 4, 0, 0, 0, 0, 2};
 /** @brief SPI bus mutex (created in init()). */
 static SemaphoreHandle_t gSpiMutex = NULL;
 
+/** @brief Storage of @ref gSpiMutex: the mutex lives in .bss, not in the heap. */
+static StaticSemaphore_t gSpiMutexStorage;
+
 // ---------------------------------------------------------------------------
 // Socket registry (for the W5500 task to poll)
 // ---------------------------------------------------------------------------
@@ -231,7 +234,8 @@ static void wiz_recv_data(uint8_t sn, uint8_t *wizdata, uint16_t len)
 class lnTaskW5500 : public lnTask
 {
   public:
-    lnTaskW5500(const char *name, uint32_t priority = 3, uint32_t taskSize = 100) : lnTask(name, priority, taskSize)
+    lnTaskW5500(const char *name, uint32_t priority, StackType_t *stack, uint32_t taskSize)
+        : lnTask(name, priority, stack, taskSize)
     {
         _state = W5_Idle;
     }
@@ -263,6 +267,11 @@ class lnTaskW5500 : public lnTask
         _state = W5_##x;                                                                                               \
         Logger("Changing state to %d\n", _state);                                                                      \
     }
+
+// The stack of the w5500 task lives here, outside the (heap allocated) object:
+// usable stack + the register save area lnTask::start() adds on top.
+#define W5500_TASK_STACK_BYTES (8 * 1024)
+static StackType_t _w500TaskStack[LN_TASK_STACK_WORDS(W5500_TASK_STACK_BYTES)];
 
 static lnTaskW5500 *_w500Task = NULL;
 
@@ -304,7 +313,7 @@ bool W5500LowLevel::init(int spiInstance, const lnW5500SPI *pins)
     _pins = pins;
 
     // Create the SPI bus mutex
-    gSpiMutex = xSemaphoreCreateMutex();
+    gSpiMutex = xSemaphoreCreateMutexStatic(&gSpiMutexStorage);
 
     // Configure GPIOs for SPI function
     lnPinMode(_pins->mosi, lnSPI_MODE);
@@ -375,7 +384,7 @@ bool W5500LowLevel::start(lnLwIpSysCallback cb, void *arg)
         write_to_reg(Sn_RXBUF_SIZE(i), 1, &socket_rxsize[i]);
     }
 
-    _w500Task = new lnTaskW5500("w5500", 5, 8 * 1024);
+    _w500Task = new lnTaskW5500("w5500", 5, _w500TaskStack, W5500_TASK_STACK_BYTES);
     _w500Task->start();
     return true;
 }

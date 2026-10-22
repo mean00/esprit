@@ -2,6 +2,13 @@
 
 add_library(ln_utils OBJECT)
 target_sources(ln_utils PRIVATE lnFreeRTOS_pp.cpp lnFreeRTOSDebug.cpp lnDebug.cpp systemHelper.cpp lnStopWatch.cpp)
+# The static storage of the FreeRTOS wrappers (see lnFreeRTOS_pp.h) lives inside
+# the wrapped object, so it is allocated where that object is declared.  This
+# translation unit keeps -fdata-sections anyway: its own statics (and the
+# freeRTOSDebug reference) then get one .bss section each and --gc-sections can
+# drop the ones a firmware never uses; without it the whole .bss of this object
+# would be kept.
+set_source_files_properties(lnFreeRTOS_pp.cpp PROPERTIES COMPILE_OPTIONS "-fdata-sections")
 # Millisecond timebase: tick-based default, or an external (per-MCU) one
 # selected via LN_EXTERNAL_SYSTEM_HELPER (e.g. ESP-IDF's esp_timer-based
 # lnSystemTime_esp32.cpp in mcus/riscv_esp32/src/).

@@ -70,7 +70,15 @@ extern void do_assert(const char *a);
 #define configUSE_MALLOC_FAILED_HOOK 1
 #define configTICK_RATE_HZ ((TickType_t)1000)
 #define configSUPPORT_DYNAMIC_ALLOCATION 1
-#define configSUPPORT_STATIC_ALLOCATION 0
+/* Static allocation is on so the kernel objects that never go away do not come
+ * from pvPortMalloc(): the Idle task(s) (vApplicationGetIdleTaskMemory), the
+ * timer service task (vApplicationGetTimerTaskMemory) and the timer command
+ * queue (timers.c) all live in .bss now.  The stack sizes are unchanged
+ * (configMINIMAL_STACK_SIZE / configTIMER_TASK_STACK_DEPTH), and the two
+ * vApplicationGet*TaskMemory() hooks are the ones shipped in tasks.c, hence
+ * configKERNEL_PROVIDED_STATIC_MEMORY. */
+#define configSUPPORT_STATIC_ALLOCATION 1
+#define configKERNEL_PROVIDED_STATIC_MEMORY 1
 #define configUSE_PREEMPTION 1
 #define configUSE_IDLE_HOOK 0
 #define configUSE_TICK_HOOK 1 // MEANX

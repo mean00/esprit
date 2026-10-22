@@ -68,6 +68,9 @@ void vApplicationDaemonTaskStartupHook( void )
 
 #define LN_INITIAL_STACK_SIZE 8 * 1024
 #define LN_INITIAL_TASK_PRIORITY 2
+/* entryTask: TCB + stack in .bss instead of the FreeRTOS heap (lnFreeRTOS_pp.h) */
+static StaticTask_t entryTaskTcb;
+static StackType_t entryTaskStack[LN_TASK_STACK_WORDS(LN_INITIAL_STACK_SIZE)];
 uint32_t SystemCoreClock = 125000000;
 
 #ifndef ESPRIT_MULTICORE
@@ -98,7 +101,8 @@ int main()
 #endif
 
 
-    lnCreateTask(initTask, "entryTask", LN_INITIAL_STACK_SIZE, NULL, LN_INITIAL_TASK_PRIORITY);
+    lnCreateTaskStatic(initTask, "entryTask", LN_INITIAL_STACK_SIZE, NULL, LN_INITIAL_TASK_PRIORITY, entryTaskStack,
+                       &entryTaskTcb);
 #ifdef ESPRIT_MULTICORE
     multicore_reset_core1();
 #endif

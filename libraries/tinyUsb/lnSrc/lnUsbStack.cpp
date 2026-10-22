@@ -6,6 +6,8 @@
 #include "lnUSDB_tinyUSB.h"
 #include "tusb.h"
 
+#include <new> // placement new for the .bss lnUsbDevice
+
 #if CFG_TUSB_DEBUG != 0
 #define USBD_EXTRA_STACK 1024
 #else
@@ -13,6 +15,9 @@
 #endif
 #define USB_BASE_STACK_SIZE 1500 // in bytes
 #define USBD_STACK_SIZE (USB_BASE_STACK_SIZE + USBD_EXTRA_STACK)
+/* usbd task: TCB + stack in .bss instead of the FreeRTOS heap (lnFreeRTOS_pp.h) */
+static StaticTask_t _usbdTcb;
+static StackType_t _usbdStack[LN_TASK_STACK_WORDS(USBD_STACK_SIZE)];
 // local prototypes
 void dcd_handle_bus_reset(void);
 void dcd_ep_ctr_handler(void);
@@ -96,7 +101,14 @@ lnUsbStack::~lnUsbStack()
 
 void lnUsbStack::init(int nb, const char **desc)
 {
-    _usbDevice = new lnUsbDevice(0);
+    /* There is exactly one USB device object per probe and it is never
+     * destroyed, so it lives in .bss instead of the heap (malloc_used.md §8.1
+     * B4).  Placement new, not a plain static: lnUsbDevice has a virtual
+     * destructor, so a static instance would pull newlib's exit machinery in
+     * (__cxa_atexit + on_exits) for a destructor nobody calls - same reason as
+     * bmp_usb.cpp's lnUsbStack. */
+    alignas(lnUsbDevice) static uint8_t usbDeviceStorage[sizeof(lnUsbDevice)];
+    _usbDevice = new (usbDeviceStorage) lnUsbDevice(0);
     _usbDevice->init();
     _usbDevice->registerEventHandler(&myEventHandler);
     _deviceDescriptor = desc;
@@ -122,7 +134,7 @@ void lnUsbStack::sendEvent(lnUsbStackEvents ev)
 */
 void lnUsbStack::start()
 {
-    lnCreateTask(tusbTrampoline, "usbd", USBD_STACK_SIZE, this, configMAX_PRIORITIES - 1);
+    lnCreateTaskStatic(tusbTrampoline, "usbd", USBD_STACK_SIZE, this, configMAX_PRIORITIES - 1, _usbdStack, &_usbdTcb);
 }
 /**
 

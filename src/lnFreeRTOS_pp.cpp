@@ -70,11 +70,12 @@ extern "C"
 //-- Binary Semaphor --
 
 /**
- *
+ * The queue behind the handle lives in _storage (see lnFreeRTOS_pp.h), the
+ * constructor only initialises it.
  */
 lnBinarySemaphore::lnBinarySemaphore()
 {
-    _handle = xSemaphoreCreateBinary();
+    _handle = xSemaphoreCreateBinaryStatic(&_storage);
     xAssert(_handle);
 }
 /**
@@ -139,7 +140,8 @@ extern "C" void lnDelay_C(uint32_t ms)
 
 lnMutex::lnMutex()
 {
-    _handle = xSemaphoreCreateRecursiveMutex();
+    _handle = xSemaphoreCreateRecursiveMutexStatic(&_storage);
+    xAssert(_handle);
 }
 bool lnMutex::lock()
 {
@@ -159,24 +161,30 @@ bool lnMutex::unlock()
  * @brief Construct a new x Task::X Task object
  *
  * @param name
- * @param entryPoint
  * @param priority
- * @param taskSize
+ * @param stack     caller owned buffer, LN_TASK_STACK_WORDS(taskSize) deep
+ * @param taskSize  usable stack, in bytes
  */
-lnTask::lnTask(const char *name, uint32_t priority, uint32_t taskSize)
+lnTask::lnTask(const char *name, uint32_t priority, StackType_t *stack, uint32_t taskSize)
 {
+    xAssert(stack);
+    _taskHandle = NULL; // set by start()
     _priority = priority;
     _taskSize = taskSize;
+    _stack = stack;
     _name = name;
 }
-/**
- *
- */
+
 #undef xTaskCreate
+/**
+ * The TCB lives in _storage (one per lnTask) and the stack is the buffer the
+ * caller gave to the constructor, so the kernel allocates nothing here.
+ */
 void lnTask::start()
 {
-    BaseType_t er = xTaskCreate(lnTask::Trampoline, _name, adjustStackSize(_taskSize), this, _priority, &_taskHandle);
-    xAssert(er == pdPASS);
+    configSTACK_DEPTH_TYPE stackDepth = adjustStackSize(_taskSize);
+    _taskHandle = xTaskCreateStatic(lnTask::Trampoline, _name, stackDepth, this, _priority, _stack, &_storage);
+    xAssert(_taskHandle);
 }
 /**
  * @brief Destroy the x Taskx Task object
@@ -191,7 +199,8 @@ lnTask::~lnTask()
  */
 lnEventGroup::lnEventGroup()
 {
-    _handle = xEventGroupCreate();
+    _handle = xEventGroupCreateStatic(&_storage);
+    xAssert(_handle);
 }
 /**
  *
@@ -406,11 +415,8 @@ bool lnCreateTask(
     xAssert(0);
 }
 
-bool lnCreateTask_core2(
-    TaskFunction_t pxTaskCode,
-    const char *const pcName, 
-    uint32_t stackSizeInBytes, 
-    void *const pvParameters, UBaseType_t uxPriority)
+bool lnCreateTask_core2(TaskFunction_t pxTaskCode, const char *const pcName, uint32_t stackSizeInBytes,
+                        void *const pvParameters, UBaseType_t uxPriority)
 {
     TaskHandle_t handle;
     if (pdPASS == xTaskCreate(pxTaskCode, pcName, adjustStackSize(stackSizeInBytes), pvParameters, uxPriority, &handle))
@@ -421,6 +427,28 @@ bool lnCreateTask_core2(
         return true;
     }
     xAssert(0);
+}
+/**
+ * Same as lnCreateTask(), with the TCB and the stack living in the caller's
+ * storage: nothing is taken from the heap, so creation cannot fail.
+ * The stack depth is the same adjustStackSize() the dynamic path uses, i.e. the
+ * task gets the same usable stack for the same byte count; the buffer itself is
+ * sized with LN_TASK_STACK_WORDS() so it is never smaller than that depth.
+ */
+bool lnCreateTaskStatic(
+    TaskFunction_t pxTaskCode,
+    const char *const pcName, /*lint !e971 Unqualified char types are allowed for strings and single characters only. */
+    uint32_t stackSizeInBytes, void *const pvParameters, UBaseType_t uxPriority, StackType_t *stack, StaticTask_t *tcb)
+{
+    xAssert(stack);
+    xAssert(tcb);
+    TaskHandle_t handle =
+        xTaskCreateStatic(pxTaskCode, pcName, adjustStackSize(stackSizeInBytes), pvParameters, uxPriority, stack, tcb);
+    xAssert(handle); // cannot fail, everything is provided
+#if (configNUMBER_OF_CORES > 1) && defined(configUSE_CORE_AFFINITY)
+    vTaskCoreAffinitySet(handle, (1 << 0));
+#endif
+    return true;
 }
 /**
  * @brief
@@ -440,6 +468,7 @@ static void lnTimerCallbackFunction(TimerHandle_t xTimer)
  */
 lnPeriodicTimer::lnPeriodicTimer()
 {
+    _timerHandle = NULL;
 }
 /**
  * @brief Construct a new ln Periodic Timer::init object
@@ -449,7 +478,9 @@ lnPeriodicTimer::lnPeriodicTimer()
  */
 void lnPeriodicTimer::init(const char *name, uint32_t periodInMs)
 {
-    _timerHandle = xTimerCreate(name, periodInMs, true, this, lnTimerCallbackFunction);
+    xAssert(!_timerHandle); // init() is only called once
+    _timerHandle = xTimerCreateStatic(name, periodInMs, true, this, lnTimerCallbackFunction, &_storage);
+    xAssert(_timerHandle);
 }
 /**
  * @brief

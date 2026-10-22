@@ -38,6 +38,15 @@ extern "C"
 #define EventGroupHandle_t int
 #define SemaphoreHandle_t int
 #define TimerHandle_t int
+/* The C++ wrappers (lnFreeRTOS_pp.h) keep the kernel object's static storage
+ * inside the object, so these type names have to exist here too.  Nothing in
+ * this flavor ever calls the kernel, so plain dummies are enough: they only
+ * need to be named types, their size is never used. */
+typedef int StaticSemaphore_t;
+typedef int StaticEventGroup_t;
+typedef int StaticTimer_t;
+typedef int StaticTask_t;
+typedef int StackType_t;
 #else
 #include "lnFreeRTOS_default.h"
 #endif

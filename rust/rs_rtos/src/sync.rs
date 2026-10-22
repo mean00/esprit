@@ -11,7 +11,24 @@
 //! * [`BinarySemaphore`] – a binary (0/1) semaphore.
 //! * [`CountingSemaphore`] – a semaphore with a configurable max count.
 //!
-//! All wrappers own the underlying FreeRTOS kernel object and free it on drop.
+//! Every wrapper allocates its kernel object with the FreeRTOS *Static() API:
+//! the 80 B queue control block lives inside the wrapper (`.bss` as soon as the
+//! wrapper is a `static`), so a mutex or a semaphore costs **no heap**.
+//!
+//! # Lifetime rule
+//!
+//! A statically allocated kernel object lives in the buffer it was given and its
+//! internal lists point back into that buffer, so it must stay where it was
+//! created.  Rather than forcing every wrapper to be pinned, the object is
+//! created on **first use**: moving a wrapper around before that is harmless,
+//! which is what lets `Mutex::new()` stay a `const fn` and lets wrappers live in
+//! `Option`s and `LazyLock`s that move them once.  After the first use the rule
+//! is the one the C++ wrappers already follow (`lnMutex` and friends keep a
+//! `StaticSemaphore_t` in the object): do not move it, do not put it in a
+//! growing `Vec`, do not `memcpy` it.
+//!
+//! `Drop` still calls `vQueueDelete()`, which for a static object only tears the
+//! kernel state down — FreeRTOS never frees the caller's buffer.
 
 use crate::prelude::*;
 use crate::c_freertos as rn_freertos_c;
@@ -24,6 +41,182 @@ use core::convert::From;
 //  Single source of truth: `crate::task::ms_to_ticks` (uses the real
 //  `configTICK_RATE_HZ` from FreeRTOSConfig.h).
 // ---------------------------------------------------------------------------
+
+// ===========================================================================
+//  Static kernel objects
+//
+//  `STATIC_QUEUE_BYTES` is `sizeof(StaticQueue_t)` of the kernel we are built
+//  against, so it lives in `crate::kernel` (one file per kernel) together with
+//  the other kernel constants.  It is not a property of the CPU: the in-tree
+//  kernel's control block is 80 bytes, ESP-IDF's is 84.  Each of those files
+//  documents how the number is measured and how the build checks it.
+//
+//  Why every wrapper below shares that one storage type: the semaphore and
+//  mutex creators are *macros* in `semphr.h` (`xSemaphoreCreateMutexStatic`,
+//  `xSemaphoreCreateRecursiveMutexStatic`, `xSemaphoreCreateCountingStatic`,
+//  `xSemaphoreCreateBinaryStatic`), and bindgen cannot bind a macro.  What is
+//  callable is the queue function behind each of them
+//  (`xQueueCreateMutexStatic`, `xQueueCreateCountingSemaphoreStatic`), and its
+//  buffer is a `StaticQueue_t` - which is also the type of a
+//  `StaticSemaphore_t` (`FreeRTOS.h`: `typedef StaticQueue_t
+//  StaticSemaphore_t;`): a mutex or a semaphore *is* a `Queue_t`, with another
+//  `ucQueueType` tag and a zero-length item.  So there is exactly one object
+//  type to size, and `KernelObject` only picks which creator to call.  The
+//  constant is named after the C type it measures, not after its users: the
+//  real queue (`crate::queue::Queue`) does not use it, it takes its control
+//  block and item buffer from the heap.
+// ===========================================================================
+
+/// `sizeof(StaticQueue_t)` (also the size of `StaticSemaphore_t`, which is the
+/// same control block under another name).
+const STATIC_QUEUE_BYTES: usize = crate::kernel::STATIC_QUEUE_BYTES;
+
+/// Words needed for that many bytes.  A 32-bit alignment is all the control
+/// block needs: it only holds pointers, `TickType_t` and `UBaseType_t`.
+const STATIC_QUEUE_WORDS: usize = STATIC_QUEUE_BYTES / mem::size_of::<u32>();
+
+/// A trailing partial word would mean the buffer is smaller than the object the
+/// kernel writes into it, so refuse to compile.
+const _: () = assert!(
+    STATIC_QUEUE_BYTES.is_multiple_of(mem::size_of::<u32>()),
+    "STATIC_QUEUE_BYTES is not a whole number of u32 words"
+);
+
+/// Storage for one statically created queue/semaphore (`.bss` when the wrapper
+/// is a `static`, part of the wrapper object otherwise).
+///
+/// One type for all of them, mutexes included: see "Static kernel objects"
+/// above.
+#[repr(C)]
+struct QueueStorage {
+    words: [u32; STATIC_QUEUE_WORDS],
+}
+
+impl QueueStorage {
+    /// Zeroed storage: the *Static() API expects uninitialised memory and sets
+    /// up everything it needs.
+    const fn new() -> Self {
+        Self {
+            words: [0; STATIC_QUEUE_WORDS],
+        }
+    }
+}
+
+/// `ucQueueType` of a plain mutex (FreeRTOS `queue.h`: `queueQUEUE_TYPE_MUTEX`).
+const QUEUE_TYPE_MUTEX: u8 = 1;
+/// `ucQueueType` of a recursive mutex (`queue.h`: `queueQUEUE_TYPE_RECURSIVE_MUTEX`).
+const QUEUE_TYPE_RECURSIVE_MUTEX: u8 = 4;
+
+/// Which kernel object a wrapper needs, in terms of the FreeRTOS *Static() API.
+///
+/// The `ucQueueType` tag is only kept by the kernel for tracing and
+/// `pcQueueGetName()`, it does not change the behaviour: a mutex is set up by
+/// `prvInitialiseMutex()` whichever tag is passed.
+#[derive(Clone, Copy)]
+enum KernelObject {
+    /// Mutex created by `xQueueCreateMutexStatic()`, used as the gate of
+    /// [`OnceLock`] (semaphore-style take/give, no owner tracking).
+    Mutex,
+    /// Recursive mutex, what [`Mutex`] and [`RecursiveMutex`] use.
+    RecursiveMutex,
+    /// Counting semaphore of length 1, the static form of
+    /// `xQueueCreateCountingSemaphore(1, given)`.
+    BinarySemaphore { given: bool },
+    /// Counting semaphore with an explicit ceiling and start value.
+    CountingSemaphore { max: u32, initial: u32 },
+}
+
+impl KernelObject {
+    /// Create the object inside `storage` and return its handle.
+    ///
+    /// The *Static() creators only fail when the buffer is NULL, which cannot
+    /// happen here (the storage belongs to the wrapper), so a NULL return is a
+    /// bug — hence the assert in [`handle_or_create`], not an error path.
+    fn create(
+        self,
+        storage: *mut rn_freertos_c::StaticQueue_t,
+    ) -> rn_freertos_c::SemaphoreHandle_t {
+        unsafe {
+            match self {
+                KernelObject::Mutex => {
+                    rn_freertos_c::xQueueCreateMutexStatic(QUEUE_TYPE_MUTEX, storage)
+                }
+                KernelObject::RecursiveMutex => {
+                    rn_freertos_c::xQueueCreateMutexStatic(QUEUE_TYPE_RECURSIVE_MUTEX, storage)
+                }
+                KernelObject::BinarySemaphore { given } => {
+                    rn_freertos_c::xQueueCreateCountingSemaphoreStatic(1, given as _, storage)
+                }
+                KernelObject::CountingSemaphore { max, initial } => {
+                    rn_freertos_c::xQueueCreateCountingSemaphoreStatic(
+                        max as _,
+                        initial as _,
+                        storage,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/// `taskSCHEDULER_RUNNING` from FreeRTOS `task.h`.
+const TASK_SCHEDULER_RUNNING: rn_freertos_c::BaseType_t = 1;
+
+/// Handle of the kernel object held in `storage`, created on first use.
+///
+/// See the "Lifetime rule" in the module documentation: the object is created
+/// here, on first use, so the wrapper may still be moved before that.
+///
+/// Consequence for ISR callers (`give_from_isr`, ...): the wrapper must have
+/// been used once from task context, which is where such a semaphore is created
+/// anyway.
+fn handle_or_create(
+    handle: &UnsafeCell<rn_freertos_c::SemaphoreHandle_t>,
+    storage: &UnsafeCell<QueueStorage>,
+    object: KernelObject,
+) -> rn_freertos_c::SemaphoreHandle_t {
+    let mut created = unsafe { *handle.get() };
+    if !created.is_null() {
+        return created;
+    }
+
+    // First use.  Only one task may build the object in its storage, so the
+    // check-and-create runs in a critical section -- but only while the
+    // scheduler runs: `vPortEnterCritical()` must not be used before that
+    // (the ports start with `uxCriticalNesting = 0xaaaaaaaa`, so
+    // `vPortExitCritical()` would never unmask interrupts again), and before the
+    // scheduler there is no other task to race with anyway.  The *Static()
+    // creators neither block nor allocate, so running them here is safe.
+    let guarded =
+        unsafe { rn_freertos_c::xTaskGetSchedulerState() == TASK_SCHEDULER_RUNNING };
+    if guarded {
+        unsafe { rn_freertos_c::vPortEnterCritical() };
+    }
+    created = unsafe { *handle.get() };
+    if created.is_null() {
+        created = object.create(storage.get().cast());
+        assert!(
+            !created.is_null(),
+            "static FreeRTOS object creation returned NULL"
+        );
+        unsafe { *handle.get() = created };
+    }
+    if guarded {
+        unsafe { rn_freertos_c::vPortExitCritical() };
+    }
+    created
+}
+
+/// Delete a kernel object if it was ever created (the wrappers' `Drop`).
+///
+/// `vQueueDelete()` on a static object only resets the kernel state: the
+/// storage belongs to the wrapper, so nothing is freed here.
+fn delete_if_created(handle: &UnsafeCell<rn_freertos_c::SemaphoreHandle_t>) {
+    let created = unsafe { *handle.get() };
+    if !created.is_null() {
+        unsafe { rn_freertos_c::vQueueDelete(created) }
+    }
+}
 // ===========================================================================
 //  Mutex<T>
 // ===========================================================================
@@ -40,7 +233,12 @@ use core::convert::From;
 /// *DATA.lock() += 1;
 /// ```
 pub struct Mutex<T: ?Sized> {
-    handle: rn_freertos_c::SemaphoreHandle_t, // actually a QueueHandle_t
+    /// Kernel handle, null until the object is created on first use.
+    handle: UnsafeCell<rn_freertos_c::SemaphoreHandle_t>, // actually a QueueHandle_t
+    /// Storage the kernel control block lives in (sized from
+    /// `crate::kernel::STATIC_QUEUE_BYTES`, `.bss` when the wrapper is a
+    /// `static` -- no heap either way).
+    storage: UnsafeCell<QueueStorage>,
     data: UnsafeCell<T>,
     // FreeRTOS mutexes are usable from any task, so we can implement Send + Sync.
 }
@@ -53,23 +251,29 @@ unsafe impl<T: Send> Sync for Mutex<T> {}
 impl<T> Mutex<T> {
     /// Create a new mutex wrapping `value`.
     ///
-    /// Panics if the underlying FreeRTOS mutex cannot be created (out of heap).
-    pub fn new(value: T) -> Self {
-        let handle = unsafe { rn_freertos_c::xQueueCreateMutex(1) }; // 1 = recursive
-        assert!(!handle.is_null(), "Mutex: xQueueCreateMutex returned NULL");
+    /// Nothing is allocated and no kernel call is made: the FreeRTOS object is
+    /// created in the mutex' own storage the first time it is used (see the
+    /// module documentation for the move rule that makes that necessary).
+    pub const fn new(value: T) -> Self {
         Self {
-            handle,
+            handle: UnsafeCell::new(core::ptr::null_mut()),
+            storage: UnsafeCell::new(QueueStorage::new()),
             data: UnsafeCell::new(value),
         }
     }
 }
 
 impl<T: ?Sized> Mutex<T> {
+    /// Handle of the underlying recursive mutex, created on first use.
+    fn kernel_handle(&self) -> rn_freertos_c::SemaphoreHandle_t {
+        handle_or_create(&self.handle, &self.storage, KernelObject::RecursiveMutex)
+    }
+
     /// Lock the mutex, blocking until it is acquired.
     ///
     /// Returns a [`MutexGuard`] that releases the lock when dropped.
     pub fn lock(&self) -> MutexGuard<'_, T> {
-        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.handle, u32::MAX) };
+        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.kernel_handle(), u32::MAX) };
         assert!(ret != 0, "Mutex::lock failed (timed out on infinite wait)");
         MutexGuard {
             mutex: self,
@@ -81,7 +285,7 @@ impl<T: ?Sized> Mutex<T> {
     ///
     /// Returns `Some(guard)` if the lock was acquired, `None` otherwise.
     pub fn try_lock(&self) -> Option<MutexGuard<'_, T>> {
-        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.handle, 0) };
+        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.kernel_handle(), 0) };
         if ret != 0 {
             Some(MutexGuard {
                 mutex: self,
@@ -96,7 +300,7 @@ impl<T: ?Sized> Mutex<T> {
     ///
     /// Returns `Some(guard)` if acquired within the timeout, `None` on timeout.
     pub fn lock_timeout(&self, timeout_ms: u32) -> Option<MutexGuard<'_, T>> {
-        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.handle, crate::task::ms_to_ticks(timeout_ms)) };
+        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.kernel_handle(), crate::task::ms_to_ticks(timeout_ms)) };
         if ret != 0 {
             Some(MutexGuard {
                 mutex: self,
@@ -127,7 +331,7 @@ impl<T: ?Sized> Mutex<T> {
 
 impl<T: ?Sized> Drop for Mutex<T> {
     fn drop(&mut self) {
-        unsafe { rn_freertos_c::vQueueDelete(self.handle) }
+        delete_if_created(&self.handle)
     }
 }
 
@@ -158,7 +362,7 @@ impl<T: ?Sized> DerefMut for MutexGuard<'_, T> {
 
 impl<T: ?Sized> Drop for MutexGuard<'_, T> {
     fn drop(&mut self) {
-        unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.mutex.handle); }
+        unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.mutex.kernel_handle()); }
     }
 }
 
@@ -180,7 +384,12 @@ impl<T: ?Sized> Drop for MutexGuard<'_, T> {
 /// }
 /// ```
 pub struct RecursiveMutex<T: ?Sized> {
-    handle: rn_freertos_c::SemaphoreHandle_t,
+    /// Kernel handle, null until the object is created on first use.
+    handle: UnsafeCell<rn_freertos_c::SemaphoreHandle_t>,
+    /// Storage the kernel control block lives in (sized from
+    /// `crate::kernel::STATIC_QUEUE_BYTES`, `.bss` when the wrapper is a
+    /// `static` -- no heap either way).
+    storage: UnsafeCell<QueueStorage>,
     data: UnsafeCell<T>,
 }
 
@@ -190,20 +399,26 @@ unsafe impl<T: Send> Sync for RecursiveMutex<T> {}
 
 impl<T> RecursiveMutex<T> {
     /// Create a new recursive mutex.
-    pub fn new(value: T) -> Self {
-        let handle = unsafe { rn_freertos_c::xQueueCreateMutex(1) }; // 1 = recursive
-        assert!(!handle.is_null(), "RecursiveMutex: xQueueCreateMutex returned NULL");
+    ///
+    /// The kernel object is created in the mutex' own storage on first use.
+    pub const fn new(value: T) -> Self {
         Self {
-            handle,
+            handle: UnsafeCell::new(core::ptr::null_mut()),
+            storage: UnsafeCell::new(QueueStorage::new()),
             data: UnsafeCell::new(value),
         }
     }
 }
 
 impl<T: ?Sized> RecursiveMutex<T> {
+    /// Handle of the underlying recursive mutex, created on first use.
+    fn kernel_handle(&self) -> rn_freertos_c::SemaphoreHandle_t {
+        handle_or_create(&self.handle, &self.storage, KernelObject::RecursiveMutex)
+    }
+
     /// Lock the recursive mutex (blocking).
     pub fn lock(&self) -> RecursiveMutexGuard<'_, T> {
-        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.handle, u32::MAX) };
+        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.kernel_handle(), u32::MAX) };
         assert!(ret != 0, "RecursiveMutex::lock failed");
         RecursiveMutexGuard {
             mutex: self,
@@ -213,7 +428,7 @@ impl<T: ?Sized> RecursiveMutex<T> {
 
     /// Try to lock without blocking.
     pub fn try_lock(&self) -> Option<RecursiveMutexGuard<'_, T>> {
-        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.handle, 0) };
+        let ret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.kernel_handle(), 0) };
         if ret != 0 {
             Some(RecursiveMutexGuard {
                 mutex: self,
@@ -227,7 +442,7 @@ impl<T: ?Sized> RecursiveMutex<T> {
     /// Lock with a timeout.
     pub fn lock_timeout(&self, timeout_ms: u32) -> Option<RecursiveMutexGuard<'_, T>> {
         let ret =
-            unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.handle, crate::task::ms_to_ticks(timeout_ms)) };
+            unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.kernel_handle(), crate::task::ms_to_ticks(timeout_ms)) };
         if ret != 0 {
             Some(RecursiveMutexGuard {
                 mutex: self,
@@ -241,7 +456,7 @@ impl<T: ?Sized> RecursiveMutex<T> {
 
 impl<T: ?Sized> Drop for RecursiveMutex<T> {
     fn drop(&mut self) {
-        unsafe { rn_freertos_c::vQueueDelete(self.handle) }
+        delete_if_created(&self.handle)
     }
 }
 
@@ -270,7 +485,7 @@ impl<T: ?Sized> DerefMut for RecursiveMutexGuard<'_, T> {
 
 impl<T: ?Sized> Drop for RecursiveMutexGuard<'_, T> {
     fn drop(&mut self) {
-        unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.mutex.handle); }
+        unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.mutex.kernel_handle()); }
     }
 }
 
@@ -288,10 +503,16 @@ impl<T: ?Sized> Drop for RecursiveMutexGuard<'_, T> {
 /// Uses a recursive mutex to protect the reader count and data, plus a
 /// binary semaphore for writers to wait until all readers have finished.
 pub struct RwLock<T: ?Sized> {
-    /// Recursive mutex protecting `reader_count` and the data.
-    gate: rn_freertos_c::SemaphoreHandle_t,
-    /// Binary semaphore – writers wait on this until readers drain.
-    drain: rn_freertos_c::SemaphoreHandle_t,
+    /// Recursive mutex protecting `reader_count` and the data (null until the
+    /// object is created on first use).
+    gate: UnsafeCell<rn_freertos_c::SemaphoreHandle_t>,
+    /// Storage the gate's kernel control block lives in (80 B, `.bss`).
+    gate_storage: UnsafeCell<QueueStorage>,
+    /// Binary semaphore – writers wait on this until readers drain (null until
+    /// the object is created on first use).
+    drain: UnsafeCell<rn_freertos_c::SemaphoreHandle_t>,
+    /// Storage the drain's kernel control block lives in (80 B, `.bss`).
+    drain_storage: UnsafeCell<QueueStorage>,
     /// Number of active readers.
     reader_count: UnsafeCell<u32>,
     /// Protected data.
@@ -304,14 +525,15 @@ unsafe impl<T: Send + Sync> Sync for RwLock<T> {}
 
 impl<T> RwLock<T> {
     /// Create a new `RwLock` wrapping `value`.
-    pub fn new(value: T) -> Self {
-        let gate = unsafe { rn_freertos_c::xQueueCreateMutex(1) }; // recursive
-        assert!(!gate.is_null(), "RwLock: gate mutex creation failed");
-        let drain = unsafe { rn_freertos_c::xQueueCreateCountingSemaphore(1, 1) };
-        assert!(!drain.is_null(), "RwLock: drain semaphore creation failed");
+    ///
+    /// The gate mutex and the drain semaphore are created in the lock's own
+    /// storage on first use, so this neither allocates nor touches the kernel.
+    pub const fn new(value: T) -> Self {
         Self {
-            gate,
-            drain,
+            gate: UnsafeCell::new(core::ptr::null_mut()),
+            gate_storage: UnsafeCell::new(QueueStorage::new()),
+            drain: UnsafeCell::new(core::ptr::null_mut()),
+            drain_storage: UnsafeCell::new(QueueStorage::new()),
             reader_count: UnsafeCell::new(0),
             data: UnsafeCell::new(value),
         }
@@ -319,41 +541,55 @@ impl<T> RwLock<T> {
 }
 
 impl<T: ?Sized> RwLock<T> {
+    /// Handle of the gate mutex, created on first use.
+    fn gate_handle(&self) -> rn_freertos_c::SemaphoreHandle_t {
+        handle_or_create(&self.gate, &self.gate_storage, KernelObject::RecursiveMutex)
+    }
+
+    /// Handle of the drain semaphore (max 1, starts given), created on first use.
+    fn drain_handle(&self) -> rn_freertos_c::SemaphoreHandle_t {
+        handle_or_create(
+            &self.drain,
+            &self.drain_storage,
+            KernelObject::CountingSemaphore { max: 1, initial: 1 },
+        )
+    }
+
     /// Lock for reading (shared access).
     ///
     /// Blocks if a writer holds the lock.  Multiple readers can hold the
     /// lock simultaneously.
     pub fn read(&self) -> RwLockReadGuard<'_, T> {
-        unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.gate, u32::MAX) };
+        unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.gate_handle(), u32::MAX) };
         // SAFETY: we hold the gate mutex, so no other task can access reader_count
         let count = unsafe { &mut *self.reader_count.get() };
         if *count == 0 {
             // First reader – take the drain semaphore so writers will block
-            unsafe { rn_freertos_c::xQueueSemaphoreTake(self.drain, u32::MAX) };
+            unsafe { rn_freertos_c::xQueueSemaphoreTake(self.drain_handle(), u32::MAX) };
         }
         *count += 1;
-        unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.gate) };
+        unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.gate_handle()) };
         RwLockReadGuard { lock: self }
     }
 
     /// Try to lock for reading without blocking.
     pub fn try_read(&self) -> Option<RwLockReadGuard<'_, T>> {
-        let wret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.gate, 0) };
+        let wret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.gate_handle(), 0) };
         if wret == 0 {
             return None;
         }
         // SAFETY: we hold the gate mutex, so no other task can access reader_count
         let count = unsafe { &mut *self.reader_count.get() };
         if *count == 0 {
-            let dret = unsafe { rn_freertos_c::xQueueSemaphoreTake(self.drain, 0) };
+            let dret = unsafe { rn_freertos_c::xQueueSemaphoreTake(self.drain_handle(), 0) };
             if dret == 0 {
                 // Writer is waiting – bail
-                unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.gate) };
+                unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.gate_handle()) };
                 return None;
             }
         }
         *count += 1;
-        unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.gate) };
+        unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.gate_handle()) };
         Some(RwLockReadGuard { lock: self })
     }
 
@@ -362,22 +598,22 @@ impl<T: ?Sized> RwLock<T> {
     /// Blocks until all readers and other writers have released.
     pub fn write(&self) -> RwLockWriteGuard<'_, T> {
         // Take the drain semaphore – this blocks until all current readers finish
-        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.drain, u32::MAX) };
+        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.drain_handle(), u32::MAX) };
         // Now take the gate to protect data access
-        unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.gate, u32::MAX) };
+        unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.gate_handle(), u32::MAX) };
         RwLockWriteGuard { lock: self }
     }
 
     /// Try to lock for writing without blocking.
     pub fn try_write(&self) -> Option<RwLockWriteGuard<'_, T>> {
-        let dret = unsafe { rn_freertos_c::xQueueSemaphoreTake(self.drain, 0) };
+        let dret = unsafe { rn_freertos_c::xQueueSemaphoreTake(self.drain_handle(), 0) };
         if dret == 0 {
             return None; // readers active
         }
-        let gret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.gate, 0) };
+        let gret = unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.gate_handle(), 0) };
         if gret == 0 {
             // Shouldn't happen since we hold drain, but release and bail
-            unsafe { rn_freertos_c::xQueueGenericSend(self.drain, core::ptr::null::<c_void>(), 0, 0) };
+            unsafe { rn_freertos_c::xQueueGenericSend(self.drain_handle(), core::ptr::null::<c_void>(), 0, 0) };
             return None;
         }
         Some(RwLockWriteGuard { lock: self })
@@ -386,10 +622,8 @@ impl<T: ?Sized> RwLock<T> {
 
 impl<T: ?Sized> Drop for RwLock<T> {
     fn drop(&mut self) {
-        unsafe {
-            rn_freertos_c::vQueueDelete(self.gate);
-            rn_freertos_c::vQueueDelete(self.drain);
-        }
+        delete_if_created(&self.gate);
+        delete_if_created(&self.drain);
     }
 }
 
@@ -407,15 +641,15 @@ impl<T: ?Sized> Deref for RwLockReadGuard<'_, T> {
 
 impl<T: ?Sized> Drop for RwLockReadGuard<'_, T> {
     fn drop(&mut self) {
-        unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.lock.gate, u32::MAX) };
+        unsafe { rn_freertos_c::xQueueTakeMutexRecursive(self.lock.gate_handle(), u32::MAX) };
         // SAFETY: we hold the gate mutex, so no other task can access reader_count
         let count = unsafe { &mut *self.lock.reader_count.get() };
         *count -= 1;
         if *count == 0 {
             // Last reader – release the drain semaphore so writers can proceed
-            unsafe { rn_freertos_c::xQueueGenericSend(self.lock.drain, core::ptr::null::<c_void>(), 0, 0) };
+            unsafe { rn_freertos_c::xQueueGenericSend(self.lock.drain_handle(), core::ptr::null::<c_void>(), 0, 0) };
         }
-        unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.lock.gate) };
+        unsafe { rn_freertos_c::xQueueGiveMutexRecursive(self.lock.gate_handle()) };
     }
 }
 
@@ -441,9 +675,9 @@ impl<T: ?Sized> Drop for RwLockWriteGuard<'_, T> {
     fn drop(&mut self) {
         unsafe {
             // Release the gate
-            rn_freertos_c::xQueueGiveMutexRecursive(self.lock.gate);
+            rn_freertos_c::xQueueGiveMutexRecursive(self.lock.gate_handle());
             // Release the drain semaphore so new readers/writers can proceed
-            rn_freertos_c::xQueueGenericSend(self.lock.drain, core::ptr::null::<c_void>(), 0, 0);
+            rn_freertos_c::xQueueGenericSend(self.lock.drain_handle(), core::ptr::null::<c_void>(), 0, 0);
         }
     }
 }
@@ -465,8 +699,10 @@ impl<T: ?Sized> Drop for RwLockWriteGuard<'_, T> {
 pub struct OnceLock<T> {
     data: UnsafeCell<Option<T>>,
     /// Binary semaphore: guards the initialisation critical section.
-    /// Wrapped in `UnsafeCell` for interior mutability in `init_gate`.
+    /// Null until the object is created on first use.
     gate: UnsafeCell<rn_freertos_c::SemaphoreHandle_t>,
+    /// Storage the gate's kernel control block lives in (80 B, `.bss`).
+    storage: UnsafeCell<QueueStorage>,
     inited: AtomicBool,
 }
 
@@ -480,26 +716,19 @@ impl<T> OnceLock<T> {
         Self {
             data: UnsafeCell::new(None),
             gate: UnsafeCell::new(core::ptr::null_mut()),
+            storage: UnsafeCell::new(QueueStorage::new()),
             inited: AtomicBool::new(false),
         }
     }
 
-    /// Lazily create the gate semaphore on first use.
+    /// Handle of the gate semaphore, created on first use.
     ///
-    /// The check-and-create is guarded by a FreeRTOS critical section so that
-    /// two tasks racing to initialise cannot both create a gate (which would
-    /// leak one mutex and leave the other's pointer dangling).
-    fn init_gate(&self) {
-        unsafe {
-            rn_freertos_c::vPortEnterCritical();
-            let current = *self.gate.get();
-            if current.is_null() {
-                let g = rn_freertos_c::xQueueCreateMutex(0);
-                assert!(!g.is_null(), "OnceLock: xQueueCreateMutex returned NULL");
-                *self.gate.get() = g;
-            }
-            rn_freertos_c::vPortExitCritical();
-        }
+    /// Creating the object needs no heap (the storage is ours) and the
+    /// check-and-create is done inside a FreeRTOS critical section, so two tasks
+    /// racing to initialise cannot both create a gate (which would corrupt the
+    /// storage and leak one mutex).
+    fn gate_handle(&self) -> rn_freertos_c::SemaphoreHandle_t {
+        handle_or_create(&self.gate, &self.storage, KernelObject::Mutex)
     }
 
     /// Get a reference to the contained value, or initialise it with `f`.
@@ -510,9 +739,8 @@ impl<T> OnceLock<T> {
         F: FnOnce() -> T,
     {
         if !self.inited.load(Ordering::Acquire) {
-            self.init_gate();
             // Try to acquire the gate – only one task gets through
-            unsafe { rn_freertos_c::xQueueSemaphoreTake(*self.gate.get(), u32::MAX) };
+            unsafe { rn_freertos_c::xQueueSemaphoreTake(self.gate_handle(), u32::MAX) };
             if !self.inited.load(Ordering::Acquire) {
                 // Double-check: we are the initialiser
                 unsafe {
@@ -523,7 +751,7 @@ impl<T> OnceLock<T> {
             // Release the gate
             unsafe {
                 rn_freertos_c::xQueueGenericSend(
-                    *self.gate.get(),
+                    self.gate_handle(),
                     core::ptr::null::<c_void>(),
                     0,
                     0,
@@ -548,12 +776,11 @@ impl<T> OnceLock<T> {
         if self.inited.load(Ordering::Acquire) {
             return Err(value);
         }
-        self.init_gate();
-        unsafe { rn_freertos_c::xQueueSemaphoreTake(*self.gate.get(), u32::MAX) };
+        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.gate_handle(), u32::MAX) };
         if self.inited.load(Ordering::Acquire) {
             unsafe {
                 rn_freertos_c::xQueueGenericSend(
-                    *self.gate.get(),
+                    self.gate_handle(),
                     core::ptr::null::<c_void>(),
                     0,
                     0,
@@ -567,7 +794,7 @@ impl<T> OnceLock<T> {
         self.inited.store(true, Ordering::Release);
         unsafe {
             rn_freertos_c::xQueueGenericSend(
-                *self.gate.get(),
+                self.gate_handle(),
                 core::ptr::null::<c_void>(),
                 0,
                 0,
@@ -584,10 +811,7 @@ impl<T> OnceLock<T> {
 
 impl<T> Drop for OnceLock<T> {
     fn drop(&mut self) {
-        let gate = unsafe { *self.gate.get() };
-        if !gate.is_null() {
-            unsafe { rn_freertos_c::vQueueDelete(gate) };
-        }
+        delete_if_created(&self.gate)
     }
 }
 
@@ -683,7 +907,14 @@ trait SemaphoreOps {
 /// Unlike a mutex, a semaphore has no concept of "owner"; any task can give
 /// and any task can take.
 pub struct BinarySemaphore {
-    handle: rn_freertos_c::SemaphoreHandle_t,
+    /// Kernel handle, null until the object is created on first use.
+    handle: UnsafeCell<rn_freertos_c::SemaphoreHandle_t>,
+    /// Storage the kernel control block lives in (sized from
+    /// `crate::kernel::STATIC_QUEUE_BYTES`, `.bss` when the wrapper is a
+    /// `static` -- no heap either way).
+    storage: UnsafeCell<QueueStorage>,
+    /// State to start in, applied when the object is created.
+    given: bool,
 }
 
 // SAFETY: binary semaphores are usable across tasks.
@@ -692,53 +923,72 @@ unsafe impl Sync for BinarySemaphore {}
 
 impl BinarySemaphore {
     /// Create a new binary semaphore, initially **not** given (i.e. take will block).
-    pub fn new() -> Self {
-        let handle = unsafe { rn_freertos_c::xQueueCreateCountingSemaphore(1, 0 as _) };
-        assert!(!handle.is_null(), "BinarySemaphore: xQueueCreateCountingSemaphore returned NULL");
-        Self { handle }
+    ///
+    /// The kernel object is created in the semaphore's own storage on first use.
+    pub const fn new() -> Self {
+        Self::with_state(false)
     }
 
     /// Create a new binary semaphore that starts in the "given" state.
-    pub fn new_given() -> Self {
-        let handle = unsafe { rn_freertos_c::xQueueCreateCountingSemaphore(1, 1 as _) };
-        // Note: first param `1` is an integer literal that Rust infers to the target type
-        assert!(!handle.is_null(), "BinarySemaphore: xQueueCreateCountingSemaphore returned NULL");
-        Self { handle }
+    pub const fn new_given() -> Self {
+        Self::with_state(true)
+    }
+
+    /// Common constructor: `given` is applied by the kernel when the object is
+    /// created on first use.
+    const fn with_state(given: bool) -> Self {
+        Self {
+            handle: UnsafeCell::new(core::ptr::null_mut()),
+            storage: UnsafeCell::new(QueueStorage::new()),
+            given,
+        }
+    }
+
+    /// Handle of the underlying counting semaphore, created on first use.
+    fn kernel_handle(&self) -> rn_freertos_c::SemaphoreHandle_t {
+        handle_or_create(
+            &self.handle,
+            &self.storage,
+            KernelObject::BinarySemaphore { given: self.given },
+        )
     }
 
     /// Give the semaphore (increment to 1).
     /// Returns `true` if the give was successful.
     pub fn give(&self) -> bool {
         let ret = unsafe {
-            rn_freertos_c::xQueueGenericSend(self.handle, core::ptr::null::<c_void>(), 0, 0)
+            rn_freertos_c::xQueueGenericSend(self.kernel_handle(), core::ptr::null::<c_void>(), 0, 0)
         };
         ret != 0
     }
 
     /// Give the semaphore from an ISR.
     /// Returns `true` if the operation was successful.
+    ///
+    /// The semaphore must already have been used from task context (that is
+    /// where its storage is initialised, see the module documentation).
     pub fn give_from_isr(&self) -> bool {
         let mut higher_priority_task_woken: rn_freertos_c::BaseType_t = 0;
         let ret = unsafe {
-            rn_freertos_c::xQueueGiveFromISR(self.handle, &mut higher_priority_task_woken)
+            rn_freertos_c::xQueueGiveFromISR(self.kernel_handle(), &mut higher_priority_task_woken)
         };
         ret != 0
     }
 
     /// Take the semaphore, blocking until it becomes available.
     pub fn take(&self) {
-        let ret = unsafe { rn_freertos_c::xQueueSemaphoreTake(self.handle, u32::MAX) };
+        let ret = unsafe { rn_freertos_c::xQueueSemaphoreTake(self.kernel_handle(), u32::MAX) };
         assert!(ret != 0, "BinarySemaphore::take failed");
     }
 
     /// Try to take without blocking.
     pub fn try_take(&self) -> bool {
-        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.handle, 0) != 0 }
+        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.kernel_handle(), 0) != 0 }
     }
 
     /// Take with a timeout.
     pub fn take_timeout(&self, timeout_ms: u32) -> bool {
-        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.handle, crate::task::ms_to_ticks(timeout_ms)) != 0 }
+        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.kernel_handle(), crate::task::ms_to_ticks(timeout_ms)) != 0 }
     }
 }
 
@@ -750,7 +1000,7 @@ impl Default for BinarySemaphore {
 
 impl Drop for BinarySemaphore {
     fn drop(&mut self) {
-        unsafe { rn_freertos_c::vQueueDelete(self.handle) }
+        delete_if_created(&self.handle)
     }
 }
 
@@ -762,7 +1012,15 @@ impl Drop for BinarySemaphore {
 ///
 /// Typical use: managing a pool of resources.
 pub struct CountingSemaphore {
-    handle: rn_freertos_c::SemaphoreHandle_t,
+    /// Kernel handle, null until the object is created on first use.
+    handle: UnsafeCell<rn_freertos_c::SemaphoreHandle_t>,
+    /// Storage the kernel control block lives in (sized from
+    /// `crate::kernel::STATIC_QUEUE_BYTES`, `.bss` when the wrapper is a
+    /// `static` -- no heap either way).
+    storage: UnsafeCell<QueueStorage>,
+    /// Ceiling and start value, applied when the object is created.
+    max: u32,
+    initial: u32,
 }
 
 unsafe impl Send for CountingSemaphore {}
@@ -770,41 +1028,59 @@ unsafe impl Sync for CountingSemaphore {}
 
 impl CountingSemaphore {
     /// Create a counting semaphore with `max_count` and `initial_count`.
-    pub fn new(max_count: u32, initial_count: u32) -> Self {
-        let handle =
-            unsafe { rn_freertos_c::xQueueCreateCountingSemaphore(max_count as _, initial_count as _) };
-        assert!(!handle.is_null(), "CountingSemaphore: xQueueCreateCountingSemaphore returned NULL");
-        Self { handle }
+    ///
+    /// The kernel object is created in the semaphore's own storage on first
+    /// use, which is also where FreeRTOS checks the pair
+    /// (`max_count != 0`, `initial_count <= max_count`).
+    pub const fn new(max_count: u32, initial_count: u32) -> Self {
+        Self {
+            handle: UnsafeCell::new(core::ptr::null_mut()),
+            storage: UnsafeCell::new(QueueStorage::new()),
+            max: max_count,
+            initial: initial_count,
+        }
+    }
+
+    /// Handle of the underlying counting semaphore, created on first use.
+    fn kernel_handle(&self) -> rn_freertos_c::SemaphoreHandle_t {
+        handle_or_create(
+            &self.handle,
+            &self.storage,
+            KernelObject::CountingSemaphore {
+                max: self.max,
+                initial: self.initial,
+            },
+        )
     }
 
     /// Give (increment) the semaphore.
     pub fn give(&self) -> bool {
         let ret = unsafe {
-            rn_freertos_c::xQueueGenericSend(self.handle, core::ptr::null::<c_void>(), 0, 0)
+            rn_freertos_c::xQueueGenericSend(self.kernel_handle(), core::ptr::null::<c_void>(), 0, 0)
         };
         ret != 0
     }
 
     /// Block until we can take (decrement) the semaphore.
     pub fn take(&self) {
-        let ret = unsafe { rn_freertos_c::xQueueSemaphoreTake(self.handle, u32::MAX) };
+        let ret = unsafe { rn_freertos_c::xQueueSemaphoreTake(self.kernel_handle(), u32::MAX) };
         assert!(ret != 0, "CountingSemaphore::take failed");
     }
 
     /// Try to take without blocking.
     pub fn try_take(&self) -> bool {
-        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.handle, 0) != 0 }
+        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.kernel_handle(), 0) != 0 }
     }
 
     /// Take with a timeout.
     pub fn take_timeout(&self, timeout_ms: u32) -> bool {
-        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.handle, crate::task::ms_to_ticks(timeout_ms)) != 0 }
+        unsafe { rn_freertos_c::xQueueSemaphoreTake(self.kernel_handle(), crate::task::ms_to_ticks(timeout_ms)) != 0 }
     }
 }
 
 impl Drop for CountingSemaphore {
     fn drop(&mut self) {
-        unsafe { rn_freertos_c::vQueueDelete(self.handle) }
+        delete_if_created(&self.handle)
     }
 }
 

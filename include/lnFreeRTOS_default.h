@@ -44,10 +44,19 @@ extern "C"
                       uint32_t stackSizeInBytes, // in bytes  !
                       void *const pvParameters, UBaseType_t uxPriority);
 
-    bool lnCreateTask_core2(TaskFunction_t pxTaskCode,
-                            const char *const pcName, 
-                            uint32_t stackSizeInBytes, 
+    bool lnCreateTask_core2(TaskFunction_t pxTaskCode, const char *const pcName, uint32_t stackSizeInBytes,
                             void *const pvParameters, UBaseType_t uxPriority);
+
+    /* Same task as lnCreateTask(), but the TCB and the stack come from the
+     * caller instead of pvPortMalloc(): `stack` must be
+     * LN_TASK_STACK_WORDS(stackSizeInBytes) words deep (see lnFreeRTOS_pp.h)
+     * and `tcb` one StaticTask_t, both typically static.  The task gets exactly
+     * the same usable stack as lnCreateTask() with the same byte count. */
+    bool lnCreateTaskStatic(TaskFunction_t pxTaskCode,
+                            const char *const pcName,  /*lint !e971 Unqualified char types are allowed for strings and
+                                                          single characters only. */
+                            uint32_t stackSizeInBytes, // in bytes  !
+                            void *const pvParameters, UBaseType_t uxPriority, StackType_t *stack, StaticTask_t *tcb);
 #ifdef __cplusplus
 }
 #endif

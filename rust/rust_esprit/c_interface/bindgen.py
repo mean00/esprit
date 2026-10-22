@@ -229,9 +229,6 @@ def main() -> None:
         "BaseType_t", "UBaseType_t", "eNotifyAction", "TaskFunction_t",
         "TaskHookFunction_t", "QueueDefinition", "tskTaskControlBlock",
     ]
-    freertos_vars = [
-        "configTICK_RATE_HZ_RUST",
-    ]
     _run_rustgen(
         header=os.path.join(pwd, "lnFreeRTOS_c.h"),
         output=os.path.join(dest, "rn_freertos_c.rs"),
@@ -240,7 +237,6 @@ def main() -> None:
         lang="c++",
         allowlist_functions=freertos_functions,
         allowlist_types=freertos_types,
-        allowlist_vars=freertos_vars,
         verbose=verbose,
     )
 

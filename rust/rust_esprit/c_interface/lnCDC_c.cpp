@@ -6,22 +6,53 @@ extern "C"
 {
 #include "lnCDC_c.h"
 }
-#define WRAPME(x) ((lnUsbCDC *)x)
-/*
+#include <new> // placement new for the .bss CDC objects
 
-*/
+#define WRAPME(x) ((lnUsbCDC *)x)
+
+/* One CDC object per USB interface, and they are permanent: the constructor
+ * registers `this` in lnUsbCDC.cpp's `_cdc_instances[]`, which the TinyUSB
+ * callbacks dereference for as long as the probe runs, so they live in .bss
+ * instead of the heap (malloc_used.md §8.1 B5).  `instance` is the interface
+ * number, so it is also the slot.  The count mirrors `MAX_CDC` of
+ * esprit/libraries/tinyUsb/lnSrc/lnUsbCDC.cpp (its ctor asserts it). */
+#define LN_CDC_SLOTS 4
+
+static_assert(LN_CDC_SLOTS >= 3, "the probe can expose GDB + bridge + logger CDCs");
+
+alignas(lnUsbCDC) static uint8_t _cdcStorage[LN_CDC_SLOTS][sizeof(lnUsbCDC)];
+static bool _cdcUsed[LN_CDC_SLOTS];
+
+/*
+ *
+ */
 lncdc_c *lncdc_create(uint32_t instance)
 {
-    return (lncdc_c *)(new lnUsbCDC((int)instance));
+    if (instance >= LN_CDC_SLOTS || _cdcUsed[instance])
+    {
+        xAssert(0);
+        return NULL;
+    }
+    _cdcUsed[instance] = true;
+    return (lncdc_c *)new (_cdcStorage[instance]) lnUsbCDC((int)instance);
 }
 
 /*
-
-*/
+ *
+ */
 void lncdc_delete(lncdc_c *instance)
 {
-    delete WRAPME(instance);
-    instance = NULL;
+    if (!instance)
+        return;
+    for (uint32_t i = 0; i < LN_CDC_SLOTS; i++)
+    {
+        if ((const void *)_cdcStorage[i] == (const void *)instance)
+        {
+            ((lnUsbCDC *)instance)->~lnUsbCDC();
+            _cdcUsed[i] = false;
+            return;
+        }
+    }
 }
 
 /*

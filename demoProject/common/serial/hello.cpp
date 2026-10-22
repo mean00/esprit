@@ -23,10 +23,13 @@ void setup()
 }
 int rx = 0, tx = 0;
 #define RX_SIZE 128
+#define RX_TASK_STACK_BYTES 800
+// Stack of rxTask: the caller owns it, see lnFreeRTOS_pp.h
+static StackType_t _rxTaskStack[LN_TASK_STACK_WORDS(RX_TASK_STACK_BYTES)];
 class rxTask : public lnTask
 {
   public:
-    rxTask(lnSerialRxTx *serial) : lnTask("RX", 3, 800)
+    rxTask(lnSerialRxTx *serial) : lnTask("RX", 3, _rxTaskStack, RX_TASK_STACK_BYTES)
     {
         _ser = serial;
     }

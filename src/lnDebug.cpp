@@ -12,7 +12,11 @@ static lnLoggerFunction *loggerFunction = NULL;
 extern lnSerialTxOnly *serial0;
 lnSerialTxOnly *serial0 = NULL;
 volatile uint32_t lnScratchRegister;
-static lnMutex *loggerMutex;
+/* The one lock every log line takes, so it has to exist for the first Logger()
+ * call: a .bss object, not a heap block (malloc_used.md §8.1 B1).  `lnMutex`
+ * keeps its semaphore storage inside itself (lnFreeRTOS_pp.h) and has no
+ * destructor, so this is plain .bss - no allocation, no exit-time machinery. */
+static lnMutex loggerMutex;
 extern "C" void Logger_crash(const char *st)
 {
     serial0->init();
@@ -33,14 +37,12 @@ extern "C" void Logger_chars(int n, const char *data)
     // or serial0). This protects the ring both against preemption on a single
     // core and against concurrent producers on different cores (the FreeRTOS
     // SMP port guards critical sections with hardware spinlocks).
-    if (loggerMutex)
-        loggerMutex->lock();
+    loggerMutex.lock();
     if (loggerFunction)
         loggerFunction(n, data);
     else
         serial0->transmit(n, (uint8_t *)data);
-    if (loggerMutex)
-        loggerMutex->unlock();
+    loggerMutex.unlock();
 }
 
 extern "C" int Logger_C(const char *fmt, ...)
@@ -73,7 +75,7 @@ void Logger(const char *fmt...)
     if (fmt[0] == 0)
         return;
 
-    loggerMutex->lock();
+    loggerMutex.lock();
     va_list va;
     va_start(va, fmt);
     vsnprintf(buffer, 127, fmt, va);
@@ -81,14 +83,14 @@ void Logger(const char *fmt...)
     buffer[127] = 0;
     va_end(va);
     Logger_chars(strlen(buffer), buffer);
-    loggerMutex->unlock();
+    loggerMutex.unlock();
 }
 /**
  *
  */
 void LoggerInitMutex()
 {
-    loggerMutex = new lnMutex;
+    // loggerMutex is a .bss object now, constructed before main() (B1).
 }
 /**
  *

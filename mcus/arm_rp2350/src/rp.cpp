@@ -61,6 +61,9 @@ void vApplicationDaemonTaskStartupHook( void )
 
 #define LN_INITIAL_STACK_SIZE 8 * 1024
 #define LN_INITIAL_TASK_PRIORITY 2
+/* entryTask: TCB + stack in .bss instead of the FreeRTOS heap (lnFreeRTOS_pp.h) */
+static StaticTask_t entryTaskTcb;
+static StackType_t entryTaskStack[LN_TASK_STACK_WORDS(LN_INITIAL_STACK_SIZE)];
 uint32_t SystemCoreClock = 150 * 1000 * 1000;
 
 #if 1
@@ -117,7 +120,8 @@ int main2()
     lnSetInterruptHandler(LN_IRQ_SVCALL, X_SVHANDLER);
 
     // allocate a fake stack to jump start the entry
-    lnCreateTask(initTask, "entryTask", LN_INITIAL_STACK_SIZE, NULL, LN_INITIAL_TASK_PRIORITY);
+    lnCreateTaskStatic(initTask, "entryTask", LN_INITIAL_STACK_SIZE, NULL, LN_INITIAL_TASK_PRIORITY, entryTaskStack,
+                       &entryTaskTcb);
     vTaskStartScheduler();
     deadEnd(25);
     return 0;

@@ -123,6 +123,13 @@ SECTIONS
         KEEP (*(.init_array))
         __init_array_end = .;
 
+        /* picolibc (LLVM's libc) __libc_init_array() only walks
+         * [__bothinit_array_start, __bothinit_array_end); both symbols are weak
+         * and resolve to 0 when the script does not provide them, which silently
+         * skips *every* C++ static constructor.  Cover preinit + init here. */
+        __bothinit_array_start = __preinit_array_start;
+        __bothinit_array_end = __init_array_end;
+
         . = ALIGN(0x4);
         KEEP (*crtbegin.o(.ctors))
         KEEP (*(EXCLUDE_FILE (*crtend.o) .ctors))

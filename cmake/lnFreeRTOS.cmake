@@ -37,3 +37,33 @@ add_library(FreeRTOS OBJECT)
 target_sources(FreeRTOS PRIVATE ${FOS_SOURCES})
 target_link_libraries(FreeRTOS PUBLIC esprit_dev)
 #
+# ---------------------------------------------------------------------------
+# FreeRTOS object sizes -> ${CMAKE_BINARY_DIR}/freertos_struct.h
+#                    and -> ${ESPRIT_ROOT}/rust/rs_rtos/src/kernel/esprit/generated.rs
+#
+# The probe is compiled with the very same flags/includes/config as the kernel
+# (it consumes esprit_dev) and is never linked into the firmware: it only exists
+# so that nm can report sizeof(StaticTask_t), sizeof(StaticSemaphore_t), ... for
+# this build.  Those numbers are what the per-instance _storage members of
+# lnFreeRTOS_pp.h have to match, and what the Rust constants of the in-tree
+# kernel (rs_rtos: STATIC_QUEUE_BYTES, TICK_RATE_HZ) are generated from - the
+# generated file is only rewritten when a number changes, and the consumer makes
+# this target a prerequisite of its cargo build (swindle/rs/CMakeLists.txt).
+# ---------------------------------------------------------------------------
+if(CMAKE_NM)
+  add_library(freertos_struct_probe OBJECT ${ESPRIT_ROOT}/cmake/lnFreeRTOS_structs_probe.c)
+  target_link_libraries(freertos_struct_probe PUBLIC esprit_dev)
+  add_custom_target(
+    freertos_struct_header ALL
+    COMMAND
+      ${CMAKE_COMMAND} -DNM=${CMAKE_NM} -DOBJ=$<TARGET_OBJECTS:freertos_struct_probe>
+      -DRUST_OUT=${ESPRIT_ROOT}/rust/rs_rtos/src/kernel/esprit/generated.rs
+      -DOUT=${CMAKE_BINARY_DIR}/freertos_struct.h "-DWHO=${LN_ARCH}/${LN_MCU} ${LN_BOARD_NAME}" -P
+      ${ESPRIT_ROOT}/cmake/lnFreeRTOS_structs.cmake
+    DEPENDS freertos_struct_probe
+    COMMENT "Measuring FreeRTOS objects -> ${CMAKE_BINARY_DIR}/freertos_struct.h"
+    VERBATIM)
+else()
+  message(STATUS "No nm found, freertos_struct.h will not be generated")
+endif()
+#

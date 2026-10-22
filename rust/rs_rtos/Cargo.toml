@@ -11,3 +11,7 @@ cfg-if = "1.0"
 default = []
 fake_std = []
 external_std = []
+# The kernel is provided by ESP-IDF instead of esprit/FreeRTOS; see
+# src/kernel/mod.rs.  Enabled through rust_esprit/esp32, which the esp32 build
+# already selects.
+esp32 = []

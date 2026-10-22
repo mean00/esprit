@@ -12,6 +12,18 @@ void lnExtiSysInit();
 void lnDmaSysInit();
 void lnRunTimeInit();
 void lnRunTimeInitPostPeripherals();
+
+#ifndef LN_INITIAL_TASK_PRIORITY
+#define LN_INITIAL_TASK_PRIORITY 2 //
+#endif                             //
+
+#ifndef LN_INITIAL_STACK_SIZE
+#define LN_INITIAL_STACK_SIZE 1024 //
+#endif                             //
+
+/* entryTask: TCB + stack in .bss instead of the FreeRTOS heap (lnFreeRTOS_pp.h) */
+static StaticTask_t entryTaskTcb;
+static StackType_t entryTaskStack[LN_TASK_STACK_WORDS(LN_INITIAL_STACK_SIZE)];
 /**
  *
  * @param
@@ -97,14 +109,8 @@ int main()
 
     // Start freertos
 
-#ifndef LN_INITIAL_TASK_PRIORITY
-#define LN_INITIAL_TASK_PRIORITY 2 //
-#endif                             //
-
-#ifndef LN_INITIAL_STACK_SIZE
-#define LN_INITIAL_STACK_SIZE 1024 //
-#endif                             //
-    lnCreateTask(initTask, "entryTask", LN_INITIAL_STACK_SIZE, NULL, LN_INITIAL_TASK_PRIORITY);
+    lnCreateTaskStatic(initTask, "entryTask", LN_INITIAL_STACK_SIZE, NULL, LN_INITIAL_TASK_PRIORITY, entryTaskStack,
+                       &entryTaskTcb);
     vTaskStartScheduler();
     deadEnd(25);
 }

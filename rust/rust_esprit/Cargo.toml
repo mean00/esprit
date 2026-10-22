@@ -87,6 +87,7 @@ rp2040 = [
 rp2350 = ["rp2040"]
 
 esp32 = [
+    "rs_rtos/esp32",
     "dep:rs_spi_wrapped",
     "dep:rs_i2c_wrapped",
     "dep:rs_timer_wrapped",

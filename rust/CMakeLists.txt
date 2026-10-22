@@ -4,6 +4,21 @@ add_library(esprit_c_bindings OBJECT)
 target_include_directories(esprit_c_bindings PRIVATE ${C})
 target_link_libraries(esprit_c_bindings PRIVATE esprit_dev)
 
+# `make rust_bindings_check` re-runs bindgen into a temporary directory and diffs
+# the result against the checked-in files (rs_rtos: src/c_freertos.rs,
+# src/c_fast_event.rs).  A manual target, never part of ALL: it needs python3 +
+# bindgen + libclang, which a plain firmware build does not.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+  add_custom_target(
+    rust_bindings_check
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/rs_rtos/c_interface/bindgen.py
+            --check
+    COMMENT "Checking the checked-in rs_rtos bindings against their headers"
+    USES_TERMINAL
+    VERBATIM)
+endif()
+
 target_sources(esprit_c_bindings PRIVATE ${EXTRA} ${C}/lnFast_EventGroup_c.cpp ${C}/lnGPIO_c.cpp ${C}/lnExti_c.cpp)
 if(NOT (LN_ENABLE_RUST AND NOT (USE_RP2040 OR USE_RP2350)))
   target_sources(esprit_c_bindings PRIVATE ${C}/lnSerial_c.cpp)

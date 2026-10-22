@@ -46,6 +46,9 @@ pub mod prelude {
 pub mod c_freertos;
 pub mod c_fast_event;
 
+/// Numbers that describe the kernel we link, one file per kernel.
+mod kernel;
+
 pub mod sync;
 pub mod queue;
 pub mod event;

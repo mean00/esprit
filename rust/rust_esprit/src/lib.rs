@@ -253,7 +253,6 @@ pub mod raw {
     // ---- FreeRTOS core types ----
     pub use crate::rn_freertos_c::{
         BaseType_t, QueueHandle_t, SemaphoreHandle_t, TaskHandle_t, TickType_t,
-        configTICK_RATE_HZ_RUST,
     };
 
     // ---- Peripherals ----

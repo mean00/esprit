@@ -28,6 +28,62 @@ pub struct xHeapStats {
 pub type HeapStats_t = xHeapStats;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct xSTATIC_LIST_ITEM {
+    pub xDummy2: TickType_t,
+    pub pvDummy3: [*mut cty::c_void; 4usize],
+}
+pub type StaticListItem_t = xSTATIC_LIST_ITEM;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct xSTATIC_MINI_LIST_ITEM {
+    pub xDummy2: TickType_t,
+    pub pvDummy3: [*mut cty::c_void; 2usize],
+}
+pub type StaticMiniListItem_t = xSTATIC_MINI_LIST_ITEM;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct xSTATIC_LIST {
+    pub uxDummy2: UBaseType_t,
+    pub pvDummy3: *mut cty::c_void,
+    pub xDummy4: StaticMiniListItem_t,
+}
+pub type StaticList_t = xSTATIC_LIST;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct xSTATIC_TCB {
+    pub pxDummy1: *mut cty::c_void,
+    pub xDummy3: [StaticListItem_t; 2usize],
+    pub uxDummy5: UBaseType_t,
+    pub pxDummy6: *mut cty::c_void,
+    pub ucDummy7: [u8; 16usize],
+    pub uxDummy10: [UBaseType_t; 2usize],
+    pub uxDummy12: [UBaseType_t; 2usize],
+    pub ulDummy18: [cty::c_uint; 5usize],
+    pub ucDummy19: [u8; 5usize],
+    pub uxDummy20: u8,
+}
+pub type StaticTask_t = xSTATIC_TCB;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct xSTATIC_QUEUE {
+    pub pvDummy1: [*mut cty::c_void; 3usize],
+    pub u: xSTATIC_QUEUE__bindgen_ty_1,
+    pub xDummy3: [StaticList_t; 2usize],
+    pub uxDummy4: [UBaseType_t; 3usize],
+    pub ucDummy5: [u8; 2usize],
+    pub ucDummy6: u8,
+    pub uxDummy8: UBaseType_t,
+    pub ucDummy9: u8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union xSTATIC_QUEUE__bindgen_ty_1 {
+    pub pvDummy2: *mut cty::c_void,
+    pub uxDummy2: UBaseType_t,
+}
+pub type StaticQueue_t = xSTATIC_QUEUE;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct xLIST_ITEM {
     pub xItemValue: TickType_t,
     pub pxNext: *mut xLIST_ITEM,
@@ -101,7 +157,6 @@ pub struct QueueDefinition {
 }
 pub type QueueHandle_t = *mut QueueDefinition;
 pub type SemaphoreHandle_t = QueueHandle_t;
-pub const configTICK_RATE_HZ_RUST: cty::c_uint = 1000;
 unsafe extern "C" {
     pub fn vPortEnterCritical();
     pub fn vPortExitCritical();
@@ -121,6 +176,15 @@ unsafe extern "C" {
         uxPriority: UBaseType_t,
         pxCreatedTask: *mut TaskHandle_t,
     ) -> BaseType_t;
+    pub fn xTaskCreateStatic(
+        pxTaskCode: TaskFunction_t,
+        pcName: *const cty::c_char,
+        uxStackDepth: StackType_t,
+        pvParameters: *mut cty::c_void,
+        uxPriority: UBaseType_t,
+        puxStackBuffer: *mut StackType_t,
+        pxTaskBuffer: *mut StaticTask_t,
+    ) -> TaskHandle_t;
     pub fn vTaskDelete(xTaskToDelete: TaskHandle_t);
     pub fn vTaskDelay(xTicksToDelay: TickType_t);
     pub fn xTaskDelayUntil(
@@ -149,6 +213,11 @@ unsafe extern "C" {
     pub fn xTaskGetTickCountFromISR() -> TickType_t;
     pub fn uxTaskGetNumberOfTasks() -> UBaseType_t;
     pub fn pcTaskGetName(xTaskToQuery: TaskHandle_t) -> *mut cty::c_char;
+    pub fn xTaskGetStaticBuffers(
+        xTask: TaskHandle_t,
+        ppuxStackBuffer: *mut *mut StackType_t,
+        ppxTaskBuffer: *mut *mut StaticTask_t,
+    ) -> BaseType_t;
     pub fn uxTaskGetSystemState(
         pxTaskStatusArray: *mut TaskStatus_t,
         uxArraySize: UBaseType_t,
@@ -273,9 +342,18 @@ unsafe extern "C" {
     pub fn xQueueIsQueueFullFromISR(xQueue: QueueHandle_t) -> BaseType_t;
     pub fn uxQueueMessagesWaitingFromISR(xQueue: QueueHandle_t) -> UBaseType_t;
     pub fn xQueueCreateMutex(ucQueueType: u8) -> QueueHandle_t;
+    pub fn xQueueCreateMutexStatic(
+        ucQueueType: u8,
+        pxStaticQueue: *mut StaticQueue_t,
+    ) -> QueueHandle_t;
     pub fn xQueueCreateCountingSemaphore(
         uxMaxCount: UBaseType_t,
         uxInitialCount: UBaseType_t,
+    ) -> QueueHandle_t;
+    pub fn xQueueCreateCountingSemaphoreStatic(
+        uxMaxCount: UBaseType_t,
+        uxInitialCount: UBaseType_t,
+        pxStaticQueue: *mut StaticQueue_t,
     ) -> QueueHandle_t;
     pub fn xQueueSemaphoreTake(xQueue: QueueHandle_t, xTicksToWait: TickType_t) -> BaseType_t;
     pub fn xQueueTakeMutexRecursive(xMutex: QueueHandle_t, xTicksToWait: TickType_t) -> BaseType_t;
@@ -285,6 +363,18 @@ unsafe extern "C" {
         uxItemSize: UBaseType_t,
         ucQueueType: u8,
     ) -> QueueHandle_t;
+    pub fn xQueueGenericCreateStatic(
+        uxQueueLength: UBaseType_t,
+        uxItemSize: UBaseType_t,
+        pucQueueStorage: *mut u8,
+        pxStaticQueue: *mut StaticQueue_t,
+        ucQueueType: u8,
+    ) -> QueueHandle_t;
+    pub fn xQueueGenericGetStaticBuffers(
+        xQueue: QueueHandle_t,
+        ppucQueueStorage: *mut *mut u8,
+        ppxStaticQueue: *mut *mut StaticQueue_t,
+    ) -> BaseType_t;
     pub fn vQueueWaitForMessageRestricted(
         xQueue: QueueHandle_t,
         xTicksToWait: TickType_t,

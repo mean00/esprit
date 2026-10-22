@@ -28,7 +28,10 @@ static const LnIRQ _dmaIrqs[2][7] = {
     {z1(0), z1(1), z1(2), z1(3), z1(4), LN_IRQ_NONE, LN_IRQ_NONE}}; // Warning DMA CHANNEL5/6 is not available
 
 static DMA_struct *_dmas[2] = {(DMA_struct *)LN_DMA0_ADR, (DMA_struct *)LN_DMA1_ADR};
-static lnMutex *dmaMutex[2][7];
+/* One recursive mutex per DMA channel, and there are exactly 2 x 7 of them for
+ * the life of the firmware, so they are .bss objects instead of 14 heap blocks
+ * (malloc_used.md §8.1 B2).  `lnMutex` holds its own semaphore storage. */
+static lnMutex dmaMutex[2][7];
 
 struct lnDmaStats
 {
@@ -51,11 +54,7 @@ const DMA_struct *dummy_dma;
 void lnDmaSysInit()
 {
     memset(&dmaStats, 0, sizeof(dmaStats));
-    for (int i = 0; i < 7; i++)
-    {
-        dmaMutex[0][i] = new lnMutex;
-        dmaMutex[1][i] = new lnMutex;
-    }
+    // dmaMutex[] is a .bss array now (B2), nothing to allocate here.
     dummy_dma = adma0;
 }
 
@@ -213,7 +212,7 @@ void lnDMA::detachCallback()
  */
 void lnDMA::beginTransfer()
 {
-    dmaMutex[_dmaInt][_channelInt]->lock();
+    dmaMutex[_dmaInt][_channelInt].lock();
     // Ok now we can configure the dma
     DMA_channels *channel = _dma->channels + _channelInt;
 
@@ -283,7 +282,7 @@ void lnDMA::cancelTransfer()
 void lnDMA::endTransfer()
 {
     cancelTransfer();
-    dmaMutex[_dmaInt][_channelInt]->unlock();
+    dmaMutex[_dmaInt][_channelInt].unlock();
 }
 
 /**
