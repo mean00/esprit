@@ -12,7 +12,7 @@ const NUM_LEDS: usize = 8;
 #[unsafe(no_mangle)]
 pub extern "C" fn main() -> ! {
     // 1. Initialise WS2812B strip on PB8 (maps to Timer 3, Channel 2, DMA0 Channel 4)
-    let mut strip = Ws2812b::<NUM_LEDS>::new(Pin::PB8);
+    let mut strip = Ws2812b::<NUM_LEDS>::with_pin(Pin::PB8);
     if strip.begin().is_err() {
         loop {}
     }
