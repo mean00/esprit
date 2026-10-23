@@ -35,8 +35,10 @@ if(NOT DEFINED LN_ARCH)
     set(LN_MCU_FLASH_SIZE
         256
         CACHE INTERNAL "")
+    # Kernel, DMA and USB objects live in .bss now, so the static budget has to
+    # cover them: the heap is (RAM - STATIC_RAM - 1) kB, see lnFreeRTOS.cmake
     set(LN_MCU_STATIC_RAM
-        10
+        15
         CACHE INTERNAL "")
     set(LN_SPEC
         "picolibc"
@@ -76,8 +78,8 @@ if(NOT DEFINED LN_ARCH)
           46
           CACHE INTERNAL "")
       set(LN_MCU_STATIC_RAM
-          8
-          CACHE INTERNAL "")
+          14
+          CACHE INTERNAL "") # kernel/dma/usb statics + margin
       # SET(LN_MCU_SPEED 72000000    CACHE INTERNAL "") #=> ok
       set(LN_MCU_SPEED
           96000000
@@ -132,8 +134,8 @@ if(NOT DEFINED LN_ARCH)
           125000000
           CACHE INTERNAL "")
       set(LN_MCU_STATIC_RAM
-          10
-          CACHE INTERNAL "")
+          14
+          CACHE INTERNAL "") # kernel/dma/usb statics + margin
       set(LN_MCU_EEPROM_SIZE
           2
           CACHE INTERNAL "")
@@ -186,8 +188,8 @@ if(NOT DEFINED LN_ARCH)
           150000000
           CACHE INTERNAL "")
       set(LN_MCU_STATIC_RAM
-          10
-          CACHE INTERNAL "")
+          30
+          CACHE INTERNAL "") # kernel/dma/usb statics + margin
       set(LN_MCU_EEPROM_SIZE
           2
           CACHE INTERNAL "")
@@ -216,8 +218,8 @@ if(NOT DEFINED LN_ARCH)
           CACHE INTERNAL "")
       if(USE_SMALLFOOTPRINT)
         set(LN_MCU_STATIC_RAM
-            3
-            CACHE INTERNAL "")
+            11
+            CACHE INTERNAL "") # kernel/dma/usb statics + margin
         set(LN_MCU_FLASH_SIZE
             64
             CACHE INTERNAL "")
@@ -226,8 +228,8 @@ if(NOT DEFINED LN_ARCH)
             CACHE INTERNAL "")
       else() # "Big" flash
         set(LN_MCU_STATIC_RAM
-            7
-            CACHE INTERNAL "")
+            15
+            CACHE INTERNAL "") # kernel/dma/usb statics + margin
         set(LN_MCU_FLASH_SIZE
             188
             CACHE INTERNAL "")

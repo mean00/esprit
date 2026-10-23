@@ -17,7 +17,7 @@ const MAX_BRIGHTNESS: u8 = 250;
 extern "C" fn user_init() {
     logger!("Initialising WS2812B driver on pin PB4...\n");
 
-    let mut strip = Ws2812b::<1>::new(Pin::PB4);
+    let mut strip = Ws2812b::<1>::with_pin(Pin::PB4);
     if strip.begin().is_err() {
         logger!("Failed to initialise WS2812B on PB4\n");
         return;
