@@ -41,6 +41,13 @@ pub const USART_CTL2_DMAT: u32 = 1 << 7;     // DMA enable transmitter
 
 // --- Configuration Constants ---
 pub const UART_DEFAULT_BAUDRATE: u32 = 115200;
+/// RX ring buffer size used when the caller asks for none
+/// (`lnserial_rx_create(instance, 0, dma)`).
+pub const RX_BUFFER_SIZE_DEFAULT: usize = 256;
+/// Largest RX ring buffer the driver serves.  The ring is an inline array of
+/// `UartRx`, and `UartRx` lives in the `.bss` array `RX_INSTANCES[]`, so the
+/// size has to be a compile-time constant (malloc_used.md §0.7, C11).
+pub const RX_BUFFER_SIZE_MAX: usize = 256;
 pub const UART0_DMA_TX_CHANNEL: usize = 3;     // DMA0 Channel 3 for USART0 TX
 pub const UART0_DMA_RX_CHANNEL: usize = 4;     // DMA0 Channel 4 for USART0 RX
 pub const UART1_DMA_TX_CHANNEL: usize = 6;     // DMA0 Channel 6 for USART1 TX

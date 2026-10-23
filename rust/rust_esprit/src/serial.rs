@@ -117,7 +117,10 @@ pub type SerialRxTx = Serial;
 impl Serial {
     /// Open a bidirectional serial port on hardware UART `instance`.
     /// * `instance` — UART peripheral index (0, 1, 2, …).
-    /// * `rx_buffer_size` — size of the receive ring buffer in bytes.
+    /// * `rx_buffer_size` — size of the receive ring buffer in bytes.  It is
+    ///   rounded up to a power of two and must not exceed
+    ///   `rs_uart_bluepill::registers::RX_BUFFER_SIZE_MAX` (256 B), because the
+    ///   ring lives in the receiver's `.bss` slot rather than on the heap.
     /// * `dma` — use DMA for reception if `true`.
     pub fn new(instance: u32, rx_buffer_size: u32, dma: bool) -> Self {
         let raw = unsafe { rn_serial_c::lnserial_rx_create(instance, rx_buffer_size, dma) };
@@ -199,6 +202,24 @@ impl Serial {
         }
     }
 
+    /// Attach (or replace) an event handler that lives in a `static`
+    /// (zero heap allocation, nothing leaked).
+    ///
+    /// This mirrors [`Cdc::new_static`](crate::Cdc::new_static): the cookie is
+    /// the handler's own address and the trampoline is monomorphised on `T`,
+    /// so no `Box<dyn SerialEventHandler>` is needed.  The previous handler (if
+    /// any) is leaked exactly as in [`Serial::set_event_handler`].
+    pub fn set_event_handler_static<T: SerialEventHandler + 'static>(&mut self, handler: &'static T) {
+        let cookie = (handler as *const T) as *mut c_void;
+        unsafe {
+            rn_serial_c::lnserial_rx_set_callback(
+                self.raw,
+                Some(Self::static_trampoline::<T>),
+                cookie,
+            );
+        }
+    }
+
     /// Low‑level: get a pointer to the receive ring‑buffer head.
     /// Returns the num of contiguous bytes available, and sets `*to` to
     /// point into the ring buffer.  Call `consume()` afterwards to advance
@@ -223,6 +244,19 @@ impl Serial {
             outer.handle(SerialEvent::from(event));
             let _ = Box::into_raw(outer);
         }
+    }
+
+    /// Trampoline for [`Serial::set_event_handler_static`]: the cookie is the
+    /// handler's address, so there is nothing to free or re‑box.
+    extern "C" fn static_trampoline<T: SerialEventHandler + 'static>(
+        cookie: *mut c_void,
+        event: i32,
+    ) {
+        if cookie.is_null() {
+            return;
+        }
+        let handler = unsafe { &*(cookie as *const T) };
+        handler.handle(SerialEvent::from(event));
     }
 }
 

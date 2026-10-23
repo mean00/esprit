@@ -8,6 +8,15 @@
 //!
 //! All methods take `&self` (not `&mut self`), making it safe to use from
 //! a `static` or behind an `Arc`.
+//!
+//! Two ways to get one:
+//!
+//! * [`EventGroup::new`] — owns the kernel object through an [`Arc`]; the last
+//!   clone frees it. Costs one heap block for the `Arc` itself.
+//! * [`EventGroup::uninit`] + [`EventGroup::init_static`] — for a group that
+//!   lives in a `static`: no heap at all (the kernel object comes from the C
+//!   side's `.bss` pool, `lnFast_EventGroup_c.cpp`) and nothing is freed, which
+//!   is what a boot-time singleton wants.
 
 use crate::prelude::*;
 use crate::c_fast_event as rn_fast_event_c;
@@ -62,29 +71,71 @@ unsafe impl Sync for EventGroupInner {}
 /// eg.set_events(1);
 /// assert!(eg2.wait_events(1, 0) != 0);
 /// ```
+/// How the kernel object behind an [`EventGroup`] is owned.
+enum EventGroupRef {
+    /// `EventGroup::new()`: the `Arc` keeps the object alive, the last clone
+    /// frees it.
+    Shared(Arc<EventGroupInner>),
+    /// `EventGroup::uninit()` + [`EventGroup::init_static`]: an object from the
+    /// C side's `.bss` pool, never freed (`null` until `init_static` runs).
+    Static(*mut c_void),
+}
+
 pub struct EventGroup {
-    inner: Arc<EventGroupInner>,
+    inner: EventGroupRef,
 }
 
 impl EventGroup {
-    /// Create a new event group.
+    /// Create a new event group (one heap block for the `Arc`).
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(EventGroupInner::new()),
+            inner: EventGroupRef::Shared(Arc::new(EventGroupInner::new())),
         }
     }
 
-    /// Returns a pointer to the raw C object.  Advanced use only.
+    /// An event group with no kernel object yet, constructible in a `static`.
+    ///
+    /// Call [`EventGroup::init_static`] once before any other method.
+    pub const fn uninit() -> Self {
+        Self {
+            inner: EventGroupRef::Static(core::ptr::null_mut()),
+        }
+    }
+
+    /// Create the kernel object of an [`EventGroup::uninit`] group.
+    ///
+    /// Allocates nothing: `lnfast_event_group_create` hands out a slot of its
+    /// `.bss` pool. Unlike [`EventGroup::new`], the object is **not** released
+    /// when the group goes away — this path is for singletons that live as long
+    /// as the firmware. Calling it again is a no-op.
+    pub fn init_static(&mut self) {
+        if let EventGroupRef::Static(raw) = &mut self.inner {
+            if !raw.is_null() {
+                return;
+            }
+            let created = unsafe { rn_fast_event_c::lnfast_event_group_create() };
+            assert!(!created.is_null(), "lnfast_event_group_create returned NULL");
+            *raw = created as *mut c_void;
+        }
+    }
+
+    /// The raw C object, for both ownership models.  Advanced use only.
     #[inline]
     pub fn raw(&self) -> *mut c_void {
-        self.inner.raw()
+        match &self.inner {
+            EventGroupRef::Shared(inner) => inner.raw(),
+            EventGroupRef::Static(raw) => {
+                assert!(!raw.is_null(), "EventGroup used before init_static()");
+                *raw
+            }
+        }
     }
 
     /// Take ownership of the underlying C object
     /// It means the calling thread will be the one receiving the events
     pub fn take_ownership(&mut self) {
         unsafe {
-            rn_fast_event_c::lnfast_event_group_takeOwnership(self.inner.raw() as *mut rn_fast_event_c::lnfast_event_group_c);
+            rn_fast_event_c::lnfast_event_group_takeOwnership(self.raw() as *mut rn_fast_event_c::lnfast_event_group_c);
         }
     }
 
@@ -94,7 +145,7 @@ impl EventGroup {
     /// under the hood).
     pub fn set_events(&self, bits: u32) {
         unsafe {
-            rn_fast_event_c::lnfast_event_group_set_events(self.inner.raw() as *mut rn_fast_event_c::lnfast_event_group_c, bits);
+            rn_fast_event_c::lnfast_event_group_set_events(self.raw() as *mut rn_fast_event_c::lnfast_event_group_c, bits);
         }
     }
 
@@ -107,14 +158,14 @@ impl EventGroup {
     /// - `timeout_ms > 0`: timeout in milliseconds.
     pub fn wait_events(&self, bits: u32, timeout_ms: i32) -> u32 {
         unsafe {
-            rn_fast_event_c::lnfast_event_group_wait_events(self.inner.raw() as *mut rn_fast_event_c::lnfast_event_group_c, bits, timeout_ms)
+            rn_fast_event_c::lnfast_event_group_wait_events(self.raw() as *mut rn_fast_event_c::lnfast_event_group_c, bits, timeout_ms)
         }
     }
 
     /// Read the current event bits matching `mask` without waiting
     /// (non‑blocking, non‑mutating).
     pub fn read_events(&self, mask: u32) -> u32 {
-        unsafe { rn_fast_event_c::lnfast_event_group_read_events(self.inner.raw() as *mut rn_fast_event_c::lnfast_event_group_c, mask) }
+        unsafe { rn_fast_event_c::lnfast_event_group_read_events(self.raw() as *mut rn_fast_event_c::lnfast_event_group_c, mask) }
     }
 }
 
@@ -126,9 +177,13 @@ impl Default for EventGroup {
 
 impl Clone for EventGroup {
     fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
+        let inner = match &self.inner {
+            EventGroupRef::Shared(arc) => EventGroupRef::Shared(arc.clone()),
+            // A static group's object is never freed, so a clone is just
+            // another view of it: there is no reference count to bump.
+            EventGroupRef::Static(raw) => EventGroupRef::Static(*raw),
+        };
+        Self { inner }
     }
 }
 

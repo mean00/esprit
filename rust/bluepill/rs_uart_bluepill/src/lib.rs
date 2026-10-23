@@ -2,10 +2,6 @@
 #![allow(non_camel_case_types, non_snake_case, dead_code)]
 #![no_std]
 
-extern crate alloc;
-use alloc::vec;
-use alloc::vec::Vec;
-
 pub mod registers;
 pub mod shim;
 pub use shim::*;
@@ -263,7 +259,10 @@ unsafe extern "C" fn uart_rx_timer_cb(xtimer: *mut c_void) {
 pub struct UartRx {
     pub(crate) instance: u32,
     pub(crate) use_dma: bool,
-    pub(crate) rx_buffer: Vec<u8>,
+    /// Ring buffer, held inline so that it lives in `.bss` with the rest of the
+    /// receiver (`RX_INSTANCES[]` is a static): no heap allocation at init
+    /// (malloc_used.md §0.7, C11).
+    pub(crate) rx_buffer: [u8; RX_BUFFER_SIZE_MAX],
     pub(crate) rx_buffer_size: usize,
     pub(crate) rx_mask: usize,
     pub(crate) rx_head: usize,
@@ -285,11 +284,16 @@ impl UartRx {
             enable(Peripheral::Uart2);
         }
         let size = if buffer_size == 0 {
-            256
+            RX_BUFFER_SIZE_DEFAULT
         } else {
             buffer_size.next_power_of_two() as usize
         };
-        let rx_buffer = alloc::vec![0u8; size];
+        // The ring is a fixed `.bss` array (malloc_used.md §0.7, C11); a caller
+        // that needs a bigger one has to raise RX_BUFFER_SIZE_MAX.
+        assert!(
+            size <= RX_BUFFER_SIZE_MAX,
+            "uart_rx: RX buffer size above RX_BUFFER_SIZE_MAX"
+        );
         let rx_mask = size - 1;
 
         let dma_chan = if dma {
@@ -324,7 +328,7 @@ impl UartRx {
         Self {
             instance,
             use_dma: dma,
-            rx_buffer,
+            rx_buffer: [0u8; RX_BUFFER_SIZE_MAX],
             rx_buffer_size: size,
             rx_mask,
             rx_head: 0,
