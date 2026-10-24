@@ -49,11 +49,14 @@ pub mod c_fast_event;
 /// Numbers that describe the kernel we link, one file per kernel.
 mod kernel;
 
+pub mod critical;
 pub mod sync;
 pub mod queue;
 pub mod event;
 pub mod task;
+pub mod timer;
 
+pub use critical::{scheduler_running, with_critical, CriticalSection};
 pub use sync::{
     Arc, BinarySemaphore, CountingSemaphore, LazyLock, Mutex, MutexGuard, OnceLock,
     RecursiveMutex, RecursiveMutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
@@ -61,6 +64,7 @@ pub use sync::{
 };
 pub use queue::Queue;
 pub use event::EventGroup;
+pub use timer::PeriodicTimer;
 pub use task::{
     current, delay_ms, delay_us, sleep, sleep_ms, spawn, spawn_raw, tick_count, time_ms, time_us,
     time_us64, yield_now, Duration, Instant, TaskEntry, TaskHandle, ms_to_ticks,

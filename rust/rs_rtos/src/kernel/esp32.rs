@@ -20,6 +20,19 @@
 /// turns a kernel bump into a compile error there.
 pub const STATIC_QUEUE_BYTES: usize = 84;
 
+/// `sizeof(StaticTimer_t)` of the ESP-IDF kernel.
+///
+/// **Not measured yet.**  ESP-IDF builds FreeRTOS as a prebuilt library, so the
+/// number cannot be probed the way the in-tree kernel is; until someone reads it
+/// out of the DWARF of `timers.c.obj` in `libfreertos.a` (the way
+/// [`STATIC_QUEUE_BYTES`] was measured), this holds the in-tree value, which is
+/// the *smaller* of any plausible layout (`configUSE_TRACE_FACILITY` is on in
+/// both, and ESP-IDF's timer control block matches FreeRTOS 10.5's field for
+/// field).  A caller that creates a software timer on ESP32 must therefore
+/// measure it first and put a `_Static_assert(sizeof(StaticTimer_t) == ...)`
+/// next to the ESP32 glue, as with the queue size above.
+pub const STATIC_TIMER_BYTES: usize = 44;
+
 /// `CONFIG_FREERTOS_HZ` from `sdkconfig.h` (1000 by default, which happens to
 /// match the in-tree kernel - it is a per-kernel setting, not a constant).
 pub const TICK_RATE_HZ: u32 = 1000;

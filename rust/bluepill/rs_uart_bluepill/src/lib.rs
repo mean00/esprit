@@ -12,100 +12,10 @@ use registers::*;
 use rs_dma_bluepill::{DmaChannel, DmaEngine};
 use rs_esprit::BinarySemaphore;
 use rs_rcu_bluepill::{enable, Peripheral};
-
-unsafe extern "C" {
-    fn xTimerCreate(
-        pcTimerName: *const cty::c_char,
-        xTimerPeriodInTicks: u32,
-        uxAutoReload: u32,
-        pvTimerID: *mut c_void,
-        pxCallbackFunction: unsafe extern "C" fn(xTimer: *mut c_void),
-    ) -> *mut c_void;
-    /// Same as `xTimerCreate()`, with the `Timer_t` taken from `pxTimerBuffer`
-    /// instead of `pvPortMalloc` (`FreeRTOS/timers.c:370`; it tags the timer
-    /// `tmrSTATUS_IS_STATICALLY_ALLOCATED`, so `xTimerDelete()` only unlinks it).
-    fn xTimerCreateStatic(
-        pcTimerName: *const cty::c_char,
-        xTimerPeriodInTicks: u32,
-        uxAutoReload: u32,
-        pvTimerID: *mut c_void,
-        pxCallbackFunction: unsafe extern "C" fn(xTimer: *mut c_void),
-        pxTimerBuffer: *mut TimerStorage,
-    ) -> *mut c_void;
-    fn xTimerGenericCommandFromTask(
-        xTimer: *mut c_void,
-        xCommandID: i32,
-        xOptionalValue: u32,
-        pxHigherPriorityTaskWoken: *mut i32,
-        xTicksToWait: u32,
-    ) -> i32;
-    fn pvTimerGetTimerID(xTimer: *mut c_void) -> *mut c_void;
-    fn xTaskGetTickCount() -> u32;
-    fn vPortEnterCritical();
-    fn vPortExitCritical();
-}
-
-/// `sizeof(StaticTimer_t)` of the kernel we are built against, i.e.
-/// `FREERTOS_SIZEOF_StaticTimer_t` in the generated `<build>/freertos_struct.h`
-/// (the same way `esprit/rust/rs_rtos/src/kernel/esprit/generated.rs` carries
-/// `STATIC_QUEUE_BYTES`).
-const STATIC_TIMER_BYTES: usize = 44;
-
-/// Words needed for that many bytes.  A 32-bit alignment is all the control
-/// block needs: a `ListItem_t`, a `TickType_t`, two `UBaseType_t` and a flag.
-const STATIC_TIMER_WORDS: usize = STATIC_TIMER_BYTES / core::mem::size_of::<u32>();
-
-/// A trailing partial word would mean the storage is smaller than the object the
-/// kernel writes into it, so refuse to compile.
-const _: () = assert!(
-    STATIC_TIMER_BYTES.is_multiple_of(core::mem::size_of::<u32>()),
-    "STATIC_TIMER_BYTES is not a whole number of u32 words"
-);
-
-/// Storage for one statically created timer (`.bss`).
-#[repr(C)]
-struct TimerStorage {
-    words: [u32; STATIC_TIMER_WORDS],
-}
-
-impl TimerStorage {
-    /// Zeroed storage: the *Static() API expects uninitialised memory and sets
-    /// up everything it needs.
-    const fn new() -> Self {
-        Self {
-            words: [0; STATIC_TIMER_WORDS],
-        }
-    }
-}
-
-/// The RX poll timers of the three UART instances, one `.bss` slot each
-/// (malloc_used.md §8.1 S3b).  This cannot live inside `UartRx`: `new()` returns
-/// the struct by value and it is then moved into `RX_INSTANCES[]`, so a pointer
-/// to its own field would dangle - the kernel keeps the address it was given.
-static mut TIMER_STORAGE: [TimerStorage; UART_MAX_INSTANCES] =
-    [TimerStorage::new(), TimerStorage::new(), TimerStorage::new()];
-
-#[inline]
-pub(crate) unsafe fn xTimerStart(timer: *mut c_void, ticks_to_wait: u32) -> i32 {
-    unsafe {
-        let now = xTaskGetTickCount();
-        xTimerGenericCommandFromTask(timer, 1, now, core::ptr::null_mut(), ticks_to_wait)
-    }
-}
-
-#[inline]
-pub(crate) unsafe fn xTimerStop(timer: *mut c_void, ticks_to_wait: u32) -> i32 {
-    unsafe {
-        xTimerGenericCommandFromTask(timer, 3, 0, core::ptr::null_mut(), ticks_to_wait)
-    }
-}
-
-#[inline]
-pub(crate) unsafe fn xTimerDelete(timer: *mut c_void, ticks_to_wait: u32) -> i32 {
-    unsafe {
-        xTimerGenericCommandFromTask(timer, 5, 0, core::ptr::null_mut(), ticks_to_wait)
-    }
-}
+// The RX poll timer and the critical sections come from `rs_rtos` directly:
+// `rs_esprit::timer` is the *hardware* timer API (`rs_timer_bluepill`), a
+// different thing from a FreeRTOS software timer (`PeriodicTimer`).
+use rs_rtos::{with_critical, PeriodicTimer};
 
 pub(crate) fn uart_set_baudrate(instance: u32, speed: u32) -> bool {
     let regs = UartRegisters::ptr(instance);
@@ -244,8 +154,13 @@ unsafe extern "C" fn uart_rx_dma_callback(_is_half: bool, cookie: *mut c_void) {
     }
 }
 
-unsafe extern "C" fn uart_rx_timer_cb(xtimer: *mut c_void) {
-    let instance = unsafe { pvTimerGetTimerID(xtimer) } as usize;
+/// The RX poll tick, called by the FreeRTOS timer daemon task every
+/// `RX_POLL_PERIOD_MS` (see `rs_rtos::timer::PeriodicTimer`).
+///
+/// The cookie is the UART instance number, so the callback needs no access to
+/// the `UartRx` it belongs to.
+fn uart_rx_timer_cb(instance: &u32) {
+    let instance = *instance as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
             if let Some(ref mut rx) = RX_INSTANCES[instance] {
@@ -268,7 +183,9 @@ pub struct UartRx {
     pub(crate) rx_head: usize,
     pub(crate) rx_tail: usize,
     pub(crate) dma: Option<DmaChannel>,
-    pub(crate) timer: *mut c_void,
+    /// Poll timer: a FreeRTOS software timer (`rs_rtos::timer::PeriodicTimer`)
+    /// whose control block lives inside this struct.
+    pub(crate) timer: PeriodicTimer<u32>,
     pub(crate) callback: ln_serial_event_cb,
     pub(crate) callback_cookie: *mut c_void,
     pub(crate) rx_enabled: bool,
@@ -308,22 +225,15 @@ impl UartRx {
             None
         };
 
-        // Static timer storage, one slot per UART instance (S3b): the RX poll
-        // timer used to be a pvPortMalloc block that lived as long as the UART.
+        // The RX poll timer.  `PeriodicTimer` keeps the kernel control block in
+        // an inline `.bss` slot that is filled on first use, so the timer
+        // survives the move into `RX_INSTANCES[]` and the driver needs no timer
+        // storage of its own (malloc_used.md §8.1 S3b).
         assert!(
             (instance as usize) < UART_MAX_INSTANCES,
             "uart_rx: instance out of range"
         );
-        let timer = unsafe {
-            xTimerCreateStatic(
-                b"uart_rx\0".as_ptr() as *const cty::c_char,
-                20,
-                1,
-                instance as usize as *mut c_void,
-                uart_rx_timer_cb,
-                core::ptr::addr_of_mut!(TIMER_STORAGE[instance as usize]),
-            )
-        };
+        let timer = PeriodicTimer::new(c"uart rx", RX_POLL_PERIOD_MS, instance, uart_rx_timer_cb);
 
         Self {
             instance,
@@ -370,64 +280,69 @@ impl UartRx {
 
     pub fn enable_rx(&mut self, enabled: bool) -> bool {
         let regs = UartRegisters::ptr(self.instance);
-        unsafe {
-            vPortEnterCritical();
-        }
 
-        self.rx_enabled = enabled;
-        if enabled {
-            self.rx_head = 0;
-            self.rx_tail = 0;
+        // State and hardware change under a critical section (`rs_rtos::critical`):
+        // that is what `get_read_pointer()`/`consume()` and the poll timer race
+        // with.  The timer commands stay outside -- `start()`/`stop()` may wait
+        // for the timer daemon, which cannot run while the scheduler is masked
+        // (the old code called `xTimerStop()`/`xTimerStart()` inside the section
+        // and could therefore block with interrupts off).
+        with_critical(|| {
+            self.rx_enabled = enabled;
+            if enabled {
+                self.rx_head = 0;
+                self.rx_tail = 0;
 
-            unsafe {
-                while (read_volatile(&mut (*regs).stat) & USART_STAT_RBNE) != 0 {
-                    let _ = read_volatile(&mut (*regs).data);
-                }
-
-                let mut ctl0 = read_volatile(&mut (*regs).ctl0);
-                ctl0 |= USART_CTL0_UEN | USART_CTL0_REN;
-                write_volatile(&mut (*regs).ctl0, ctl0);
-
-                if self.use_dma {
-                    let mut ctl2 = read_volatile(&mut (*regs).ctl2);
-                    ctl2 |= USART_CTL2_DMAR;
-                    write_volatile(&mut (*regs).ctl2, ctl2);
-
-                    if let Some(ref mut dma) = self.dma {
-                        dma.attach_callback(uart_rx_dma_callback, self.instance as usize as *mut c_void);
-                        dma.begin_circular_rx_transfer(
-                            &(*regs).data as *const _ as u32,
-                            self.rx_buffer.as_ptr() as u32,
-                            self.rx_buffer_size as u32,
-                            false,
-                            false,
-                        );
+                unsafe {
+                    while (read_volatile(&mut (*regs).stat) & USART_STAT_RBNE) != 0 {
+                        let _ = read_volatile(&mut (*regs).data);
                     }
 
-                    if !self.timer.is_null() {
-                        xTimerStart(self.timer, 1);
+                    let mut ctl0 = read_volatile(&mut (*regs).ctl0);
+                    ctl0 |= USART_CTL0_UEN | USART_CTL0_REN;
+                    write_volatile(&mut (*regs).ctl0, ctl0);
+
+                    if self.use_dma {
+                        let mut ctl2 = read_volatile(&mut (*regs).ctl2);
+                        ctl2 |= USART_CTL2_DMAR;
+                        write_volatile(&mut (*regs).ctl2, ctl2);
+
+                        if let Some(ref mut dma) = self.dma {
+                            dma.attach_callback(uart_rx_dma_callback, self.instance as usize as *mut c_void);
+                            dma.begin_circular_rx_transfer(
+                                &(*regs).data as *const _ as u32,
+                                self.rx_buffer.as_ptr() as u32,
+                                self.rx_buffer_size as u32,
+                                false,
+                                false,
+                            );
+                        }
                     }
                 }
-                vPortExitCritical();
+            } else {
+                unsafe {
+                    if self.use_dma {
+                        if let Some(ref mut dma) = self.dma {
+                            dma.end_transfer();
+                        }
+                        let mut ctl2 = read_volatile(&mut (*regs).ctl2);
+                        ctl2 &= !USART_CTL2_DMAR;
+                        write_volatile(&mut (*regs).ctl2, ctl2);
+                    }
+                    let mut ctl0 = read_volatile(&mut (*regs).ctl0);
+                    ctl0 &= !USART_CTL0_REN;
+                    write_volatile(&mut (*regs).ctl0, ctl0);
+                }
             }
-        } else {
-            unsafe {
-                if !self.timer.is_null() {
-                    xTimerStop(self.timer, 1);
-                }
-                if self.use_dma {
-                    if let Some(ref mut dma) = self.dma {
-                        dma.end_transfer();
-                    }
-                    let mut ctl2 = read_volatile(&mut (*regs).ctl2);
-                    ctl2 &= !USART_CTL2_DMAR;
-                    write_volatile(&mut (*regs).ctl2, ctl2);
-                }
-                let mut ctl0 = read_volatile(&mut (*regs).ctl0);
-                ctl0 &= !USART_CTL0_REN;
-                write_volatile(&mut (*regs).ctl0, ctl0);
+        });
 
-                vPortExitCritical();
+        // Only a DMA-driven receiver needs the poll timer: without DMA
+        // `current_dma_pos()` reports `rx_head`, which never moves.
+        if self.use_dma {
+            if enabled {
+                self.timer.start();
+            } else {
+                self.timer.stop();
             }
         }
         true
@@ -479,58 +394,46 @@ impl UartRx {
     }
 
     pub fn get_read_pointer(&mut self) -> (i32, *mut u8) {
-        unsafe {
-            vPortEnterCritical();
-        }
-        let h = self.rx_head & self.rx_mask;
-        let t = self.rx_tail & self.rx_mask;
+        with_critical(|| {
+            let h = self.rx_head & self.rx_mask;
+            let t = self.rx_tail & self.rx_mask;
 
-        let nb = if h >= t {
-            if self.rx_head.saturating_sub(self.rx_tail) > self.rx_buffer_size {
-                self.rx_tail = self.rx_head;
-                0
+            let nb = if h >= t {
+                if self.rx_head.saturating_sub(self.rx_tail) > self.rx_buffer_size {
+                    self.rx_tail = self.rx_head;
+                    0
+                } else {
+                    self.rx_head - self.rx_tail
+                }
             } else {
-                self.rx_head - self.rx_tail
-            }
-        } else {
-            self.rx_buffer_size - t
-        };
+                self.rx_buffer_size - t
+            };
 
-        let ptr = if nb > 0 {
-            unsafe { self.rx_buffer.as_mut_ptr().add(t) }
-        } else {
-            core::ptr::null_mut()
-        };
+            let ptr = if nb > 0 {
+                unsafe { self.rx_buffer.as_mut_ptr().add(t) }
+            } else {
+                core::ptr::null_mut()
+            };
 
-        unsafe {
-            vPortExitCritical();
-        }
-        (nb as i32, ptr)
+            (nb as i32, ptr)
+        })
     }
 
     pub fn consume(&mut self, n: u32) {
-        unsafe {
-            vPortEnterCritical();
-        }
-        self.rx_tail += n as usize;
-        if self.rx_tail > self.rx_buffer_size && self.rx_head > self.rx_buffer_size {
-            self.rx_tail -= self.rx_buffer_size;
-            self.rx_head -= self.rx_buffer_size;
-        }
-        unsafe {
-            vPortExitCritical();
-        }
+        with_critical(|| {
+            self.rx_tail += n as usize;
+            if self.rx_tail > self.rx_buffer_size && self.rx_head > self.rx_buffer_size {
+                self.rx_tail -= self.rx_buffer_size;
+                self.rx_head -= self.rx_buffer_size;
+            }
+        });
     }
 
     pub fn purge_rx(&mut self) {
-        unsafe {
-            vPortEnterCritical();
-        }
-        self.rx_head = 0;
-        self.rx_tail = 0;
-        unsafe {
-            vPortExitCritical();
-        }
+        with_critical(|| {
+            self.rx_head = 0;
+            self.rx_tail = 0;
+        });
     }
 
     pub fn read(&mut self, to: &mut [u8]) -> usize {
@@ -549,13 +452,14 @@ impl UartRx {
 
 impl Drop for UartRx {
     fn drop(&mut self) {
+        // Disable the receiver: this stops the DMA and posts `stop` to the poll
+        // timer.  The timer's control block is not deleted (see `rs_rtos::timer`:
+        // a delete command is processed by the daemon *after* the call returns,
+        // so it would write into a structure that is already gone).  Here that
+        // is harmless: `RX_INSTANCES[]` is a `.bss` array, so the memory the
+        // kernel still knows about stays valid, and a late expiry finds
+        // `RX_INSTANCES[instance] == None` and does nothing.
         self.enable_rx(false);
-        if !self.timer.is_null() {
-            unsafe {
-                xTimerDelete(self.timer, 1);
-            }
-            self.timer = core::ptr::null_mut();
-        }
     }
 }
 

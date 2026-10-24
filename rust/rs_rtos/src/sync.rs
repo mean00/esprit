@@ -159,9 +159,6 @@ impl KernelObject {
     }
 }
 
-/// `taskSCHEDULER_RUNNING` from FreeRTOS `task.h`.
-const TASK_SCHEDULER_RUNNING: rn_freertos_c::BaseType_t = 1;
-
 /// Handle of the kernel object held in `storage`, created on first use.
 ///
 /// See the "Lifetime rule" in the module documentation: the object is created
@@ -181,17 +178,11 @@ fn handle_or_create(
     }
 
     // First use.  Only one task may build the object in its storage, so the
-    // check-and-create runs in a critical section -- but only while the
-    // scheduler runs: `vPortEnterCritical()` must not be used before that
-    // (the ports start with `uxCriticalNesting = 0xaaaaaaaa`, so
-    // `vPortExitCritical()` would never unmask interrupts again), and before the
-    // scheduler there is no other task to race with anyway.  The *Static()
-    // creators neither block nor allocate, so running them here is safe.
-    let guarded =
-        unsafe { rn_freertos_c::xTaskGetSchedulerState() == TASK_SCHEDULER_RUNNING };
-    if guarded {
-        unsafe { rn_freertos_c::vPortEnterCritical() };
-    }
+    // check-and-create runs in a critical section (see `crate::critical`, which
+    // also skips the masking while the scheduler is not running -- there is no
+    // other task to race with before that).  The *Static() creators neither
+    // block nor allocate, so running them here is safe.
+    let _section = crate::critical::CriticalSection::enter();
     created = unsafe { *handle.get() };
     if created.is_null() {
         created = object.create(storage.get().cast());
@@ -200,9 +191,6 @@ fn handle_or_create(
             "static FreeRTOS object creation returned NULL"
         );
         unsafe { *handle.get() = created };
-    }
-    if guarded {
-        unsafe { rn_freertos_c::vPortExitCritical() };
     }
     created
 }

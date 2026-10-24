@@ -8,3 +8,6 @@ rs_esprit = { path = "../../rs_esprit" }
 rs_bluepill = { path = "../rs_bluepill" }
 rs_rcu_bluepill = { path = "../rs_rcu_bluepill" }
 rs_gpio_bluepill = { path = "../rs_gpio_bluepill" }
+# TX DMA channel: the block/async writes are DMA driven and the channel
+# interrupt is their completion signal (like `txDma` in lnSPI_bp).
+rs_dma_bluepill = { path = "../rs_dma_bluepill" }

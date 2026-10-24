@@ -30,15 +30,23 @@ _CMAKE_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."
 _RUSTGEN_PY = os.path.join(_CMAKE_DIR, "rustgen.py")
 
 # FreeRTOS allowlists to keep c_freertos.rs minimal and noise-free
+#
+# The `xTimer*` / `pvTimer*` entries are the software timers (`crate::timer`).
+# `xTimerStart()` / `Stop()` / `Reset()` / `Delete()` are *macros* in `timers.h`,
+# so what is bound is the function they expand to,
+# `xTimerGenericCommandFromTask()` -- the same situation as the semaphore
+# creators in `sync.rs`.  `lnFreeRTOS_c.h` is what pulls `timers.h` in.
 FREERTOS_ALLOW_FUNCTIONS = [
     "xTask.*", "vTask.*", "pcTask.*", "uxTask.*", "ulTask.*",
     "xQueue.*", "vQueue.*", "uxQueue.*", "vPort.*", "Logger_chars",
+    "xTimer.*", "pvTimer.*",
 ]
 
 FREERTOS_ALLOW_TYPES = [
     "TaskHandle_t", "QueueHandle_t", "SemaphoreHandle_t", "TickType_t",
     "BaseType_t", "UBaseType_t", "eNotifyAction", "TaskFunction_t",
     "TaskHookFunction_t", "QueueDefinition", "tskTaskControlBlock",
+    "TimerHandle_t", "TimerCallbackFunction_t", "StaticTimer_t",
 ]
 
 

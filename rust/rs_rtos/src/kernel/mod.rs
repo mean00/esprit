@@ -22,6 +22,8 @@
 //!
 //! * [`STATIC_QUEUE_BYTES`] - `sizeof(StaticQueue_t)` (`sizeof(StaticSemaphore_t)`
 //!   is the same number: both names are `Queue_t` under a different spelling)
+//! * [`STATIC_TIMER_BYTES`] - `sizeof(StaticTimer_t)`, the storage behind a
+//!   statically created software timer (`crate::timer`)
 //! * [`TICK_RATE_HZ`] - `configTICK_RATE_HZ` of that kernel
 //!
 //! Values that do not depend on the kernel stay where the kernel is declared:

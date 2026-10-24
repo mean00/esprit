@@ -48,6 +48,15 @@ pub const RX_BUFFER_SIZE_DEFAULT: usize = 256;
 /// `UartRx`, and `UartRx` lives in the `.bss` array `RX_INSTANCES[]`, so the
 /// size has to be a compile-time constant (malloc_used.md §0.7, C11).
 pub const RX_BUFFER_SIZE_MAX: usize = 256;
+
+/// RX poll period of the trailing `UartRx` timer, in milliseconds.
+///
+/// The receiver has no "transfer complete" interrupt: a running DMA moves the
+/// data and this timer is what turns "the DMA position moved" into
+/// `check_for_new_data()` -> `SerialEvent::DataAvailable`.  Same value as the
+/// C++ driver's `lnSerialRxTxDma` (20 ms).
+pub const RX_POLL_PERIOD_MS: u32 = 20;
+
 pub const UART0_DMA_TX_CHANNEL: usize = 3;     // DMA0 Channel 3 for USART0 TX
 pub const UART0_DMA_RX_CHANNEL: usize = 4;     // DMA0 Channel 4 for USART0 RX
 pub const UART1_DMA_TX_CHANNEL: usize = 6;     // DMA0 Channel 6 for USART1 TX

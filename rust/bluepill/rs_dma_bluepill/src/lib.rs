@@ -155,6 +155,37 @@ impl DmaChannel {
     }
 
     pub fn begin_tx_transfer(&mut self, peripheral_addr: u32, memory_addr: u32, length: u32, src_16bit: bool, dst_16bit: bool) {
+        self.begin_tx(peripheral_addr, memory_addr, length, src_16bit, dst_16bit, true);
+    }
+
+    /// Begin a memory-to-peripheral transfer that reads the **same** memory word
+    /// `length` times (memory increment off).
+    ///
+    /// This is what `lnDMA::doMemoryToPeripheralTransferNoLock(..., repeat=true)`
+    /// does: the peripheral sees `length` copies of `*memory_addr`, so a fill
+    /// value does not need a staging buffer.
+    pub fn begin_tx_transfer_const(
+        &mut self,
+        peripheral_addr: u32,
+        memory_addr: u32,
+        length: u32,
+        word_16bit: bool,
+    ) {
+        self.begin_tx(peripheral_addr, memory_addr, length, word_16bit, word_16bit, false);
+    }
+
+    /// Configure and start a memory-to-peripheral transfer.
+    /// `memory_increment` selects between marching through the buffer (normal)
+    /// and re-reading its first word for the whole transfer (`repeat`).
+    fn begin_tx(
+        &mut self,
+        peripheral_addr: u32,
+        memory_addr: u32,
+        length: u32,
+        src_16bit: bool,
+        dst_16bit: bool,
+        memory_increment: bool,
+    ) {
         let regs = self.regs();
         unsafe {
             let ch_regs = &mut (*regs).channels[self.channel_idx];
@@ -175,8 +206,9 @@ impl DmaChannel {
             // 4. Set Length
             write_volatile(&mut ch_regs.cndtr, length);
             
-            // 5. Configure CCR: Memory increment, DIR=MemToPeriph, sizes
-            ccr = DMA_CCR_MINC | DMA_CCR_DIR_MEM2PERIPH;
+            // 5. Configure CCR: DIR=MemToPeriph, sizes, memory increment
+            ccr = DMA_CCR_DIR_MEM2PERIPH;
+            if memory_increment { ccr |= DMA_CCR_MINC; }
             
             if src_16bit { ccr |= DMA_CCR_MSIZE_16BIT; }
             if dst_16bit { ccr |= DMA_CCR_PSIZE_16BIT; }

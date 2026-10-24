@@ -5,8 +5,10 @@ edition = "2024"
 
 [dependencies]
 rs_esprit = { path = "../../rs_esprit" }
+# The RX poll timer and the critical sections.  Direct dependency rather than a
+# re-export: `rs_esprit::timer` is the hardware-timer API, not this one.
+rs_rtos = { path = "../../rs_rtos" }
 rs_bluepill = { path = "../rs_bluepill" }
 rs_rcu_bluepill = { path = "../rs_rcu_bluepill" }
 rs_gpio_bluepill = { path = "../rs_gpio_bluepill" }
 rs_dma_bluepill = { path = "../rs_dma_bluepill" }
-cty = "0.2.2"

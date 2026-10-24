@@ -84,6 +84,18 @@ pub union xSTATIC_QUEUE__bindgen_ty_1 {
 pub type StaticQueue_t = xSTATIC_QUEUE;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct xSTATIC_TIMER {
+    pub pvDummy1: *mut cty::c_void,
+    pub xDummy2: StaticListItem_t,
+    pub xDummy3: TickType_t,
+    pub pvDummy5: *mut cty::c_void,
+    pub pvDummy6: TaskFunction_t,
+    pub uxDummy7: UBaseType_t,
+    pub ucDummy8: u8,
+}
+pub type StaticTimer_t = xSTATIC_TIMER;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct xLIST_ITEM {
     pub xItemValue: TickType_t,
     pub pxNext: *mut xLIST_ITEM,
@@ -150,6 +162,14 @@ pub struct xTASK_STATUS {
     pub usStackHighWaterMark: StackType_t,
 }
 pub type TaskStatus_t = xTASK_STATUS;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct tmrTimerControl {
+    _unused: [u8; 0],
+}
+pub type TimerHandle_t = *mut tmrTimerControl;
+pub type TimerCallbackFunction_t =
+    ::core::option::Option<unsafe extern "C" fn(xTimer: TimerHandle_t)>;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct QueueDefinition {
@@ -303,6 +323,46 @@ unsafe extern "C" {
     pub fn uxTaskGetTaskNumber(xTask: TaskHandle_t) -> UBaseType_t;
     pub fn vTaskSetTaskNumber(xTask: TaskHandle_t, uxHandle: UBaseType_t);
     pub fn vTaskInternalSetTimeOutState(pxTimeOut: *mut TimeOut_t);
+    pub fn xTimerCreate(
+        pcTimerName: *const cty::c_char,
+        xTimerPeriodInTicks: TickType_t,
+        xAutoReload: BaseType_t,
+        pvTimerID: *mut cty::c_void,
+        pxCallbackFunction: TimerCallbackFunction_t,
+    ) -> TimerHandle_t;
+    pub fn xTimerCreateStatic(
+        pcTimerName: *const cty::c_char,
+        xTimerPeriodInTicks: TickType_t,
+        xAutoReload: BaseType_t,
+        pvTimerID: *mut cty::c_void,
+        pxCallbackFunction: TimerCallbackFunction_t,
+        pxTimerBuffer: *mut StaticTimer_t,
+    ) -> TimerHandle_t;
+    pub fn pvTimerGetTimerID(xTimer: TimerHandle_t) -> *mut cty::c_void;
+    pub fn xTimerIsTimerActive(xTimer: TimerHandle_t) -> BaseType_t;
+    pub fn xTimerGetTimerDaemonTaskHandle() -> TaskHandle_t;
+    pub fn xTimerGetReloadMode(xTimer: TimerHandle_t) -> BaseType_t;
+    pub fn xTimerGetPeriod(xTimer: TimerHandle_t) -> TickType_t;
+    pub fn xTimerGetExpiryTime(xTimer: TimerHandle_t) -> TickType_t;
+    pub fn xTimerGetStaticBuffer(
+        xTimer: TimerHandle_t,
+        ppxTimerBuffer: *mut *mut StaticTimer_t,
+    ) -> BaseType_t;
+    pub fn xTimerCreateTimerTask() -> BaseType_t;
+    pub fn xTimerGenericCommandFromTask(
+        xTimer: TimerHandle_t,
+        xCommandID: BaseType_t,
+        xOptionalValue: TickType_t,
+        pxHigherPriorityTaskWoken: *mut BaseType_t,
+        xTicksToWait: TickType_t,
+    ) -> BaseType_t;
+    pub fn xTimerGenericCommandFromISR(
+        xTimer: TimerHandle_t,
+        xCommandID: BaseType_t,
+        xOptionalValue: TickType_t,
+        pxHigherPriorityTaskWoken: *mut BaseType_t,
+        xTicksToWait: TickType_t,
+    ) -> BaseType_t;
     pub fn xQueueGenericSend(
         xQueue: QueueHandle_t,
         pvItemToQueue: *const cty::c_void,

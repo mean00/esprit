@@ -78,6 +78,21 @@ pub const SPI_DR_DATA_16BIT_MASK: u32 = 0xFFFF;
 pub const SPI_DATA_SIZE_8: u32 = 8;
 pub const SPI_DATA_SIZE_16: u32 = 16;
 
+// --- Register masks (the "reserved / not driven by the driver" bits) ---
+// `SPI_CTL0_KEEP_MASK` keeps the upper half of CTL0 only, `SPI_CTL1_KEEP_MASK`
+// the upper 24 bits of CTL1, `SPI_STAT_KEEP_MASK` the sticky flags of STAT:
+// masking a register with them clears everything the driver owns
+// (`LN_SPI_CTL0_MASK` / `LN_SPI_CTL1_MASK` / `LN_SPI_STAT_MASK` in lnSPI_priv.h).
+pub const SPI_CTL0_KEEP_MASK: u32 = 0xFFFF_0000;
+pub const SPI_CTL1_KEEP_MASK: u32 = 0xFFFF_FF00;
+pub const SPI_STAT_KEEP_MASK: u32 = 0xFFFF_FE00;
+
+// --- Baud rate ---
+// The SPI clock is PCLK / 2^(BR+1): the BR field covers 2 (BR=0) to 256 (BR=7).
+pub const SPI_BAUDRATE_MIN_DIVISOR: u32 = 2;
+pub const SPI_BAUDRATE_MAX_DIVISOR: u32 = 256;
+pub const SPI_BAUDRATE_MAX_BITS: u32 = 7;
+
 // --- GD32 Aliases ---
 pub const SPI_CTL0_CKPH: u32 = SPI_CR1_CPHA;
 pub const SPI_CTL0_CKPL: u32 = SPI_CR1_CPOL;

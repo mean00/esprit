@@ -69,6 +69,7 @@ list(SORT values)
 # ---------------------------------------------------------------------------
 set(rust_consts
     "StaticQueue_t|STATIC_QUEUE_BYTES|usize|`sizeof(StaticQueue_t)`, which is also `sizeof(StaticSemaphore_t)`: the storage one static queue, mutex or semaphore costs."
+    "StaticTimer_t|STATIC_TIMER_BYTES|usize|`sizeof(StaticTimer_t)`: the storage one statically created software timer (`crate::timer`) costs."
     "configTICK_RATE_HZ|TICK_RATE_HZ|u32|`configTICK_RATE_HZ`: how many ticks a second has (milliseconds -> ticks in `task.rs`).")
 
 if(RUST_OUT)

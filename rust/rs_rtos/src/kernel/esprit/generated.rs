@@ -18,5 +18,8 @@
 /// `sizeof(StaticQueue_t)`, which is also `sizeof(StaticSemaphore_t)`: the storage one static queue, mutex or semaphore costs.
 pub const STATIC_QUEUE_BYTES: usize = 80;
 
+/// `sizeof(StaticTimer_t)`: the storage one statically created software timer (`crate::timer`) costs.
+pub const STATIC_TIMER_BYTES: usize = 44;
+
 /// `configTICK_RATE_HZ`: how many ticks a second has (milliseconds -> ticks in `task.rs`).
 pub const TICK_RATE_HZ: u32 = 1000;
