@@ -21,15 +21,25 @@ set(OVERLAY_SRCS
     lnADC_timing.cpp
     lnFMC.cpp
     lnStubs.cpp
-    lnSerialTxOnly.cpp
-    lnSerialTxOnlyDma.cpp
-    lnSerialTxOnlyDmaBuffer.cpp
+    # lnSerialTxOnly*.cpp live further down (USE_RUST_LOGGER)
     # ${LN_MCU_FOLDER}/boards/${LN_BOARD_NAME}/lnPinMapping.cpp
     CACHE INTERNAL "")
 
 add_library(esprit_lib OBJECT ${OVERLAY_SRCS})
 target_link_libraries(esprit_lib PUBLIC esprit_dev)
 target_include_directories(esprit_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# The debug UART's Tx-only drivers.  Their only user in this firmware is the C++
+# logger (lnDebug.cpp -> createLnSerialTxOnly), and USE_RUST_LOGGER replaces
+# that logger with the Rust one, which owns its own ring buffer and DMA channel
+# (rust_esprit/src/logger_c.rs + rs_uart_bluepill/src/buffered_tx.rs).  Building
+# them then only produces dead code the linker drops anyway: the image keeps the
+# exact same size and symbol set, only section placement shifts.
+# lnSerialCore.cpp stays either way: it holds createLnSerialTxOnly() and the
+# USART0..3 IRQ handlers the Rx/Tx drivers need.
+if(NOT USE_RUST_LOGGER)
+  target_sources(esprit_lib PRIVATE lnSerialTxOnly.cpp lnSerialTxOnlyDma.cpp lnSerialTxOnlyDmaBuffer.cpp)
+endif()
 
 if(LN_ENABLE_UART)
   target_sources(esprit_lib PRIVATE lnSerialRxTx.cpp lnSerialRxTxDma.cpp)

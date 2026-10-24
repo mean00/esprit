@@ -1,7 +1,14 @@
 #
 
 add_library(ln_utils OBJECT)
-target_sources(ln_utils PRIVATE lnFreeRTOS_pp.cpp lnFreeRTOSDebug.cpp lnDebug.cpp systemHelper.cpp lnStopWatch.cpp)
+target_sources(ln_utils PRIVATE lnFreeRTOS_pp.cpp lnFreeRTOSDebug.cpp systemHelper.cpp lnStopWatch.cpp)
+# The logger has a Rust twin with the same C ABI (rust_esprit/src/logger_c.rs,
+# CMake option USE_RUST_LOGGER): exactly one of the two provides Logger(),
+# Logger_C(), Logger_chars(), setLogger(), LoggerInit(), Logger_crash() and
+# lnScratchRegister.
+if(NOT USE_RUST_LOGGER)
+  target_sources(ln_utils PRIVATE lnDebug.cpp)
+endif()
 # The static storage of the FreeRTOS wrappers (see lnFreeRTOS_pp.h) lives inside
 # the wrapped object, so it is allocated where that object is declared.  This
 # translation unit keeps -fdata-sections anyway: its own statics (and the

@@ -5,9 +5,7 @@
 pub type lnLoggerFunction =
     ::core::option::Option<unsafe extern "C" fn(n: cty::c_int, data: *const cty::c_char)>;
 unsafe extern "C" {
-    #[link_name = "\u{1}_Z10LoggerInitv"]
     pub fn LoggerInit();
-    #[link_name = "\u{1}_Z11debugLoggerPKcz"]
     pub fn debugLogger(fmt: *const cty::c_char, ...);
     pub fn Logger(fmt: *const cty::c_char, ...);
     pub fn Logger_C(fmt: *const cty::c_char, ...) -> cty::c_int;

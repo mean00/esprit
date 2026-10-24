@@ -37,6 +37,22 @@ if(True) # NOT ESPRIT_ROOT)
   option(LN_ENABLE_RUST "Enable rust support" OFF)
   option(LN_ENABLE_ETH "Enable Ethernet support" OFF)
 
+  # The Esprit logger (`esprit/src/lnDebug.cpp`) has a Rust twin
+  # (rust_esprit/src/logger_c.rs) that exports the very same C ABI; with this on,
+  # lnDebug.cpp is dropped from ln_utils and the Rust one is linked instead.
+  # It needs the Rust tree (LN_ENABLE_RUST) and the bluepill MCU family, because
+  # it drives the debug UART through rs_uart_bluepill's DMA ring.
+  option(USE_RUST_LOGGER "Build the Esprit logger (lnDebug) in Rust" OFF)
+  if(USE_RUST_LOGGER)
+    if(NOT LN_ENABLE_RUST)
+      message(FATAL_ERROR "USE_RUST_LOGGER needs LN_ENABLE_RUST (the logger is Rust code)")
+    endif()
+    if(NOT (LN_EXT STREQUAL "arm_gd32fx" OR LN_EXT STREQUAL "riscv_ch32v3x"))
+      message(FATAL_ERROR "USE_RUST_LOGGER only supports the bluepill MCU families (LN_EXT ${LN_EXT})")
+    endif()
+    message(STATUS "Esprit logger: Rust (rust_esprit/src/logger_c.rs)")
+  endif()
+
   # WCH32Vxx specific
   option(USE_CH32v3x_HW_IRQ_STACK "Enable WCH HW interrupt stack push pop (CH32V3xx only)" TRUE)
   option(USE_CH32v3x_FAST_IRQ "Use the WCH fast IRQ mode (CH32V30x only)" TRUE)

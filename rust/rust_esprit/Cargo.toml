@@ -106,6 +106,16 @@ wrapped = [
     "dep:rs_adc_wrapped",
 ]
 
+# The Esprit logger (`lnDebug.cpp`) written in Rust: CMake option
+# USE_RUST_LOGGER, which drops lnDebug.cpp from ln_utils and defines the same
+# C ABI here (logger_c.rs).  Needs the Bluepill UART/DMA backends, and a nightly
+# compiler (c_variadic).
+rust_logger = ["bluepill"]
+# Which UART the logger writes to when nothing is redirected (CMake
+# LN_DEBUG_UART, C++ `LN_DEBUG_UART`): the default is instance 0 / USART0.
+logger_uart1 = []
+logger_uart2 = []
+
 default = ["bluepill"]
 
 # esprit provides its own std-compatible shim (FreeRTOS-backed).

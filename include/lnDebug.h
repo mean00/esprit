@@ -5,8 +5,11 @@
 
 #pragma once
 #if 1
-void LoggerInit();
-void debugLogger(const char *fmt,...);
+// C linkage on purpose: `USE_RUST_LOGGER` replaces lnDebug.cpp with
+// rust_esprit/src/logger_c.rs, and a Rust `#[unsafe(no_mangle)]` function cannot
+// answer to a C++-mangled name (`_Z10LoggerInitv`).
+extern "C" void LoggerInit();
+extern "C" void debugLogger(const char *fmt, ...);
 #else
 #define LoggerInit()                                                                                                   \
     {                                                                                                                  \

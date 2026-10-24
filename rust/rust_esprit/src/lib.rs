@@ -76,6 +76,7 @@
 //! * **`external_std`**: the crate is used inside an existing `std`‑enabled
 //!   framework that provides the real `std`.
 #![cfg_attr(not(feature = "external_std"), no_std)]
+
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
@@ -207,6 +208,11 @@ mod timer;
 mod multi_pulse;
 mod serial;
 mod logger;
+/// The Esprit logger's C ABI (`lnDebug.cpp`) in Rust: CMake `USE_RUST_LOGGER`.
+#[cfg(feature = "rust_logger")]
+mod logger_c;
+#[cfg(all(feature = "rust_logger", not(feature = "bluepill")))]
+compile_error!("the `rust_logger` feature drives the debug UART through rs_uart_bluepill: it needs the `bluepill` platform backend");
 #[cfg(feature = "embedded-hal")]
 mod hal;
 

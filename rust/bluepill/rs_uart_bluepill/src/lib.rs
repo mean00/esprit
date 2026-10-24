@@ -6,6 +6,11 @@ pub mod registers;
 pub mod shim;
 pub use shim::*;
 
+/// Ring + DMA transmit buffer (Rust port of the C++
+/// `lnSerialBpTxOnlyBufferedDma`), used by the Rust logger.
+mod buffered_tx;
+pub use buffered_tx::{BufferedTx, RING_SIZE as TX_RING_SIZE};
+
 use core::ffi::c_void;
 use core::ptr::{read_volatile, write_volatile};
 use registers::*;
