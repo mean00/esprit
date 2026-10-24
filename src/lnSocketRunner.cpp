@@ -13,7 +13,14 @@
     {                                                                                                                  \
     }
 #endif
-extern void ln_set_connected_state(bool state);
+// Optional hook, notified when the link goes up/down. Empty weak default so a
+// build that does not provide it still links; an application or a driver can
+// override it with a strong definition.
+__attribute__((weak)) void ln_set_connected_state(bool state)
+{
+    (void)state;
+    xAssert(0); // it builds but does not run, something is missing!
+}
 
 /**
 
