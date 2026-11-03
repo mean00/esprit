@@ -14,8 +14,13 @@ volatile SysTick_Type *WCH_SysTick = (volatile SysTick_Type *)0xE000F000;
  */
 void lnSystemTimerInit()
 {
-    // number of ticks for a duration of 1 us
-    tickPerUs16 = ((SystemCoreClock * 4)) / (1000 * 1000); // *16/4
+    // Ticks per microsecond, scaled by 16 to keep the integer division precise:
+    // `lnGetUs64()` computes `lnGetCycle64() * 16 / tickPerUs16`, and
+    // `lnGetCycle64()` returns *core* cycles (the WCH SysTick is loaded with
+    // `configCPU_CLOCK_HZ / configTICK_RATE_HZ`, i.e. one core cycle per count).
+    // This used to be `* 4`, which made every microsecond reading 4x too large -
+    // verified against the host clock: a 1000 ms delay reported 4 003 802 us.
+    tickPerUs16 = (SystemCoreClock * 16) / (1000 * 1000);
 }
 
 /**
