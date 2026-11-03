@@ -6,6 +6,9 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
+
+portable-atomic = { version = "1.15.0", features = ["critical-section"] }
+critical-section = "1.2"
 # --- Platform backends -------------------------------------------------------
 # Only one family is selected, by the cargo features below:
 #   * `bluepill` — GD32 / CH32: the pure-Rust backends in esprit/rust/bluepill/

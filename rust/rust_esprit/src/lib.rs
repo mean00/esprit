@@ -76,14 +76,13 @@
 //! * **`external_std`**: the crate is used inside an existing `std`‑enabled
 //!   framework that provides the real `std`.
 #![cfg_attr(not(feature = "external_std"), no_std)]
-
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(clashing_extern_declarations)]
 #![allow(unsafe_op_in_unsafe_fn)]
 #![allow(unused_imports)]
-
+use critical_section::{Impl, RawRestoreState, set_impl};
 // In no_std mode we use the `alloc` crate.
 // In fake_std mode we're also no_std (embedded target), so we need alloc too.
 // In external_std mode, `std` is available.
@@ -198,21 +197,23 @@ cfg_if::cfg_if! {
 //  implementation details and must not be used directly.
 // ---------------------------------------------------------------------------
 
-mod gpio;
-mod exti;
-mod spi;
-mod i2c;
 mod adc;
+mod exti;
+mod gpio;
+mod i2c;
+mod spi;
 pub use rs_rtos::{event, queue, sync, task};
-mod timer;
-mod multi_pulse;
-mod serial;
 mod logger;
 /// The Esprit logger's C ABI (`lnDebug.cpp`) in Rust: CMake `USE_RUST_LOGGER`.
 #[cfg(feature = "rust_logger")]
 mod logger_c;
+mod multi_pulse;
+mod serial;
+mod timer;
 #[cfg(all(feature = "rust_logger", not(feature = "bluepill")))]
-compile_error!("the `rust_logger` feature drives the debug UART through rs_uart_bluepill: it needs the `bluepill` platform backend");
+compile_error!(
+    "the `rust_logger` feature drives the debug UART through rs_uart_bluepill: it needs the `bluepill` platform backend"
+);
 #[cfg(feature = "embedded-hal")]
 mod hal;
 
@@ -262,18 +263,18 @@ pub mod raw {
     };
 
     // ---- Peripherals ----
+    pub use crate::rn_exti_c::lnEdge;
+    pub use crate::rn_fast_event_c::lnfast_event_group_c;
     pub use crate::rn_i2c_c::ln_i2c_c;
+    pub use crate::rn_multi_pulse_c::ln_multi_pulse_c;
+    pub use crate::rn_serial_c::{ln_serial_event_cb, ln_serial_rx_c, ln_serial_tx_c};
     pub use crate::rn_spi_c::{
-        lnSpiCallback, lnSPISettings, ln_spi_c, spiBitOrder, spiBitOrder_SPI_LSBFIRST,
+        ln_spi_c, lnSPISettings, lnSpiCallback, spiBitOrder, spiBitOrder_SPI_LSBFIRST,
         spiBitOrder_SPI_MSBFIRST, spiDataMode, spiDataMode_SPI_MODE0, spiDataMode_SPI_MODE1,
         spiDataMode_SPI_MODE2, spiDataMode_SPI_MODE3,
     };
-    pub use crate::rn_fast_event_c::lnfast_event_group_c;
     pub use crate::rn_timer_c::ln_timer_c;
-    pub use crate::rn_multi_pulse_c::ln_multi_pulse_c;
     pub use crate::rn_timing_adc_c::ln_timing_adc_c;
-    pub use crate::rn_serial_c::{ln_serial_event_cb, ln_serial_rx_c, ln_serial_tx_c};
-    pub use crate::rn_exti_c::lnEdge;
     #[cfg(feature = "cdc")]
     pub use rs_tinyusb::raw::*;
 }
@@ -287,30 +288,29 @@ pub use exti::{
     Edge, PinCallback, attach_interrupt, detach_interrupt, disable_interrupt, enable_interrupt,
 };
 pub use gpio::{GpioMode, GpioPin, Pin};
+#[cfg(feature = "embedded-hal")]
+pub use hal::Delay;
 pub use i2c::I2c;
 pub use logger::LoggerWriter;
 pub use multi_pulse::MultiPulse;
 pub use queue::Queue;
-pub use serial::{Serial, SerialEvent, SerialEventHandler, SerialTx};
-pub use spi::{BitOrder, Spi, SpiMode};
-pub use sync::{
-    Arc, BinarySemaphore, CountingSemaphore, LazyLock, Mutex, MutexGuard, OnceLock,
-    RecursiveMutex, RecursiveMutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
-    SemaphoreGuard,
-};
-pub use task::{
-    current, delay_ms, delay_us, sleep, sleep_ms, spawn, spawn_raw, tick_count, time_ms, time_us,
-    time_us64, yield_now, Duration, Instant, TaskEntry, TaskHandle,
-};
-pub use timer::{DelayTimer, Timer};
 #[cfg(feature = "cdc")]
 #[allow(deprecated)]
 pub use rs_tinyusb::{
     Cdc, CdcAcm, CdcEvent, CdcEventHandler, CdcPort, LineState, Usb, UsbBus, UsbError, UsbEvent,
     UsbEventHandler,
 };
-#[cfg(feature = "embedded-hal")]
-pub use hal::Delay;
+pub use serial::{Serial, SerialEvent, SerialEventHandler, SerialTx};
+pub use spi::{BitOrder, Spi, SpiMode};
+pub use sync::{
+    Arc, BinarySemaphore, CountingSemaphore, LazyLock, Mutex, MutexGuard, OnceLock, RecursiveMutex,
+    RecursiveMutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard, SemaphoreGuard,
+};
+pub use task::{
+    Duration, Instant, TaskEntry, TaskHandle, current, delay_ms, delay_us, sleep, sleep_ms, spawn,
+    spawn_raw, tick_count, time_ms, time_us, time_us64, yield_now,
+};
+pub use timer::{DelayTimer, Timer};
 
 // ---------------------------------------------------------------------------
 //  Hardware-specific backend re-exports
@@ -325,19 +325,19 @@ pub mod bluepill {
     pub use rs_gpio_bluepill as gpio;
     pub use rs_i2c_bluepill as i2c;
     pub use rs_multi_pulse_bluepill as multi_pulse;
+    #[cfg(feature = "bluepill48")]
+    pub use rs_pinout48_bluepill as pinout;
     pub use rs_rcu_bluepill as rcu;
     pub use rs_spi_bluepill as spi;
     pub use rs_timer_bluepill as timer;
     pub use rs_uart_bluepill as uart;
-    #[cfg(feature = "bluepill48")]
-    pub use rs_pinout48_bluepill as pinout;
 }
 
 #[cfg(feature = "bluepill")]
 pub use {
     rs_adc_bluepill, rs_afio_bluepill, rs_dma_bluepill, rs_exti_bluepill, rs_gpio_bluepill,
-    rs_i2c_bluepill, rs_multi_pulse_bluepill, rs_rcu_bluepill, rs_spi_bluepill,
-    rs_timer_bluepill, rs_uart_bluepill,
+    rs_i2c_bluepill, rs_multi_pulse_bluepill, rs_rcu_bluepill, rs_spi_bluepill, rs_timer_bluepill,
+    rs_uart_bluepill,
 };
 
 // ---------------------------------------------------------------------------
@@ -373,9 +373,9 @@ pub use task::{get_time_ms, get_time_us};
 #[allow(deprecated)]
 pub use i2c::I2cBus;
 #[allow(deprecated)]
-pub use spi::SpiBus;
-#[allow(deprecated)]
 pub use serial::{SerialRxTx, SerialTxOnly};
+#[allow(deprecated)]
+pub use spi::SpiBus;
 
 // ---------------------------------------------------------------------------
 //  Interrupt control
@@ -399,6 +399,20 @@ pub fn enable_interrupts() {
 cfg_if! {
     if #[cfg(all(not(target_os = "espidf"), not(feature = "external_std")))] {
         pub struct FreeRtosAllocator;
+        struct FreeRtosCriticalSection;
+        critical_section::set_impl!(FreeRtosCriticalSection);
+
+    unsafe impl critical_section::Impl for FreeRtosCriticalSection {
+        unsafe fn acquire() -> critical_section::RawRestoreState {
+            // Calls FreeRTOS portENTER_CRITICAL()
+             rn_freertos_c::vPortEnterCritical()
+        }
+
+        unsafe fn release(_token: critical_section::RawRestoreState) {
+            // Calls FreeRTOS portEXIT_CRITICAL()
+             rn_freertos_c::vPortExitCritical()
+        }
+     }
 
         unsafe impl GlobalAlloc for FreeRtosAllocator {
             unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -497,11 +511,21 @@ pub mod std_shim {
     pub use core::task;
 
     // --- ZERO-COST ALLOC RE-EXPORTS ---
-    pub mod vec { pub use alloc::vec::*; }
-    pub mod string { pub use alloc::string::*; }
-    pub mod boxed { pub use alloc::boxed::*; }
-    pub mod borrow { pub use alloc::borrow::*; }
-    pub mod rc { pub use alloc::rc::*; }
+    pub mod vec {
+        pub use alloc::vec::*;
+    }
+    pub mod string {
+        pub use alloc::string::*;
+    }
+    pub mod boxed {
+        pub use alloc::boxed::*;
+    }
+    pub mod borrow {
+        pub use alloc::borrow::*;
+    }
+    pub mod rc {
+        pub use alloc::rc::*;
+    }
 
     pub mod collections {
         //! Heap-allocated collections (backed by FreeRTOS heap).
@@ -515,30 +539,26 @@ pub mod std_shim {
 
     pub mod prelude {
         pub mod v1 {
-            pub use core::prelude::rust_2021::*;
-            pub use alloc::vec::Vec;
-            pub use alloc::string::{String, ToString};
-            pub use alloc::boxed::Box;
             pub use alloc::borrow::ToOwned;
+            pub use alloc::boxed::Box;
+            pub use alloc::string::{String, ToString};
+            pub use alloc::vec::Vec;
+            pub use core::prelude::rust_2021::*;
         }
     }
 
     pub mod sync {
         //! FreeRTOS-backed synchronisation primitives.
         pub use crate::sync::{
-            Arc,
-            Mutex, MutexGuard,
-            RecursiveMutex, RecursiveMutexGuard,
-            RwLock, RwLockReadGuard, RwLockWriteGuard,
-            OnceLock,
-            LazyLock,
-            BinarySemaphore, CountingSemaphore, SemaphoreGuard,
+            Arc, BinarySemaphore, CountingSemaphore, LazyLock, Mutex, MutexGuard, OnceLock,
+            RecursiveMutex, RecursiveMutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
+            SemaphoreGuard,
         };
 
         pub mod mpsc {
             //! FreeRTOS-backed message passing.
-            use crate::sync::Arc;
             use crate::queue::Queue;
+            use crate::sync::Arc;
 
             #[derive(PartialEq, Eq, Clone, Copy, Debug)]
             pub struct RecvError;
@@ -584,7 +604,7 @@ pub mod std_shim {
 
     pub mod thread {
         //! FreeRTOS-backed task spawning.
-        pub use crate::task::{spawn, yield_now, current, sleep, sleep_ms};
+        pub use crate::task::{current, sleep, sleep_ms, spawn, yield_now};
     }
 }
 
@@ -597,15 +617,17 @@ pub mod std_shim {
 #[cfg(feature = "fake_std")]
 pub use std_shim as std;
 
-pub mod simple_adc;
 pub mod hw_stopwatch;
+pub mod simple_adc;
 
 pub use rs_esprit as hal;
 pub use rs_esprit::{
-    uart::{UartTx as HalUartTx, UartRx as HalUartRx, UartTxHandler, UartRxHandler, UartConfig},
-    spi::{Spi as HalSpi, SpiTxHandler, SpiRxHandler, SpiConfig, SpiMode as HalSpiMode, SpiBitOrder},
+    adc::{AdcHandler, SimpleAdc as HalSimpleAdc, TimingAdc as HalTimingAdc},
+    gpio::{EdgeTrigger, GpioInterruptHandler, GpioPin as HalGpioPin},
+    i2c::{I2c as HalI2c, I2cConfig, I2cHandler},
+    spi::{
+        Spi as HalSpi, SpiBitOrder, SpiConfig, SpiMode as HalSpiMode, SpiRxHandler, SpiTxHandler,
+    },
     timer::{Timer as HalTimer, TimerHandler},
-    i2c::{I2c as HalI2c, I2cHandler, I2cConfig},
-    adc::{SimpleAdc as HalSimpleAdc, TimingAdc as HalTimingAdc, AdcHandler},
-    gpio::{GpioPin as HalGpioPin, GpioInterruptHandler, EdgeTrigger},
+    uart::{UartConfig, UartRx as HalUartRx, UartRxHandler, UartTx as HalUartTx, UartTxHandler},
 };
