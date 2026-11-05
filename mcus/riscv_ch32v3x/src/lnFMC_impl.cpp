@@ -12,23 +12,32 @@
 LN_FMC *aFMC = (LN_FMC *)LN_FMC_ADR;
 
 #define LN_FMC_STAT_CH32_WR_BUSY (1 << 1)
+#define LN_FMC_STAT_CH32_EHMODS (1 << 7)
 #define LN_FMC_CTL_CH32_FASTUNLOCK (1 << 15)
 #define LN_FMC_CTL_CH32_FASTPROGRAM (1 << 16)
 #define LN_FMC_CTL_CH32_FASTERASE (1 << 17)
 #define LN_FMC_CTL_CH32_FASTSTART (1 << 21)
+#define LN_FMC_CTL_CH32_RSENACT (1 << 22)
 #define LN_FMC_CTL_CH32_EHMOD (1 << 24)
+
+bool CH32_fastUnlock();
+bool CH32_fastLock();
 
 void CH32V3_flashEnhanceMode(bool enable)
 {
-#if 0    
-    if(enable)
+    if (enable)
     {
+        CH32_fastUnlock();
         aFMC->CTL |= LN_FMC_CTL_CH32_EHMOD;
-    }else
-    {
-        aFMC->CTL &= ~LN_FMC_CTL_CH32_EHMOD;
+        volatile uint32_t stat = aFMC->STAT;
+        (void)stat;
     }
-#endif
+    else
+    {
+        CH32_fastUnlock();
+        aFMC->CTL &= ~LN_FMC_CTL_CH32_EHMOD;
+        aFMC->CTL |= LN_FMC_CTL_CH32_RSENACT;
+    }
 }
 
 void lnInitFlash_ch32v3x()
