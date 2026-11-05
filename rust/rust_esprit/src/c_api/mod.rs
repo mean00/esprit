@@ -14,6 +14,7 @@
 
 #[cfg(feature = "cdc")]
 pub mod rn_cdc_c;
+pub mod rn_cpuid_c;
 pub mod rn_debug_c;
 pub mod rn_exti_c;
 pub mod rn_fast_event_c;

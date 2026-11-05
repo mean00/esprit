@@ -24,3 +24,62 @@ uint32_t lnCpuID::getSerialID()
            ((uint32_t)id.id[2] << 16) |
            ((uint32_t)id.id[3] << 24);
 }
+
+void lnCpuID::identify()
+{
+}
+
+lnCpuID::LN_VENDOR lnCpuID::vendor()
+{
+    return LN_VENDOR_RP;
+}
+
+lnCpuID::LN_MCU lnCpuID::mcu()
+{
+#if defined(PICO_RP2350)
+    return LN_MCU_RP2350;
+#else
+    return LN_MCU_RP2040;
+#endif
+}
+
+const char *lnCpuID::mcuAsString()
+{
+#if defined(PICO_RP2350)
+    return "RP2350";
+#else
+    return "RP2040";
+#endif
+}
+
+int lnCpuID::flashSize()
+{
+    return 2048;
+}
+
+int lnCpuID::ramSize()
+{
+#if defined(PICO_RP2350)
+    return 520;
+#else
+    return 264;
+#endif
+}
+
+const char *lnCpuID::idAsString()
+{
+#if defined(PICO_RP2350)
+    return "RP2350";
+#else
+    return "RP2040";
+#endif
+}
+
+int lnCpuID::clockSpeed()
+{
+#if defined(PICO_RP2350)
+    return 150000000;
+#else
+    return 125000000;
+#endif
+}

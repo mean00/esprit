@@ -149,6 +149,7 @@ pub(crate) mod c_api;
 // Re-export the C‑FFI modules internally so that existing code (e.g.
 // `crate::rn_freertos_c::xQueueCreateMutex(...)`) continues to work.
 // These are **internal** bindings, not part of the public API.
+pub(crate) use c_api::rn_cpuid_c;
 pub(crate) use c_api::rn_debug_c;
 pub(crate) use c_api::rn_exti_c;
 pub(crate) use c_api::rn_fast_event_c;
@@ -198,6 +199,7 @@ cfg_if::cfg_if! {
 // ---------------------------------------------------------------------------
 
 mod adc;
+mod cpu_id;
 mod exti;
 mod gpio;
 mod i2c;
@@ -283,6 +285,7 @@ pub mod raw {
 //  Public API — flat, idiomatic re-exports at the crate root
 // ---------------------------------------------------------------------------
 pub use adc::{AdcBuffer, AdcTiming};
+pub use cpu_id::{CpuId, Mcu, Vendor};
 pub use event::EventGroup;
 pub use exti::{
     Edge, PinCallback, attach_interrupt, detach_interrupt, disable_interrupt, enable_interrupt,

@@ -19,7 +19,7 @@ if(Python3_Interpreter_FOUND)
     VERBATIM)
 endif()
 
-target_sources(esprit_c_bindings PRIVATE ${EXTRA} ${C}/lnFast_EventGroup_c.cpp ${C}/lnGPIO_c.cpp ${C}/lnExti_c.cpp)
+target_sources(esprit_c_bindings PRIVATE ${EXTRA} ${C}/lnFast_EventGroup_c.cpp ${C}/lnGPIO_c.cpp ${C}/lnExti_c.cpp ${C}/lnCpuID_c.cpp)
 if(NOT (LN_ENABLE_RUST AND NOT (USE_RP2040 OR USE_RP2350)))
   target_sources(esprit_c_bindings PRIVATE ${C}/lnSerial_c.cpp)
 endif()

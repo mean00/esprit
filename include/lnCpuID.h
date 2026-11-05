@@ -15,7 +15,8 @@ class lnCpuID
         LN_VENDOR_STM,
         LN_VENDOR_GD,
         LN_VENDOR_WCH,
-        LN_VENDOR_ESP
+        LN_VENDOR_ESP,
+        LN_VENDOR_RP,
     };
     enum LN_MCU
     {
@@ -24,6 +25,8 @@ class lnCpuID
         LN_MCU_ARM_F4,
         LN_MCU_RISCV,
         LN_MCU_XTENSA,
+        LN_MCU_RP2040,
+        LN_MCU_RP2350,
     };
 
   public:
