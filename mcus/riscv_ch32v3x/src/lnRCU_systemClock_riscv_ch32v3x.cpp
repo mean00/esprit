@@ -74,6 +74,7 @@ uint32_t lnPeripherals::getClock(const Peripherals periph)
     case pTIMER1:
     case pTIMER2:
     case pTIMER3:
+    case pTIMER4:
     case pTIMER5:
     case pTIMER6:
 #if CH32_APB1_DIVIDER == 0
@@ -122,13 +123,20 @@ static void waitCfg0Bit(int mask)
  *  i.e. if you want x10, you use multipliers[10]
  */
 
+/* PLL multiplier encoding of this family, indexed by the multiplier the build asks for.
+ *
+ * For CH32V30x_D8C (CH32V305/CH32V307, ch32v3.md §3.2.3 Table 3-3):
+ *   0000: x18 (144 MHz)
+ *   0001..1100: x3..x14 (index - 2, so x12 = 10 -> 96 MHz)
+ *   1110: x15 (120 MHz)
+ *   1111: x16 (128 MHz)
+ */
 static const uint8_t Multipliers[] = {
     0, 0, 0, 1, // 0 1 2 3
     2, 3, 4, 5, // 4 5 6 7
     6, 7, 8, 9, // 8 9 10 11
-    // the ones below dont work on stm32 !
-    10, 11, 12, 13, // 12 13 14 15
-    14, 14, 15      // 16 17 18 19
+    10, 11, 12, 14, // 12 13 14 15
+    15, 0, 0        // 16 17 18 (18 -> 0 = x18 = 144 MHz)
 };
 /**
  * \brief setup the pll to achieve the wanted frequency
@@ -138,12 +146,25 @@ static const uint8_t Multipliers[] = {
 void setPll(int multiplier, bool external)
 {
     arcu->CFG1 = 0;
-    xAssert(multiplier < sizeof(Multipliers));
+    // Bound by the number of *entries*: `sizeof(Multipliers)` alone only happens to be right
+    // because the elements are bytes, and an out-of-range index reads past the table.
+    xAssert(multiplier < (int)(sizeof(Multipliers) / sizeof(Multipliers[0])));
     int pllMultiplier = Multipliers[multiplier];
+
+    // CHIPID at 0x1FFFF704: bits 31:20 contain family code (0x303 vs 0x305/0x307, see ch32v3.md §3.2.3)
+    uint32_t chipid = *(volatile uint32_t *)0x1FFFF704;
+    uint32_t family = (chipid >> 20) & 0xFFF;
+    if (multiplier == 18)
+    {
+        if (family == 0x305 || family == 0x307)
+            pllMultiplier = 0;  // D8C: 0000 = x18 (144 MHz)
+        else
+            pllMultiplier = 15; // D8:  1111 = x18 (144 MHz)
+    }
 
     // Set PLL multiplier
     uint32_t c0 = arcu->CFG0;
-    c0 &= CH32_CFG0_PLL_MASK;
+    c0 &= ~CH32_CFG0_PLL_MASK;
     c0 |= CH32_CFG0_PLL_VALUE(pllMultiplier); // PLL Multiplier, ignore MSB
 
     if (external)
@@ -247,13 +268,13 @@ void lnInitSystemClock()
     // APB2=AHB/1
 
     uint32_t clks = arcu->CFG0;
-    clks &= CH32_CFG0_AHB_MASK;
+    clks &= ~CH32_CFG0_AHB_MASK;
     clks |= CH32_CFG0_AHB_DIVIDER(0); // 0-> 1:1
 
-    clks &= CH32_CFG0_APB1_MASK;
+    clks &= ~CH32_CFG0_APB1_MASK;
     clks |= CH32_CFG0_APB1_DIVIDER(CH32_APB1_DIVIDER * 4); // 0-> 1:1, 4-> 1:2
 
-    clks &= CH32_CFG0_APB2_MASK;
+    clks &= ~CH32_CFG0_APB2_MASK;
     clks |= CH32_CFG0_APB2_DIVIDER(0); // 0-> 1:1
 
     arcu->CFG0 = clks;
@@ -262,11 +283,12 @@ void lnInitSystemClock()
     clks &= ~(LN_RCU_CFG0_SYSCLOCK_MASK);
     clks |= LN_RCU_CFG0_SYSCLOCK_PLL;
     arcu->CFG0 = clks;
+    // SWS mirrors SW, wait for it to report PLL
+    waitCfg0Bit(LN_RCU_CFG0_SYSCLOCK_PLL << 2);
 
-#warning DO WE NEED WAIT STATE FOR THE FLASH (CH32) ????
-#warning DO WE NEED WAIT STATE FOR THE FLASH (CH32) ????
-#warning DO WE NEED WAIT STATE FOR THE FLASH (CH32) ????
-#warning DO WE NEED WAIT STATE FOR THE FLASH (CH32) ????
-#warning DO WE NEED WAIT STATE FOR THE FLASH (CH32) ????
-
+    // No flash wait states to program on this family: the CH32V30x FMC has no latency field
+    // (FMC_CTL only carries the erase/program/option-byte/erase-enable bits), so the flash
+    // keeps whatever the part comes up with. That is also what WCH's own 144 MHz examples
+    // rely on, and the firmware runs at 96 MHz on silicon with no fetch problem, so the old
+    // "DO WE NEED WAIT STATE FOR THE FLASH" question is settled: there is nothing to set.
 } // EOF
