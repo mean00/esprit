@@ -25,6 +25,18 @@ static const LN_RP_PIO *rpiox[2] = {(LN_RP_PIO *)LN_PIO0_BASE_ADR, (LN_RP_PIO *)
     }
 #endif
 
+/* Poll budget of the FIFO wait helpers below. They used to spin until the state
+ * machine moved, which never happens when the target stays silent (a debug pin
+ * muted right after an ndmreset, a lost line): the spin runs inside the GDB task,
+ * so the whole GDB CDC died with it for minutes and the probe had to be replugged.
+ * Two things matter about the size: a legitimate word arrives within one frame (tens
+ * of microseconds, i.e. a few hundred polls), and the budget must stay small because
+ * the callers multiply it - the DMI layer retries a frame 6 times and a run-control
+ * poll loops hundreds of times, so 2^22 spins per wait turned a single stuck halt
+ * into minutes. 2^14 polls is a couple of milliseconds, a generous margin over a
+ * frame and far below anything a user would call a hang. */
+#define LN_RP_PIO_WAIT_SPINS (1UL << 14)
+
 /**
  *
  */
@@ -38,7 +50,7 @@ static void startPIO(LN_RP_PIO *rpio, uint32_t sm)
     rpio->PIO_CTRL = ctrl;
     // Purge RX
     const uint32_t msk = LN_RP_PIO_FSTAT_RX_EMPTY_BIT(sm);
-    while (1)
+    for (uint32_t spin = 0; spin < LN_RP_PIO_WAIT_SPINS; spin++)
     {
         uint32_t fstat = rpio->PIO_FSTAT;
         if (fstat & msk)
@@ -242,12 +254,13 @@ bool rpPIO_SM::setPinsValue(uint32_t value)
 bool rpPIO_SM::waitTxEmpty()
 {
     const uint32_t msk = LN_RP_PIO_FSTAT_TX_EMPTY_BIT(_sm);
-    while (1)
+    for (uint32_t spin = 0; spin < LN_RP_PIO_WAIT_SPINS; spin++)
     {
         uint32_t fstat = ENGINE()->PIO_FSTAT;
         if (fstat & msk)
             return true;
     }
+    return false;
 }
 /**
  *
@@ -256,12 +269,13 @@ bool rpPIO_SM::waitTxEmpty()
 bool rpPIO_SM::waitTxReady()
 {
     const uint32_t msk = LN_RP_PIO_FSTAT_TX_FULL_BIT(_sm);
-    while (1)
+    for (uint32_t spin = 0; spin < LN_RP_PIO_WAIT_SPINS; spin++)
     {
         uint32_t fstat = ENGINE()->PIO_FSTAT;
         if (!(fstat & msk))
             return true;
     }
+    return false;
 }
 /**
  *
@@ -270,7 +284,7 @@ bool rpPIO_SM::waitTxReady()
 bool rpPIO_SM::waitRxReady()
 {
     const uint32_t msk = LN_RP_PIO_FSTAT_RX_EMPTY_BIT(_sm);
-    while (1)
+    for (uint32_t spin = 0; spin < LN_RP_PIO_WAIT_SPINS; spin++)
     {
         uint32_t fstat = ENGINE()->PIO_FSTAT;
         if (!(fstat & msk))
@@ -289,6 +303,7 @@ bool rpPIO_SM::waitRxReady()
         }
 #endif
     }
+    return false;
 }
 
 /**
@@ -343,19 +358,18 @@ bool rpPIO_SM::read(uint32_t nb, uint32_t *data)
 {
     xAssert(nb == 1);
     // wait for rx fifo not empty
-#if 1
-    while (1)
+    for (uint32_t spin = 0; spin < LN_RP_PIO_WAIT_SPINS; spin++)
     {
         uint32_t level = ENGINE()->PIO_LEVEL;
         level = ((level >> (8 * _sm)) >> 4) & 0xf; // RX level
         if (level)
         {
-            break;
+            *data = ENGINE()->PIO_RXF[_sm];
+            return true;
         }
     }
-#endif
-    *data = ENGINE()->PIO_RXF[_sm];
-    return true;
+    *data = 0;
+    return false;
 }
 /**
  *
