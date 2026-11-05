@@ -3,6 +3,7 @@
  *  See license file
  */
 #pragma once
+#include "esprit_macro.h"
 
 /**
  *
@@ -12,20 +13,20 @@ class lnFastIO
 {
   public:
     lnFastIO(lnPin p);
-    void on() volatile
+    LN_ALWAYS_INLINE void on()
     {
         *_onoff = _onbit;
     }
-    void off() volatile
+    LN_ALWAYS_INLINE void off()
     {
         *_onoff = _offbit;
     }
-    void pulseLow() volatile __attribute__((always_inline))
+    LN_ALWAYS_INLINE void pulseLow()
     {
         *_onoff = _offbit;
         *_onoff = _onbit;
     }
-    void pulseHigh() volatile __attribute__((always_inline))
+    LN_ALWAYS_INLINE void pulseHigh()
     {
         *_onoff = _onbit;
         *_onoff = _offbit;
@@ -38,7 +39,7 @@ class lnFastIO
      * cell has ~24 timer ticks of slack after its sample, and the call was most
      * of them).
      */
-    bool read() volatile
+    LN_ALWAYS_INLINE bool read() const
     {
         return (*_in & _inbit) != 0;
     }
@@ -49,24 +50,24 @@ class lnFastIO
      * through the DMA, which has to write exactly these words to this register
      * at the instant the channel releases the wire.
      */
-    volatile uint32_t *fastRegister() volatile
+    volatile uint32_t *fastRegister() const
     {
         return _onoff;
     }
-    uint32_t fastSetWord() volatile
+    uint32_t fastSetWord() const
     {
         return _onbit;
     }
-    uint32_t fastClearWord() volatile
+    uint32_t fastClearWord() const
     {
         return _offbit;
     }
 
   protected:
     volatile uint32_t *_onoff;
-    volatile uint32_t _onbit, _offbit;
+    uint32_t _onbit, _offbit;
     volatile uint32_t *_in; // the port's input status register
-    volatile uint32_t _inbit;
+    uint32_t _inbit;
 };
 
 // EOF
