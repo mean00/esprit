@@ -181,7 +181,28 @@ impl SimpleAdc {
         self.pin
     }
 
-    pub fn set_smpt(&mut self, _smpt: u32) {}
+    pub fn set_smpt(&self, smpt: u32) {
+        // The sampling time of a channel lives in SAMPT0 (channels 0..9) or SAMPT1
+        // (channels 10..17), three bits per channel. Leaving it at the reset value
+        // (1.5 cycles) under-reads any source with a non-negligible impedance — the
+        // NRST/2 divider of a probe sense input, for instance — by a large margin.
+        let regs = AdcRegisters::ptr(self.instance);
+        let ch = pin_to_adc_channel(self.pin);
+        let smpt = smpt & ADC_SAMPT_MASK;
+        unsafe {
+            if ch < ADC_SAMPT0_CHANNELS {
+                let shift = ch * ADC_SAMPT_BITS;
+                let mut v = read_volatile(&mut (*regs).sampt0);
+                v &= !(ADC_SAMPT_MASK << shift);
+                write_volatile(&mut (*regs).sampt0, v | (smpt << shift));
+            } else {
+                let shift = (ch - ADC_SAMPT0_CHANNELS) * ADC_SAMPT_BITS;
+                let mut v = read_volatile(&mut (*regs).sampt1);
+                v &= !(ADC_SAMPT_MASK << shift);
+                write_volatile(&mut (*regs).sampt1, v | (smpt << shift));
+            }
+        }
+    }
 
     pub fn read(&self) -> i32 {
         let regs = AdcRegisters::ptr(self.instance);

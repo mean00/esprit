@@ -13,7 +13,12 @@ pub struct AdcRegisters {
     pub iofr1: u32,
     pub iofr2: u32,
     pub iofr3: u32,
-    pub wdt: u32,
+    /// Analog watchdog high threshold (WDHT, 0x24).
+    pub wdht: u32,
+    /// Analog watchdog low threshold (WDLT, 0x28). Its own register, not part of
+    /// WDHT: without it every field below (RSQ0/RSQ1/RSQ2, ISQ, IDATA, RDATA) is
+    /// 4 bytes short and a conversion's result is read from IDATA3 instead of RDATA.
+    pub wdlt: u32,
     pub rsq0: u32,
     pub rsq1: u32,
     pub rsq2: u32,
@@ -75,6 +80,12 @@ pub const ADC_RSQ0_LEN_MASK: u32 = 0x0F << ADC_RSQ0_LEN_POS;
 
 // --- Sampling time constants ---
 pub const ADC_SAMPT_239_5: u32 = 7;
+/// Channels 0..=9 take their sampling time from SAMPT0, 10..=17 from SAMPT1.
+pub const ADC_SAMPT0_CHANNELS: u32 = 10;
+/// Bits per channel in SAMPT0 / SAMPT1.
+pub const ADC_SAMPT_BITS: u32 = 3;
+/// A channel's field in SAMPT0 / SAMPT1.
+pub const ADC_SAMPT_MASK: u32 = 0x7;
 
 // --- RDATA bitmask ---
 pub const ADC_RDATA_DATA_MASK: u32 = 0x0FFF;

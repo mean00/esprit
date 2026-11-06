@@ -121,7 +121,7 @@ pub extern "C" fn ln_simple_adc_set_smpt(adc: *mut c_void, smpt: u32) {
     let packed = adc as usize as u32;
     let instance = packed & 0xFFFF;
     let pin = (packed >> 16) & 0xFFFF;
-    let mut a = SimpleAdc::new(instance, pin);
+    let a = SimpleAdc::new(instance, pin);
     a.set_smpt(smpt);
 }
 
