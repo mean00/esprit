@@ -149,3 +149,36 @@ pub extern "C" fn ln_simple_adc_read(adc: *mut c_void) -> i32 {
 pub extern "C" fn ln_simple_adc_destroy(adc: *mut c_void) {
     unsafe { ln_rp_simple_adc_destroy(adc) }
 }
+
+/// Simple ADC driver for RP2040/RP2350 implementing [`rs_esprit::adc::SimpleAdc`].
+pub struct SimpleAdc {
+    raw: *mut c_void,
+}
+
+impl SimpleAdc {
+    pub fn new(instance: u32, pin: u32) -> Self {
+        let raw = ln_simple_adc_create(instance, pin);
+        assert!(!raw.is_null());
+        Self { raw }
+    }
+
+    pub fn set_smpt(&self, _smpt: u32) {}
+
+    pub fn read(&self) -> i32 {
+        ln_simple_adc_read(self.raw)
+    }
+}
+
+impl Drop for SimpleAdc {
+    fn drop(&mut self) {
+        ln_simple_adc_destroy(self.raw);
+    }
+}
+
+impl rs_esprit::adc::SimpleAdc for SimpleAdc {
+    fn read(&self) -> i32 {
+        self.read()
+    }
+
+    fn set_handler(&mut self, _handler: Option<&'static dyn rs_esprit::adc::AdcHandler>) {}
+}

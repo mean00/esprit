@@ -33,3 +33,11 @@ impl Drop for SimpleAdc {
         unsafe { rn_simple_adc_c::ln_simple_adc_destroy(self.handle) }
     }
 }
+
+impl rs_esprit::adc::SimpleAdc for SimpleAdc {
+    fn read(&self) -> i32 {
+        self.read()
+    }
+
+    fn set_handler(&mut self, _handler: Option<&'static dyn rs_esprit::adc::AdcHandler>) {}
+}

@@ -2,3 +2,6 @@
 name = "rs_adc_rp2xxx"
 version = "0.1.0"
 edition = "2024"
+
+[dependencies]
+rs_esprit = { path = "../../rs_esprit" }
