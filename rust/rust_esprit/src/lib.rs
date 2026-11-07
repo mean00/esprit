@@ -291,6 +291,11 @@ pub use exti::{
     Edge, PinCallback, attach_interrupt, detach_interrupt, disable_interrupt, enable_interrupt,
 };
 pub use gpio::{GpioMode, GpioPin, Pin};
+/// The RP2040 / RP2350 pins (`rs_gpio_rp2xxx`): [`Pin`] above, on that platform,
+/// *is* that crate's `Pin`, and this module is where the pin type, its mode
+/// mapping and the `GpioPin` implementation all live.
+#[cfg(feature = "rp2040")]
+pub use rs_gpio_rp2xxx as gpio_rp2xxx;
 #[cfg(feature = "embedded-hal")]
 pub use hal::Delay;
 pub use i2c::I2c;

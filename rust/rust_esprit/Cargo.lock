@@ -122,6 +122,9 @@ dependencies = [
 [[package]]
 name = "rs_adc_rp2xxx"
 version = "0.1.0"
+dependencies = [
+ "rs_esprit",
+]
 
 [[package]]
 name = "rs_adc_wrapped"
@@ -183,6 +186,13 @@ name = "rs_gpio_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_esprit",
+]
+
+[[package]]
+name = "rs_gpio_rp2xxx"
+version = "0.1.0"
+dependencies = [
  "rs_esprit",
 ]
 
@@ -345,6 +355,7 @@ dependencies = [
  "rs_exti_bluepill",
  "rs_exti_wrapped",
  "rs_gpio_bluepill",
+ "rs_gpio_rp2xxx",
  "rs_gpio_wrapped",
  "rs_i2c_bluepill",
  "rs_i2c_rp2xxx",

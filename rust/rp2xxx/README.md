@@ -5,8 +5,10 @@ These crates are the link-time backends for `rust_esprit` on RP2040 / RP2350.
 Most of them are **not drivers**: they only give `rust_esprit` something to link
 against for the peripherals that esprit implements in C++ *only* for the other
 targets, and every function body is `unimplemented!(...)`, i.e. it panics.  The
-exception is the simple ADC (`ln_simple_adc_*`), which forwards to the C++
-RP2xxx driver — see [ADC backends](#adc-backends-rs_adc_rp2xxx) below.
+exceptions are the simple ADC (`ln_simple_adc_*`), which forwards to the C++
+RP2xxx driver — see [ADC backends](#adc-backends-rs_adc_rp2xxx) below — and the
+pure-Rust GPIO driver `rs_gpio_rp2xxx` — see
+[GPIO backend](#gpio-backend-rs_gpio_rp2xxx).
 
 ## Why they exist
 
@@ -65,6 +67,31 @@ the Bluepill targets (`mcus/common_bluepill/`), so:
 `ln_simple_adc_set_smpt()` is a no-op, matching both `lnSimpleADC` (no sample-time
 knob on RP2xxx) and the Bluepill Rust backend.
 
+
+## GPIO backend (`rs_gpio_rp2xxx`)
+
+The second real driver, and the only crate here that is a full peripheral driver:
+it implements the `rs_esprit::gpio::GpioPin` super trait for `rs_gpio_rp2xxx::Pin`
+(`GPIO0` … `GPIO29`) straight on the SIO / IO_BANK0 / PADS_BANK0 registers
+(`registers.rs`, numbers from `rp2040.md`; the RP2350 is treated as identical).
+Pin type, mode mapping, open-drain sequencing and registers all live in that crate,
+exactly like `rs_gpio_bluepill` does for the bluepill parts.
+
+That `Pin` is *the* pin type of the RP2xxx Rust stack: `rust_esprit` re-exports it
+as its `Pin`, and `rust_esprit`'s C bindings use it as their `lnPin`
+(`c_api/rn_gpio_rp2040_c.rs` re-exports it, and `pin_types.rs` hands the same type
+to the timer/ADC/exti bindings), so a board-table entry and a `lnPin` argument are
+the same type.
+
+It still exports **no** C ABI: the `lnDigitalWrite` / `lnPinMode` /
+`lnOpenDrainClose` symbols are owned by esprit's C++ GPIO
+(`mcus/rp_common/src/ln_rp_gpio.cpp`) on RP2xxx. The mode mapping and the
+open-drain sequence mirror that file bit for bit, so the two can be mixed in one
+firmware (C++ SWD pins + Rust target-reset line, which is what
+`rs_swindle_board`'s `rp2xxx::reset_pin` does).
+
+It is reached as `rust_esprit::gpio_rp2xxx` (enabled by the `rp2040` feature). The
+first consumer is the probe board table: `swindle/rs/rs_swindle_board/src/rp2xxx/`.
 
 ## Naming
 

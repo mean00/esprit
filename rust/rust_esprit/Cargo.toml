@@ -40,6 +40,10 @@ rs_i2c_rp2xxx = { path = "../rp2xxx/rs_i2c_rp2xxx", optional = true }
 rs_timer_rp2xxx = { path = "../rp2xxx/rs_timer_rp2xxx", optional = true }
 rs_adc_rp2xxx = { path = "../rp2xxx/rs_adc_rp2xxx", optional = true }
 rs_multi_pulse_rp2xxx = { path = "../rp2xxx/rs_multi_pulse_rp2xxx", optional = true }
+# Real driver (not a stub): pure-Rust GPIO on SIO/IO_BANK0/PADS_BANK0, i.e. the
+# `rs_esprit::gpio::GpioPin` trait for the RP2xxx pins. Its `Pin` is re-exported
+# below as `rust_esprit::gpio_rp2xxx` and used as the `lnPin` of the C bindings.
+rs_gpio_rp2xxx = { path = "../rp2xxx/rs_gpio_rp2xxx", optional = true }
 ufmt = { version = "0.2.0", default-features = false }
 heapless = { version = "0.7.17", features = ["ufmt-impl"] }
 cfg-if = "1.0"
@@ -85,6 +89,7 @@ rp2040 = [
     "dep:rs_timer_rp2xxx",
     "dep:rs_adc_rp2xxx",
     "dep:rs_multi_pulse_rp2xxx",
+    "dep:rs_gpio_rp2xxx",
 ]
 # RP2350 shares the complete RP2xxx code path (bindings, cfgs and stubs).
 rp2350 = ["rp2040"]

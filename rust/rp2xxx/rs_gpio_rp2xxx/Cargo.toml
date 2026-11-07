@@ -1,0 +1,20 @@
+[package]
+name = "rs_gpio_rp2xxx"
+version = "0.1.0"
+edition = "2024"
+
+# Pure-Rust GPIO for the RP2040 / RP2350: the `rs_esprit::gpio::GpioPin` super
+# trait implemented straight on SIO / IO_BANK0 / PADS_BANK0 (registers.rs), the
+# RP2xxx counterpart of esprit/rust/bluepill/rs_gpio_bluepill — pin type, mode
+# mapping, open-drain sequencing and the registers, all in one place.
+#
+# `Pin` is *the* pin type of the RP2xxx Rust stack: `rust_esprit` re-exports it as
+# its `Pin`, and the RP2xxx C bindings use it as their `lnPin`.
+#
+# It exports no C ABI on purpose: on RP2xxx esprit's C++ GPIO
+# (esprit/mcus/rp_common/src/ln_rp_gpio.cpp) is still linked and owns the
+# lnDigitalWrite/lnPinMode/... symbols, so aliasing them here would be a
+# duplicate definition. The mode mapping below mirrors that C++ file bit for bit.
+
+[dependencies]
+rs_esprit = { path = "../../rs_esprit" }

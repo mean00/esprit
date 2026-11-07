@@ -63,7 +63,10 @@ pub use import_gpio::gpio::lnPin as Pin;
 pub type pin = Pin;
 
 /// Build a [`Pin`] from a raw numeric value (advanced).
-#[cfg(any(feature = "rp2040", feature = "esp32"))]
+///
+/// ESP32 only: on RP2040/RP2350 [`Pin`] is `rs_esprit::gpio::rp2xxx::Pin`, which
+/// brings its own `From<u32>` (a foreign type cannot gain one here).
+#[cfg(feature = "esp32")]
 impl From<u32> for Pin {
     fn from(val: u32) -> Self {
         // SAFETY: `lnPin` is a C enum; this mirrors the cast historically
