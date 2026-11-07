@@ -103,10 +103,15 @@ set(SDK_SRCS
 
 set(RP_LN_SOURCES
     ${RP_COMMON_FOLDER}/ln_rp_gpio.cpp ${RP_COMMON_FOLDER}/ln_rp_dma.cpp ${RP_COMMON_FOLDER}/ln_rp_pio.cpp
-    ${RP_COMMON_FOLDER}/lnStubs.cpp ${RP_COMMON_FOLDER}/ln_rp_spi.cpp ln_rp_adc.cpp
-    ${RP_COMMON_FOLDER}/rp_uniqid.cpp
+    ${RP_COMMON_FOLDER}/lnStubs.cpp ln_rp_adc.cpp
     # boot.s
 )
+# Rust-owned on a LN_ENABLE_RUST build: rs_spi_rp2xxx replaces ln_rp_spi.cpp and the
+# unique id is read from the registers by the Rust driver (rp_uniqid.cpp has no
+# caller). Both files stay in a non-Rust build.
+if(NOT LN_ENABLE_RUST)
+  list(APPEND RP_LN_SOURCES ${RP_COMMON_FOLDER}/ln_rp_spi.cpp ${RP_COMMON_FOLDER}/rp_uniqid.cpp)
+endif()
 
 set(RP_LN_SRCS
     ${RP_COMMON_FOLDER}/rp_serial.cpp ${RP_COMMON_FOLDER}/rp_rcu.cpp
@@ -116,7 +121,6 @@ add_library(esprit_lib OBJECT rp.cpp ${SDK_SRCS} ${RP_LN_SOURCES} ${RP_LN_SRCS}
                   ln_rp_adc.cpp
                   ${RP_COMMON_FOLDER}/ln_rp_gpio.cpp
                   ${RP_COMMON_FOLDER}/ln_rp_dma.cpp
-                  ${RP_COMMON_FOLDER}/ln_rp_spi.cpp
                   ${RP_COMMON_FOLDER}/ln_rp_pio.cpp
                   ${RP_COMMON_FOLDER}/ln_rp_exti.cpp
                   ${RP_COMMON_FOLDER}/lnStubs.cpp

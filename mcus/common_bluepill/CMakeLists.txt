@@ -25,7 +25,31 @@ set(OVERLAY_SRCS
     # ${LN_MCU_FOLDER}/boards/${LN_BOARD_NAME}/lnPinMapping.cpp
     CACHE INTERNAL "")
 
-add_library(esprit_lib OBJECT ${OVERLAY_SRCS})
+# Sources whose C++ symbols have no caller left once the Rust backends own the
+# peripheral. They are simply not compiled in a Rust build (LN_ENABLE_RUST, which
+# swindle always sets), and they are back in every non-Rust build (the esprit demo
+# projects can turn LN_ENABLE_RUST off). Their Rust counterparts:
+#   lnADC.cpp / lnADC_base.cpp / lnADC_timing.cpp -> rs_adc_bluepill (simple + timing ADC)
+#   lnDmaTimer.cpp                                -> rs_dma_bluepill (WS2812B, ws2812b crate)
+#   lnMultiPulse.cpp                              -> rs_multi_pulse_bluepill
+#   lnDAC.cpp                                     -> nothing at all on these boards (no DAC)
+#   lnStubs.cpp                                   -> libc glue nothing references any more
+# Nothing here is deleted: the files stay for the non-Rust builds.
+set(OVERLAY_SRCS_RUST_REPLACED
+    lnADC.cpp
+    lnADC_base.cpp
+    lnADC_timing.cpp
+    lnDmaTimer.cpp
+    lnMultiPulse.cpp
+    lnDAC.cpp
+    lnStubs.cpp)
+set(OVERLAY_SRCS_BUILD ${OVERLAY_SRCS})
+if(LN_ENABLE_RUST)
+  message(STATUS "Rust backends own them, not compiled: ${OVERLAY_SRCS_RUST_REPLACED}")
+  list(REMOVE_ITEM OVERLAY_SRCS_BUILD ${OVERLAY_SRCS_RUST_REPLACED})
+endif()
+
+add_library(esprit_lib OBJECT ${OVERLAY_SRCS_BUILD})
 target_link_libraries(esprit_lib PUBLIC esprit_dev)
 target_include_directories(esprit_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -42,7 +66,12 @@ if(NOT USE_RUST_LOGGER)
 endif()
 
 if(LN_ENABLE_UART)
-  target_sources(esprit_lib PRIVATE lnSerialRxTx.cpp lnSerialRxTxDma.cpp)
+  # lnSerialRxTx*.cpp are the C++ UART drivers. With LN_ENABLE_RUST the Rust side
+  # uses rs_uart_bluepill (rust_esprit/src/serial.rs) instead and nothing links
+  # them; a non-Rust build still gets them.
+  if(NOT LN_ENABLE_RUST)
+    target_sources(esprit_lib PRIVATE lnSerialRxTx.cpp lnSerialRxTxDma.cpp)
+  endif()
   target_compile_options(esprit_lib PRIVATE "-DLN_ENABLE_UART=1")
 endif()
 
