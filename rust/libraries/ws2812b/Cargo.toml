@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rs_gpio_bluepill = { path = "../../bluepill/rs_gpio_bluepill", optional = true }
-rs_timer_bluepill = { path = "../../bluepill/rs_timer_bluepill", optional = true }
+rs_gpio_bluepill = { path = "../../rs_mcus/bluepill/rs_gpio_bluepill", optional = true }
+rs_timer_bluepill = { path = "../../rs_mcus/bluepill/rs_timer_bluepill", optional = true }
 rust_esprit = { path = "../../rust_esprit", default-features = false, optional = true }
 
 [features]

@@ -1,7 +1,7 @@
 //! Safe Rust wrapper around the hardware stopwatch backend.
 //!
 //! The backend is selected by the platform features (see
-//! `esprit/rust/rp2xxx/README.md`): `rs_timer_bluepill` on GD32/CH32,
+//! `esprit/rust/rs_mcus/rp2xxx/README.md`): `rs_timer_bluepill` on GD32/CH32,
 //! `rs_timer_rp2xxx` (panicking stub) on RP2040/RP2350, the C API elsewhere.
 
 use crate::rn_hw_stopwatch_c;

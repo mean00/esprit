@@ -1,7 +1,7 @@
 //! Safe Rust wrapper around the simple (single-shot) ADC backend.
 //!
 //! The backend is selected by the platform features (see
-//! `esprit/rust/rp2xxx/README.md`): `rs_adc_bluepill` on GD32/CH32,
+//! `esprit/rust/rs_mcus/rp2xxx/README.md`): `rs_adc_bluepill` on GD32/CH32,
 //! `rs_adc_rp2xxx` on RP2040/RP2350, `rs_adc_wrapped` (C API) elsewhere.
 //!
 //! On the backends that have a Rust driver of their own (`bluepill`, `rp2040`)

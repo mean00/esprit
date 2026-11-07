@@ -29,7 +29,7 @@
 //! In both cases the exported names, signatures and handle types match the
 //! other backends (`rs_adc_bluepill` on GD32/CH32, `c_api::rn_timing_adc_c` /
 //! `c_api::rn_simple_adc_c` on ESP32) so that `rust_esprit` can select a backend
-//! per platform — see `esprit/rust/rp2xxx/README.md`.
+//! per platform — see `esprit/rust/rs_mcus/rp2xxx/README.md`.
 
 
 #![no_std]

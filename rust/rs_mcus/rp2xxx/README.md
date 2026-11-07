@@ -50,7 +50,7 @@ Unlike the other crates, `rs_adc_rp2xxx` covers two different situations:
 | `ln_timing_adc_*` | panics — esprit has no RP2xxx `lnTimingAdc` |
 
 esprit's RP2xxx ADC support is the C++
-[`lnSimpleADC`](../rust_esprit/../mcus/arm_rp2040/include/lnADC.h) class
+[`lnSimpleADC`](../../mcus/arm_rp2040/include/lnADC.h) class
 (`mcus/arm_rpX/src/ln_rp_adc.cpp`) — the same driver swindle uses in
 `swindle/src/platform/rp2040/bmp_adc_rp2040.cpp` for target-voltage measurement.
 It has no `extern "C"` interface, and `lnTimingAdc` / `lnBaseAdc` only exist for

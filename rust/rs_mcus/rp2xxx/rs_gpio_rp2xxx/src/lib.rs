@@ -4,7 +4,7 @@
 //! super trait implemented straight on SIO / IO_BANK0 / PADS_BANK0
 //! (`registers.rs`, numbers from `rp2040.md`; the RP2350 has the same layout for
 //! every field used here). The RP2xxx sibling of
-//! `esprit/rust/bluepill/rs_gpio_bluepill`: pin type, mode mapping, open-drain
+//! `esprit/rust/rs_mcus/bluepill/rs_gpio_bluepill`: pin type, mode mapping, open-drain
 //! sequencing and registers in one crate.
 //!
 //! [`Pin`] is *the* pin type of the RP2xxx Rust stack — `rust_esprit` re-exports it

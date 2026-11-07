@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rs_esprit = { path = "../../rs_esprit" }
+rs_esprit = { path = "../../../rs_esprit" }

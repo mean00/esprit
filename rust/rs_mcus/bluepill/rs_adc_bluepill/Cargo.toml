@@ -1,16 +1,12 @@
 [package]
-name = "rs_timer_bluepill"
+name = "rs_adc_bluepill"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rs_esprit = { path = "../../rs_esprit" }
 rs_bluepill = { path = "../rs_bluepill" }
 rs_gpio_bluepill = { path = "../rs_gpio_bluepill" }
 rs_rcu_bluepill = { path = "../rs_rcu_bluepill" }
+rs_timer_bluepill = { path = "../rs_timer_bluepill" }
 rs_dma_bluepill = { path = "../rs_dma_bluepill" }
-rs_pinout48_bluepill = { path = "../rs_pinout48_bluepill" }
-
-[features]
-bluepill48 = ["rs_pinout48_bluepill/bluepill48"]
-bluepill64 = ["rs_pinout48_bluepill/bluepill64"]
+rs_esprit = { path = "../../../rs_esprit" }
