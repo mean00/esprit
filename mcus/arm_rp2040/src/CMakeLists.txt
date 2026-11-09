@@ -48,9 +48,9 @@ set(RP_LN_SOURCES ${RP_COMMON_FOLDER}/ln_rp_gpio.cpp ${RP_COMMON_FOLDER}/ln_rp_d
 # Rust-owned on a LN_ENABLE_RUST build: rs_spi_rp2xxx replaces ln_rp_spi.cpp and the
 # unique id is read from the registers by the Rust driver (rp_uniqid.cpp has no
 # caller). Both files stay in a non-Rust build.
-if(NOT LN_ENABLE_RUST)
-  list(APPEND RP_LN_SOURCES ${RP_COMMON_FOLDER}/ln_rp_spi.cpp ${RP_COMMON_FOLDER}/rp_uniqid.cpp)
-endif()
+#if(NOT LN_ENABLE_RUST)
+list(APPEND RP_LN_SOURCES ${RP_COMMON_FOLDER}/ln_rp_spi.cpp ${RP_COMMON_FOLDER}/rp_uniqid.cpp)
+#endif()
 set(BASE_SOURCES
     ${PICO_SDK_PATH}/src/rp2_common/pico_unique_id/unique_id.c
     ${PICO_SDK_PATH}/src/rp2_common/hardware_timer/timer.c
