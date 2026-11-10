@@ -1,0 +1,10 @@
+[package]
+name = "rs_socketrunner"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rs_rtos = { path = "../../rs_rtos" }
+
+[features]
+default = []
