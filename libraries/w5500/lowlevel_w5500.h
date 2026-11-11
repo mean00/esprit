@@ -1,9 +1,10 @@
 /**
  * @file    lowlevel_w5500.h
- * @brief   W5500 SPI adapter — Rust driver C++ interface.
+ * @brief   W5500 SPI adapter — Rust driver entry point.
  *
- * Thin header forwarding W5500LowLevel operations to the pure-Rust
- * rs_w5500 driver (w5500_init_c, w5500_set_mac_c, w5500_start_c).
+ * The driver itself is the Rust crate rs_w5500; this header only hands the board
+ * pin table, the MAC address and the network callback to its single C entry
+ * point, which initialises the controller and starts the coordinator task.
  *
  * @copyright (C) 2025-2026
  * @license  See license file
@@ -27,26 +28,16 @@ class lnW5500SPI
 };
 
 extern "C" {
-    bool w5500_init_c(int spiInstance, const lnW5500SPI *pins);
-    void w5500_set_mac_c(const uint8_t mac[6]);
-    bool w5500_start_c(lnLwIpSysCallback cb, void *arg);
+bool w5500_begin_c(uint32_t spiInstance, const lnW5500SPI *pins, const uint8_t mac[6],
+                   lnLwIpSysCallback cb, void *arg);
 }
 
 class W5500LowLevel
 {
   public:
-    static inline bool init(int spiInstance, const lnW5500SPI *pins)
+    static inline bool begin(int spiInstance, const lnW5500SPI *pins, const uint8_t mac[6],
+                             lnLwIpSysCallback cb, void *arg)
     {
-        return w5500_init_c(spiInstance, pins);
-    }
-
-    static inline void setMac(const uint8_t mac[6])
-    {
-        w5500_set_mac_c(mac);
-    }
-
-    static inline bool start(lnLwIpSysCallback cb, void *arg)
-    {
-        return w5500_start_c(cb, arg);
+        return w5500_begin_c((uint32_t)spiInstance, pins, mac, cb, arg);
     }
 };

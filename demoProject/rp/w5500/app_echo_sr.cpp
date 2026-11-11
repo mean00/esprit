@@ -210,15 +210,13 @@ void setup()
     Logger("\n--- W5500 Echo Server Demo (socketRunner) ---\n");
     Logger("Initializing W5500 on SPI%d...\n", SPI_INSTANCE);
 
-    if (!W5500LowLevel::init(SPI_INSTANCE, &spi_pins))
+    if (!W5500LowLevel::begin(SPI_INSTANCE, &spi_pins, gMacAddr, lwip_cb, nullptr))
     {
         Logger("FATAL: W5500 init failed!\n");
         while (1)
             ;
     }
-    Logger("W5500 SPI initialized.\n");
-
-    W5500LowLevel::setMac(gMacAddr);
+    Logger("W5500 started. Waiting for DHCP...\n");
 }
 /**
  * @brief Application main loop.
@@ -231,12 +229,6 @@ void setup()
 void loop()
 {
 
-    if (!W5500LowLevel::start(lwip_cb, nullptr))
-    {
-        Logger("FATAL: W5500 start failed!\n");
-        xAssert(0);
-    }
-    Logger("W5500 started. Waiting for DHCP...\n");
     eg.takeOwnership();
     EchoSocketRunner runner(TCP_PORT, eg, 0);
 

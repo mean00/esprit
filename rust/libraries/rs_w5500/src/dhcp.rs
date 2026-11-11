@@ -12,7 +12,6 @@ const DHCP_DISCOVER: u8 = 1;
 const DHCP_OFFER: u8 = 2;
 const DHCP_REQUEST: u8 = 3;
 const DHCP_ACK: u8 = 5;
-const DHCP_NAK: u8 = 6;
 
 const DHCP_OPT_SUBNET_MASK: u8 = 1;
 const DHCP_OPT_ROUTER: u8 = 3;
@@ -25,11 +24,57 @@ const DHCP_OPT_SERVER_ID: u8 = 54;
 const DHCP_OPT_PARAM_REQ: u8 = 55;
 const DHCP_OPT_END: u8 = 255;
 
+// BOOTP fixed-header fields (RFC 951 / DHCP option layout)
+const BOOTP_XID_OFFSET: usize = 4;
+const BOOTP_YIADDR_OFFSET: usize = 16;
+const BOOTP_CHADDR_OFFSET: usize = 28;
 const BOOTP_MAGIC_OFFSET: usize = 236;
 const BOOTP_OPTIONS_OFFSET: usize = 240;
 
+/// Size of the request/reply buffer, i.e. the largest DHCP message we build or
+/// accept.
+const DHCP_BUF_LEN: usize = 600;
+/// Polls spent waiting for `SEND_OK` after `Sn_CR_SEND`.
+const SEND_POLL_TRIES: usize = 10_000;
+/// Ticks (seconds) without an answer before DISCOVER is re-sent.
+const RETRY_TICKS: u8 = 5;
+/// Initial transaction id, derived from the MAC at `init()`.
+const XID_SEED: u32 = 0x12345678;
+
+const BOOTREQUEST: u8 = 1;
+const HTYPE_ETHERNET: u8 = 1;
+const MAC_LEN: u8 = 6;
+
+/// Fixed BOOTP prefix: op, htype, hlen, hops.
+const BOOT_REQUEST_HEADER: [u8; 4] = [BOOTREQUEST, HTYPE_ETHERNET, MAC_LEN, 0];
+
+/// Options we always ask the server for: tag, length, then the four tags.
+const PARAM_REQUEST_LIST: [u8; 6] = [
+    DHCP_OPT_PARAM_REQ,
+    4,
+    DHCP_OPT_SUBNET_MASK,
+    DHCP_OPT_ROUTER,
+    DHCP_OPT_DNS,
+    DHCP_OPT_LEASE_TIME,
+];
+
+const HOST_NAME: &[u8] = b"swindle";
+
 const BROADCAST_IP: [u8; 4] = [255, 255, 255, 255];
 const BROADCAST_MAC: [u8; 6] = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+
+/// Append `tag`, `value.len()` and `value` at `*off`, then advance `*off`.
+fn put_option(buf: &mut [u8], off: &mut usize, tag: u8, value: &[u8]) {
+    buf[*off] = tag;
+    buf[*off + 1] = value.len() as u8;
+    buf[*off + 2..*off + 2 + value.len()].copy_from_slice(value);
+    *off += 2 + value.len();
+}
+
+/// Big-endian `u32` at `off`.
+fn read_u32_be(buf: &[u8], off: usize) -> u32 {
+    u32::from_be_bytes([buf[off], buf[off + 1], buf[off + 2], buf[off + 3]])
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DhcpState {
@@ -55,7 +100,7 @@ pub struct DhcpClient {
     server_ip: [u8; 4],
     requested_ip: [u8; 4],
     pub info: DhcpInfo,
-    buf: [u8; 600],
+    buf: [u8; DHCP_BUF_LEN],
     retry_count: u8,
     tick_count: u32,
 }
@@ -64,7 +109,7 @@ impl DhcpClient {
     pub const fn new() -> Self {
         Self {
             state: DhcpState::Idle,
-            xid: 0x12345678,
+            xid: XID_SEED,
             server_ip: [0; 4],
             requested_ip: [0; 4],
             info: DhcpInfo {
@@ -74,7 +119,7 @@ impl DhcpClient {
                 dns: [0; 4],
                 lease_time: 0,
             },
-            buf: [0; 600],
+            buf: [0; DHCP_BUF_LEN],
             retry_count: 0,
             tick_count: 0,
         }
@@ -99,7 +144,10 @@ impl DhcpClient {
 
     fn send_command(&mut self, bus: &mut W5500Bus, cmd: u8) {
         bus.write_u8(Sn_CR, sreg_block(DHCP_SOCKET), cmd);
-        while bus.read_u8(Sn_CR, sreg_block(DHCP_SOCKET)) != 0 {
+        for _ in 0..SEND_POLL_TRIES {
+            if bus.read_u8(Sn_CR, sreg_block(DHCP_SOCKET)) == 0 {
+                return;
+            }
             core::hint::spin_loop();
         }
     }
@@ -130,7 +178,7 @@ impl DhcpClient {
         self.send_command(bus, Sn_CR_SEND);
 
         // Wait for SEND_OK
-        for _ in 0..10_000 {
+        for _ in 0..SEND_POLL_TRIES {
             let ir = bus.read_u8(Sn_IR, sreg_block(DHCP_SOCKET));
             if (ir & Sn_IR_SENDOK) != 0 {
                 bus.write_u8(Sn_IR, sreg_block(DHCP_SOCKET), Sn_IR_SENDOK);
@@ -152,23 +200,26 @@ impl DhcpClient {
 
         // Read 8-byte UDP header
         let mut hdr = [0u8; 8];
-        let mut ptr = bus.read_stable_u16(Sn_RX_RD, sreg_block(DHCP_SOCKET));
+        let ptr = bus.read_stable_u16(Sn_RX_RD, sreg_block(DHCP_SOCKET));
         bus.read_reg(ptr, rxbuf_block(DHCP_SOCKET), &mut hdr);
-        ptr = ptr.wrapping_add(8);
-        bus.write_u16(Sn_RX_RD, sreg_block(DHCP_SOCKET), ptr);
-        self.send_command(bus, Sn_CR_RECV);
 
         let pack_len = (((hdr[6] as u16) << 8) | (hdr[7] as u16)) as usize;
-        let payload_len = if pack_len > 0 { pack_len } else { (rsr - 8) as usize };
+        let available = (rsr - 8) as usize;
+        let payload_len = if pack_len > 0 && pack_len <= available {
+            pack_len
+        } else {
+            available
+        };
         if payload_len == 0 {
+            bus.write_u16(Sn_RX_RD, sreg_block(DHCP_SOCKET), ptr.wrapping_add(8));
+            self.send_command(bus, Sn_CR_RECV);
             return None;
         }
 
         let to_read = payload_len.min(self.buf.len());
-        ptr = bus.read_stable_u16(Sn_RX_RD, sreg_block(DHCP_SOCKET));
-        bus.read_reg(ptr, rxbuf_block(DHCP_SOCKET), &mut self.buf[..to_read]);
-        ptr = ptr.wrapping_add(payload_len as u16);
-        bus.write_u16(Sn_RX_RD, sreg_block(DHCP_SOCKET), ptr);
+        bus.read_reg(ptr.wrapping_add(8), rxbuf_block(DHCP_SOCKET), &mut self.buf[..to_read]);
+        let total_to_consume = (8 + payload_len) as u16;
+        bus.write_u16(Sn_RX_RD, sreg_block(DHCP_SOCKET), ptr.wrapping_add(total_to_consume));
         self.send_command(bus, Sn_CR_RECV);
 
         Some(to_read)
@@ -176,27 +227,13 @@ impl DhcpClient {
 
     fn build_header(&mut self, mac: &[u8; 6], msg_type: u8) -> usize {
         self.buf.fill(0);
-        self.buf[0] = 1; // BOOTREQUEST
-        self.buf[1] = 1; // Ethernet
-        self.buf[2] = 6; // MAC length
-        self.buf[3] = 0;
-
-        self.buf[4] = (self.xid >> 24) as u8;
-        self.buf[5] = (self.xid >> 16) as u8;
-        self.buf[6] = (self.xid >> 8) as u8;
-        self.buf[7] = self.xid as u8;
-
-        self.buf[28..34].copy_from_slice(mac);
-
-        // Magic cookie
+        self.buf[..BOOT_REQUEST_HEADER.len()].copy_from_slice(&BOOT_REQUEST_HEADER);
+        self.buf[BOOTP_XID_OFFSET..BOOTP_XID_OFFSET + 4].copy_from_slice(&self.xid.to_be_bytes());
+        self.buf[BOOTP_CHADDR_OFFSET..BOOTP_CHADDR_OFFSET + MAC_LEN as usize].copy_from_slice(mac);
         self.buf[BOOTP_MAGIC_OFFSET..BOOTP_MAGIC_OFFSET + 4].copy_from_slice(&MAGIC_COOKIE);
 
         let mut off = BOOTP_OPTIONS_OFFSET;
-        self.buf[off] = DHCP_OPT_MSG_TYPE;
-        self.buf[off + 1] = 1;
-        self.buf[off + 2] = msg_type;
-        off += 3;
-
+        put_option(&mut self.buf, &mut off, DHCP_OPT_MSG_TYPE, &[msg_type]);
         off
     }
 
@@ -204,21 +241,10 @@ impl DhcpClient {
         self.xid = self.xid.wrapping_add(1);
         let mut off = self.build_header(mac, DHCP_DISCOVER);
 
-        // Option: parameter request list (subnet, router, dns, lease)
-        self.buf[off] = DHCP_OPT_PARAM_REQ;
-        self.buf[off + 1] = 4;
-        self.buf[off + 2] = DHCP_OPT_SUBNET_MASK;
-        self.buf[off + 3] = DHCP_OPT_ROUTER;
-        self.buf[off + 4] = DHCP_OPT_DNS;
-        self.buf[off + 5] = DHCP_OPT_LEASE_TIME;
-        off += 6;
+        self.buf[off..off + PARAM_REQUEST_LIST.len()].copy_from_slice(&PARAM_REQUEST_LIST);
+        off += PARAM_REQUEST_LIST.len();
 
-        // Option: host name
-        let hostname = b"swindle";
-        self.buf[off] = DHCP_OPT_HOST_NAME;
-        self.buf[off + 1] = hostname.len() as u8;
-        self.buf[off + 2..off + 2 + hostname.len()].copy_from_slice(hostname);
-        off += 2 + hostname.len();
+        put_option(&mut self.buf, &mut off, DHCP_OPT_HOST_NAME, HOST_NAME);
 
         self.buf[off] = DHCP_OPT_END;
         off += 1;
@@ -230,26 +256,11 @@ impl DhcpClient {
     fn send_request(&mut self, bus: &mut W5500Bus, mac: &[u8; 6]) {
         let mut off = self.build_header(mac, DHCP_REQUEST);
 
-        // Requested IP
-        self.buf[off] = DHCP_OPT_REQUESTED_IP;
-        self.buf[off + 1] = 4;
-        self.buf[off + 2..off + 6].copy_from_slice(&self.requested_ip);
-        off += 6;
+        put_option(&mut self.buf, &mut off, DHCP_OPT_REQUESTED_IP, &self.requested_ip);
+        put_option(&mut self.buf, &mut off, DHCP_OPT_SERVER_ID, &self.server_ip);
 
-        // Server ID
-        self.buf[off] = DHCP_OPT_SERVER_ID;
-        self.buf[off + 1] = 4;
-        self.buf[off + 2..off + 6].copy_from_slice(&self.server_ip);
-        off += 6;
-
-        // Parameter request list
-        self.buf[off] = DHCP_OPT_PARAM_REQ;
-        self.buf[off + 1] = 4;
-        self.buf[off + 2] = DHCP_OPT_SUBNET_MASK;
-        self.buf[off + 3] = DHCP_OPT_ROUTER;
-        self.buf[off + 4] = DHCP_OPT_DNS;
-        self.buf[off + 5] = DHCP_OPT_LEASE_TIME;
-        off += 6;
+        self.buf[off..off + PARAM_REQUEST_LIST.len()].copy_from_slice(&PARAM_REQUEST_LIST);
+        off += PARAM_REQUEST_LIST.len();
 
         self.buf[off] = DHCP_OPT_END;
         off += 1;
@@ -288,7 +299,7 @@ impl DhcpClient {
         self.tick_count = self.tick_count.wrapping_add(1);
         if self.state == DhcpState::Discovering || self.state == DhcpState::Requesting {
             self.retry_count += 1;
-            if self.retry_count >= 5 {
+            if self.retry_count >= RETRY_TICKS {
                 self.retry_count = 0;
                 // Retry discover
                 self.open_socket(bus);
@@ -308,17 +319,13 @@ impl DhcpClient {
         }
 
         // Validate XID
-        let rx_xid = ((self.buf[4] as u32) << 24)
-            | ((self.buf[5] as u32) << 16)
-            | ((self.buf[6] as u32) << 8)
-            | (self.buf[7] as u32);
-        if rx_xid != self.xid {
+        if read_u32_be(&self.buf, BOOTP_XID_OFFSET) != self.xid {
             return false;
         }
 
         let mut msg_type = 0u8;
         let mut offered_ip = [0u8; 4];
-        offered_ip.copy_from_slice(&self.buf[16..20]);
+        offered_ip.copy_from_slice(&self.buf[BOOTP_YIADDR_OFFSET..BOOTP_YIADDR_OFFSET + 4]);
 
         let mut off = BOOTP_OPTIONS_OFFSET;
         while off < len {
@@ -356,10 +363,7 @@ impl DhcpClient {
                     self.info.dns.copy_from_slice(&self.buf[off..off + 4]);
                 }
                 DHCP_OPT_LEASE_TIME if opt_len >= 4 => {
-                    self.info.lease_time = ((self.buf[off] as u32) << 24)
-                        | ((self.buf[off + 1] as u32) << 16)
-                        | ((self.buf[off + 2] as u32) << 8)
-                        | (self.buf[off + 3] as u32);
+                    self.info.lease_time = read_u32_be(&self.buf, off);
                 }
                 _ => {}
             }

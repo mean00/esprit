@@ -1,12 +1,12 @@
 //! Abstract socket trait.
 
-use crate::types::{ReadReleaser, RxPacket, SocketError, SocketListener};
+use crate::types::{SocketError, SocketListener};
 
 /// Abstract socket interface used by `SocketRunner`.
 ///
 /// Implementors represent a streaming TCP server socket that notifies events
 /// (connection state, data readiness, TX buffer availability) via `SocketListener`.
-pub trait Socket: ReadReleaser + Sized {
+pub trait Socket: Sized {
     /// Creates and binds a listening socket on `port` with the given event listener.
     fn create(port: u16, listener: SocketListener) -> Result<Self, SocketError>;
 
@@ -16,8 +16,8 @@ pub trait Socket: ReadReleaser + Sized {
     /// Disconnects the currently connected client.
     fn disconnect_client(&mut self) -> Result<(), SocketError>;
 
-    /// Reads incoming packet using zero-copy semantics with RAII buffer release.
-    fn read_packet(&mut self) -> Result<Option<RxPacket<'_, Self>>, SocketError>;
+    /// Reads pending data into `buf` and returns how many bytes were copied.
+    fn read_packet(&mut self, buf: &mut [u8]) -> Result<Option<usize>, SocketError>;
 
     /// Writes raw slice data to the socket.
     /// Returns the number of bytes actually written.

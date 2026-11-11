@@ -1,6 +1,6 @@
 //! `rs_socketrunner` — Event-driven socket runner engine in Rust.
 //!
-//! Provides a safe, zero-copy, event-multiplexed TCP server engine
+//! Provides a safe, event-multiplexed TCP server engine
 //! for microcontroller networking (GDB server, RTT streaming, echo demonstrators).
 
 #![no_std]

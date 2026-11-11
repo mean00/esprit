@@ -1,7 +1,6 @@
-//! Shared types, enums, traits, and RAII guards for SocketRunner.
+//! Shared types, enums and traits for SocketRunner.
 
 use core::ffi::c_void;
-use core::ops::Deref;
 use rs_rtos::event::EventGroup;
 use crate::constants::*;
 
@@ -145,6 +144,11 @@ pub enum SocketListener {
     None,
 }
 
+// SAFETY: the `CCallback` cookie is an opaque pointer that is only handed back to
+// the C callback; nothing here dereferences it, so a listener can move between
+// tasks. (The `fn` pointers are `Send` already.)
+unsafe impl Send for SocketListener {}
+
 impl SocketListener {
     pub fn from_event_group(event_group: EventGroup, shift: u32) -> Self {
         Self::EventGroup { event_group, shift }
@@ -201,50 +205,6 @@ pub enum SocketError {
     NotConnected,
     Disconnected,
     BufferFull,
-}
-
-// ---------------------------------------------------------------------------
-//  RAII Zero-Copy Read Guard
-// ---------------------------------------------------------------------------
-
-/// Trait implemented by socket backends to release read data.
-pub trait ReadReleaser {
-    fn release_read_data(&mut self);
-}
-
-/// RAII guard providing safe zero-copy access to socket receive data.
-/// Automatically releases the receive buffer on drop.
-pub struct RxPacket<'a, R: ReadReleaser> {
-    releaser: &'a mut R,
-    data: &'a [u8],
-}
-
-impl<'a, R: ReadReleaser> RxPacket<'a, R> {
-    pub fn new(releaser: &'a mut R, data: &'a [u8]) -> Self {
-        Self { releaser, data }
-    }
-
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
-    }
-}
-
-impl<'a, R: ReadReleaser> Deref for RxPacket<'a, R> {
-    type Target = [u8];
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target {
-        self.data
-    }
-}
-
-impl<'a, R: ReadReleaser> Drop for RxPacket<'a, R> {
-    fn drop(&mut self) {
-        self.releaser.release_read_data();
-    }
 }
 
 // ---------------------------------------------------------------------------

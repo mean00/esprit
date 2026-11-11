@@ -106,35 +106,29 @@ impl<H: SocketRunnerHandler, S: Socket, const WRITE_BUF_SIZE: usize> SocketRunne
         Ok(())
     }
 
-    /// Reads incoming packet data using zero-copy semantics.
-    /// The returned `RxPacket` releases the receive buffer automatically on Drop.
-    pub fn read_packet(&mut self) -> Result<Option<RxPacket<'_, S>>, SocketError> {
+    /// Reads pending data into `buf` and returns how many bytes were copied.
+    pub fn read_packet(&mut self, buf: &mut [u8]) -> Result<Option<usize>, SocketError> {
         match self.socket.as_mut() {
-            Some(socket) => socket.read_packet(),
+            Some(socket) => socket.read_packet(buf),
             None => Err(SocketError::NotConnected),
         }
     }
 
-    /// Reads incoming packet data with zero-copy and invokes `f` on the slice.
-    /// The receive buffer is automatically released when `f` returns.
-    pub fn with_incoming_packet<R>(&mut self, f: impl FnOnce(&[u8]) -> R) -> Result<Option<R>, SocketError> {
-        let socket = self.socket.as_mut().ok_or(SocketError::NotConnected)?;
-        if let Some(packet) = socket.read_packet()? {
-            let res = f(&packet);
-            drop(packet);
-            return Ok(Some(res));
+    /// Reads pending data into `buf` and invokes `f` on the copied bytes.
+    pub fn with_incoming_packet<R>(
+        &mut self,
+        buf: &mut [u8],
+        f: impl FnOnce(&[u8]) -> R,
+    ) -> Result<Option<R>, SocketError> {
+        match self.read_packet(buf)? {
+            Some(len) => Ok(Some(f(&buf[..len]))),
+            None => Ok(None),
         }
-        Ok(None)
     }
 
     /// Reads incoming data directly into the provided slice buffer.
     pub fn read_into(&mut self, buf: &mut [u8]) -> Result<usize, SocketError> {
-        let opt_n = self.with_incoming_packet(|data| {
-            let to_copy = data.len().min(buf.len());
-            buf[..to_copy].copy_from_slice(&data[..to_copy]);
-            to_copy
-        })?;
-        Ok(opt_n.unwrap_or(0))
+        Ok(self.read_packet(buf)?.unwrap_or(0))
     }
 
     /// Directly echoes all pending incoming data back to the client.

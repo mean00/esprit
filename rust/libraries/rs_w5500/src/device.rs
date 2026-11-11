@@ -3,23 +3,34 @@
 use crate::bus::W5500Bus;
 use crate::registers::*;
 use rs_rtos::task::delay_ms;
-use rust_esprit::{GpioMode, GpioPin};
+use rust_esprit::{GpioMode, GpioPin, Pin};
 
-/// Pin configuration for the W5500 SPI interface.
+/// Pin map of the W5500 SPI interface.
+///
+/// `#[repr(C)]` with one [`Pin`] per field, i.e. layout-compatible with the C++
+/// `lnW5500SPI` struct: the board setup hands its pin table over as is.
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub struct W5500Pins {
-    pub spi_instance: u32,
-    pub miso: GpioPin,
-    pub mosi: GpioPin,
-    pub clk: GpioPin,
-    pub cs: GpioPin,
-    pub reset: GpioPin,
-    pub intr: GpioPin,
+    pub miso: Pin,
+    pub mosi: Pin,
+    pub clk: Pin,
+    pub cs: Pin,
+    pub reset: Pin,
+    pub intr: Pin,
 }
 
 /// Buffer size distribution in KB across the 8 hardware sockets.
-pub const SOCKET_TX_SIZES: [u8; 8] = [4, 4, 4, 0, 0, 0, 0, 2];
-pub const SOCKET_RX_SIZES: [u8; 8] = [4, 4, 4, 0, 0, 0, 0, 2];
+pub const SOCKET_TX_SIZES: [u8; 8] = [4, 4, 4, 2, 0, 0, 0, 2];
+pub const SOCKET_RX_SIZES: [u8; 8] = [4, 4, 4, 2, 0, 0, 0, 2];
+
+/// Settling delays of the reset / PHY bring-up sequence, in milliseconds.
+const PINS_SETTLE_MS: u32 = 5;
+const RESET_LOW_MS: u32 = 10;
+const RESET_RECOVERY_MS: u32 = 50;
+const PHY_CONFIG_MS: u32 = 10;
+const PHY_AUTONEGOTIATION_MS: u32 = 200;
+const SOFT_RESET_MS: u32 = 10;
 
 /// Core W5500 controller abstraction.
 pub struct W5500Device {
@@ -28,37 +39,40 @@ pub struct W5500Device {
     pub intr: GpioPin,
 }
 
+// SAFETY: the device lives in a `Mutex`, so only one task borrows it at a time.
 unsafe impl Send for W5500Device {}
-unsafe impl Sync for W5500Device {}
 
 impl W5500Device {
     /// Initialize GPIOs, SPI bus, and execute a hardware reset.
-    pub fn new(mut pins: W5500Pins) -> Self {
+    pub fn new(spi_instance: u32, pins: W5500Pins) -> Self {
+        let mut mosi = GpioPin::new(pins.mosi);
+        let mut miso = GpioPin::new(pins.miso);
+        let mut clk = GpioPin::new(pins.clk);
+        let mut cs = GpioPin::new(pins.cs);
+        let mut reset = GpioPin::new(pins.reset);
+        let mut intr = GpioPin::new(pins.intr);
+
         // Setup SPI function on pins
-        pins.mosi.set_mode(GpioMode::Spi);
-        pins.miso.set_mode(GpioMode::Spi);
-        pins.clk.set_mode(GpioMode::Spi);
+        mosi.set_mode(GpioMode::Spi);
+        miso.set_mode(GpioMode::Spi);
+        clk.set_mode(GpioMode::Spi);
 
         // Chip-select pin
-        pins.cs.set_high();
-        pins.cs.set_mode(GpioMode::Output);
+        cs.set_high();
+        cs.set_mode(GpioMode::Output);
 
         // Reset pin
-        pins.reset.set_high();
-        pins.reset.set_mode(GpioMode::Output);
+        reset.set_high();
+        reset.set_mode(GpioMode::Output);
 
         // Interrupt pin
-        pins.intr.set_mode(GpioMode::InputPullUp);
+        intr.set_mode(GpioMode::InputPullUp);
 
-        delay_ms(5);
+        delay_ms(PINS_SETTLE_MS);
 
-        let bus = W5500Bus::new(pins.spi_instance, pins.cs);
+        let bus = W5500Bus::new(spi_instance, cs);
 
-        let mut device = Self {
-            bus,
-            reset: pins.reset,
-            intr: pins.intr,
-        };
+        let mut device = Self { bus, reset, intr };
 
         device.hardware_reset();
         device
@@ -67,15 +81,15 @@ impl W5500Device {
     /// Pulse the hardware reset line.
     pub fn hardware_reset(&mut self) {
         self.reset.set_low();
-        delay_ms(10);
+        delay_ms(RESET_LOW_MS);
         self.reset.set_high();
-        delay_ms(50);
+        delay_ms(RESET_RECOVERY_MS);
     }
 
     /// Trigger a software reset via the Mode Register (MR).
     pub fn software_reset(&mut self) {
         self.bus.write_u8(MR, CREG_BLOCK, MR_RST);
-        delay_ms(10);
+        delay_ms(SOFT_RESET_MS);
     }
 
     /// Configure the TX and RX buffer allocations for all 8 sockets.
@@ -112,9 +126,9 @@ impl W5500Device {
     pub fn configure_phy(&mut self) {
         let phy_conf = PHYCFGR_OPMD | PHYCFGR_OPMDC_ALLA;
         self.bus.write_u8(PHYCFGR, CREG_BLOCK, phy_conf);
-        delay_ms(10);
+        delay_ms(PHY_CONFIG_MS);
         self.bus.write_u8(PHYCFGR, CREG_BLOCK, PHYCFGR_NORMAL | phy_conf);
-        delay_ms(200);
+        delay_ms(PHY_AUTONEGOTIATION_MS);
     }
 
     /// Read the PHY status register and check if link is up.

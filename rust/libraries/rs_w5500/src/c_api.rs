@@ -1,88 +1,61 @@
-//! C-ABI exports for initialization of W5500 driver from C++ boot code.
+//! C ABI seam: the board setup hands the pin map, MAC and network callback to
+//! the Rust driver, and gets the coordinator task in return.
 
-use crate::coordinator::{
-    w5500_coordinator_task, COORDINATOR, DEVICE,
-};
+use crate::coordinator::NET;
+use crate::coordinator::{w5500_coordinator_task, COORDINATOR};
 use crate::device::{W5500Device, W5500Pins};
 use core::ffi::c_void;
-use core::mem::MaybeUninit;
-use rust_esprit::{GpioPin, Pin};
+use rs_rtos::task::TaskStorage;
 
-#[repr(C)]
-pub struct W5500PinsC {
-    pub miso: i32,
-    pub mosi: i32,
-    pub clk: i32,
-    pub cs: i32,
-    pub reset: i32,
-    pub intr: i32,
-}
+/// Network state callback, i.e. the C++ `lnLwIpSysCallback`.
+pub type NetCallback = extern "C" fn(event: u32, arg: *mut c_void);
 
-static mut COORDINATOR_STACK: [u32; 1024] = [0; 1024];
-static mut COORDINATOR_TCB: MaybeUninit<rs_rtos::c_freertos::StaticTask_t> =
-    MaybeUninit::uninit();
+/// Coordinator task stack, in words (4 KiB), and its priority.
+const COORDINATOR_STACK_WORDS: usize = 1024;
+const COORDINATOR_PRIORITY: u32 = 5;
 
-unsafe extern "C" fn coordinator_entry(param: *mut c_void) {
-    w5500_coordinator_task(param);
-}
+/// Stack and control block of the coordinator task, in `.bss`: the task takes
+/// nothing from the FreeRTOS heap.
+static COORDINATOR_STORAGE: TaskStorage<COORDINATOR_STACK_WORDS> = TaskStorage::new();
 
+/// Initialise the W5500 and start the coordinator task that drives the PHY,
+/// the DHCP client and the socket interrupts.
+///
+/// `pins` is a C++ `lnW5500SPI`, `mac` six bytes. Returns `false` if a pointer is
+/// null; a task that cannot be created is fatal (it aborts, like any other
+/// out-of-resources failure at boot).
+///
+/// # Safety
+/// `pins` must point to an `lnW5500SPI` and `mac` to six readable bytes.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn w5500_init_c(spi_instance: i32, pins_ptr: *const W5500PinsC) -> bool {
-    if pins_ptr.is_null() {
+pub unsafe extern "C" fn w5500_begin_c(
+    spi_instance: u32,
+    pins: *const W5500Pins,
+    mac: *const u8,
+    cb: Option<NetCallback>,
+    arg: *mut c_void,
+) -> bool {
+    if pins.is_null() || mac.is_null() {
         return false;
     }
-    let p = unsafe { &*pins_ptr };
 
-    let pins = W5500Pins {
-        spi_instance: spi_instance as u32,
-        miso: GpioPin::new(unsafe { core::mem::transmute(p.miso) }),
-        mosi: GpioPin::new(unsafe { core::mem::transmute(p.mosi) }),
-        clk: GpioPin::new(unsafe { core::mem::transmute(p.clk) }),
-        cs: GpioPin::new(unsafe { core::mem::transmute(p.cs) }),
-        reset: GpioPin::new(unsafe { core::mem::transmute(p.reset) }),
-        intr: GpioPin::new(unsafe { core::mem::transmute(p.intr) }),
-    };
+    let mut mac_bytes = [0u8; 6];
+    // SAFETY: `mac` points to `mac_bytes.len()` readable bytes (checked above).
+    unsafe { core::ptr::copy_nonoverlapping(mac, mac_bytes.as_mut_ptr(), mac_bytes.len()) };
 
-    let dev = W5500Device::new(pins);
-    *DEVICE.lock() = Some(dev);
+    // SAFETY: `pins` points to an `lnW5500SPI`, which has the layout of `W5500Pins`.
+    let device = W5500Device::new(spi_instance, unsafe { *pins });
+    NET.lock().device = Some(device);
+
+    COORDINATOR.lock().configure(mac_bytes, cb, arg);
+
+    COORDINATOR_STORAGE.spawn(
+        "w5500",
+        COORDINATOR_PRIORITY,
+        w5500_coordinator_task,
+        core::ptr::null_mut(),
+    );
 
     true
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn w5500_set_mac_c(mac_ptr: *const u8) {
-    if mac_ptr.is_null() {
-        return;
-    }
-    let mut mac = [0u8; 6];
-    unsafe {
-        core::ptr::copy_nonoverlapping(mac_ptr, mac.as_mut_ptr(), 6);
-    }
-
-    let mut coord = COORDINATOR.lock();
-    coord.mac = mac;
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn w5500_start_c(cb: extern "C" fn(u32, *mut c_void), arg: *mut c_void) -> bool {
-    {
-        let mut coord = COORDINATOR.lock();
-        coord.net_cb = Some(cb);
-        coord.net_arg = arg;
-    }
-
-    // Launch coordinator FreeRTOS task
-    let handle = unsafe {
-        rs_rtos::c_freertos::xTaskCreateStatic(
-            Some(coordinator_entry),
-            b"w5500\0".as_ptr() as *const cty::c_char,
-            1024,
-            core::ptr::null_mut(),
-            5,
-            core::ptr::addr_of_mut!(COORDINATOR_STACK) as *mut u32,
-            core::ptr::addr_of_mut!(COORDINATOR_TCB) as *mut rs_rtos::c_freertos::StaticTask_t,
-        )
-    };
-
-    !handle.is_null()
-}

@@ -1,10 +1,9 @@
 //! Hardware TCP socket management and ring buffer arithmetic.
 
 use crate::bus::W5500Bus;
+use crate::coordinator::MAX_SOCKETS;
 use crate::registers::*;
-pub use rs_socketrunner::{ReadReleaser, RxPacket, Socket, SocketError, SocketEvent, SocketListener};
-
-pub const DEFAULT_RX_BUF_SIZE: usize = 2048;
+pub use rs_socketrunner::{Socket, SocketError, SocketEvent, SocketListener};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SocketState {
@@ -22,12 +21,9 @@ pub struct W5500Socket {
     state: SocketState,
     is_sending: bool,
     listener: Option<SocketListener>,
-    rx_buf: [u8; DEFAULT_RX_BUF_SIZE],
-    rx_len: usize,
 }
 
-unsafe impl Send for W5500Socket {}
-unsafe impl Sync for W5500Socket {}
+const CMD_POLL_TRIES: usize = 10_000;
 
 impl W5500Socket {
     pub const fn new(sn: u8, port: u16, listener: Option<SocketListener>) -> Self {
@@ -37,8 +33,6 @@ impl W5500Socket {
             state: SocketState::Closed,
             is_sending: false,
             listener,
-            rx_buf: [0u8; DEFAULT_RX_BUF_SIZE],
-            rx_len: 0,
         }
     }
 
@@ -58,10 +52,6 @@ impl W5500Socket {
         SocketStatus::try_from(bus.read_u8(Sn_SR, sreg_block(self.sn)))
     }
 
-    pub fn set_state(&mut self, state: SocketState) {
-        self.state = state;
-    }
-
     pub fn clear_is_sending(&mut self) {
         self.is_sending = false;
     }
@@ -72,16 +62,19 @@ impl W5500Socket {
         }
     }
 
-    /// Issue a command to Sn_CR and busy-wait until accepted (register clears).
+    /// Issue a command to Sn_CR and wait until accepted (register clears) or timeout.
     pub fn send_command(&mut self, bus: &mut W5500Bus, cmd: u8) {
         bus.write_u8(Sn_CR, sreg_block(self.sn), cmd);
-        while bus.read_u8(Sn_CR, sreg_block(self.sn)) != 0 {
+        for _ in 0..CMD_POLL_TRIES {
+            if bus.read_u8(Sn_CR, sreg_block(self.sn)) == 0 {
+                return;
+            }
             core::hint::spin_loop();
         }
     }
 
     /// Open socket in TCP server mode and start listening on `port`.
-    pub fn init(&mut self, bus: &mut W5500Bus) -> bool {
+    pub fn init(&mut self, bus: &mut W5500Bus) -> Result<(), SocketError> {
         self.close(bus);
 
         bus.write_u8(Sn_MR, sreg_block(self.sn), Sn_MR_TCP);
@@ -90,14 +83,14 @@ impl W5500Socket {
 
         if self.status(bus) != Ok(SocketStatus::Init) {
             self.state = SocketState::Error;
-            return false;
+            return Err(SocketError::CreationFailed);
         }
 
         self.send_command(bus, Sn_CR_LISTEN);
 
         if self.status(bus) != Ok(SocketStatus::Listen) {
             self.state = SocketState::Error;
-            return false;
+            return Err(SocketError::CreationFailed);
         }
 
         // Enable interrupts for this socket
@@ -106,7 +99,7 @@ impl W5500Socket {
 
         self.state = SocketState::Listening;
         self.is_sending = false;
-        true
+        Ok(())
     }
 
     /// Close the socket.
@@ -115,32 +108,23 @@ impl W5500Socket {
         bus.write_u8(Sn_IR, sreg_block(self.sn), 0xFF);
         self.state = SocketState::Closed;
         self.is_sending = false;
-        self.rx_len = 0;
-    }
-
-    /// Disconnect connected peer (sends TCP FIN), closes socket and restarts listening.
-    pub fn disconnect(&mut self, bus: &mut W5500Bus) {
-        self.handle_disconnect(bus);
     }
 
     /// Handles disconnect event (local or remote), cleans up socket and re-listens.
     pub fn handle_disconnect(&mut self, bus: &mut W5500Bus) {
         if self.state == SocketState::Connected || self.state == SocketState::Closing {
             self.state = SocketState::Closing;
-            if let Ok(s) = self.status(bus) {
-                if s == SocketStatus::Established || s == SocketStatus::CloseWait {
-                    self.send_command(bus, Sn_CR_DISCON);
-                }
-            }
             self.close(bus);
-            self.init(bus);
+            let _ = self.init(bus);
             self.invoke(SocketEvent::Disconnect);
         }
     }
 
-    /// Read incoming bytes into the internal RX buffer.
-    /// Returns slice pointing to received data.
-    pub fn read<'a>(&'a mut self, bus: &mut W5500Bus) -> Option<&'a [u8]> {
+    /// Read pending bytes straight into `buf`, returning how many were read.
+    ///
+    /// The SPI transfer writes the caller's buffer: there is no intermediate
+    /// socket buffer, hence nothing to copy out afterwards.
+    pub fn read(&mut self, bus: &mut W5500Bus, buf: &mut [u8]) -> Option<usize> {
         if self.state != SocketState::Connected {
             return None;
         }
@@ -150,38 +134,35 @@ impl W5500Socket {
             return None;
         }
 
-        let to_read = (rsr as usize).min(self.rx_buf.len());
+        let to_read = (rsr as usize).min(buf.len());
+        if to_read == 0 {
+            return None;
+        }
+
         let ptr = bus.read_stable_u16(Sn_RX_RD, sreg_block(self.sn));
 
-        bus.read_reg(ptr, rxbuf_block(self.sn), &mut self.rx_buf[..to_read]);
+        bus.read_reg(ptr, rxbuf_block(self.sn), &mut buf[..to_read]);
         bus.write_u16(Sn_RX_RD, sreg_block(self.sn), ptr.wrapping_add(to_read as u16));
         self.send_command(bus, Sn_CR_RECV);
 
-        self.rx_len = to_read;
-        Some(&self.rx_buf[..self.rx_len])
-    }
-
-    /// Clear internal RX buffer tracking.
-    pub fn free_read_data(&mut self) {
-        self.rx_len = 0;
+        Some(to_read)
     }
 
     /// Write bytes to the socket TX buffer and issue Sn_CR_SEND.
-    /// Returns number of bytes sent, 0 if would block, or Err(()) on failure.
-    pub fn write(&mut self, bus: &mut W5500Bus, data: &[u8]) -> Result<usize, ()> {
+    /// Returns number of bytes sent, 0 if it would block.
+    pub fn write(&mut self, bus: &mut W5500Bus, data: &[u8]) -> Result<usize, SocketError> {
         if self.state != SocketState::Connected {
-            return Err(());
+            return Err(SocketError::WriteFailed);
         }
 
-        let mut had_sendok = false;
         if self.is_sending {
             let ir = bus.read_u8(Sn_IR, sreg_block(self.sn));
             if (ir & Sn_IR_SENDOK) != 0 {
-                had_sendok = true;
+                bus.write_u8(Sn_IR, sreg_block(self.sn), Sn_IR_SENDOK);
                 self.is_sending = false;
             } else if (ir & Sn_IR_TIMEOUT) != 0 {
-                self.close(bus);
-                return Err(());
+                self.handle_disconnect(bus);
+                return Err(SocketError::WriteFailed);
             } else {
                 return Ok(0); // Still sending previous packet
             }
@@ -191,10 +172,6 @@ impl W5500Socket {
         let to_send = data.len().min(freesize);
         if to_send == 0 {
             return Ok(0);
-        }
-
-        if had_sendok {
-            bus.write_u8(Sn_IR, sreg_block(self.sn), Sn_IR_SENDOK);
         }
 
         let ptr = bus.read_stable_u16(Sn_TX_WR, sreg_block(self.sn));
@@ -230,7 +207,7 @@ impl W5500Socket {
                         self.invoke(SocketEvent::Connected);
                     }
                     SocketStatus::Closed => {
-                        self.init(bus);
+                        let _ = self.init(bus);
                     }
                     _ => {}
                 }
@@ -242,7 +219,7 @@ impl W5500Socket {
             }
             SocketState::Closing | SocketState::Closed | SocketState::Error => {
                 self.close(bus);
-                self.init(bus);
+                let _ = self.init(bus);
             }
         }
     }
@@ -252,13 +229,10 @@ impl W5500Socket {
 //  W5500SocketHandle — safe RAII socket implementing rs_socketrunner::Socket
 // ---------------------------------------------------------------------------
 
-/// Safe, zero-copy RAII socket handle implementing [`rs_socketrunner::Socket`].
+/// RAII socket handle implementing [`rs_socketrunner::Socket`].
 pub struct W5500SocketHandle {
     sn: u8,
 }
-
-unsafe impl Send for W5500SocketHandle {}
-unsafe impl Sync for W5500SocketHandle {}
 
 impl W5500SocketHandle {
     #[inline(always)]
@@ -267,58 +241,37 @@ impl W5500SocketHandle {
     }
 }
 
-impl ReadReleaser for W5500SocketHandle {
-    fn release_read_data(&mut self) {
-        let mut sockets_guard = crate::coordinator::SOCKETS.lock();
-        if let Some(sock) = sockets_guard[self.sn as usize].as_mut() {
-            sock.free_read_data();
-        }
-    }
-}
-
 impl Socket for W5500SocketHandle {
     fn create(port: u16, listener: SocketListener) -> Result<Self, SocketError> {
-        let mut sockets_guard = crate::coordinator::SOCKETS.lock();
+        let net = &mut *crate::coordinator::NET.lock();
 
-        let mut slot_idx = None;
-        for (i, slot) in sockets_guard.iter().enumerate() {
-            if slot.is_none() {
-                slot_idx = Some(i);
-                break;
-            }
-        }
-
-        let sn = match slot_idx {
-            Some(idx) => idx as u8,
-            None => return Err(SocketError::CreationFailed),
-        };
+        let sn = (0..MAX_SOCKETS)
+            .find(|&slot| net.sockets[slot].is_none())
+            .ok_or(SocketError::CreationFailed)? as u8;
 
         let mut sock = W5500Socket::new(sn, port, Some(listener));
 
-        let mut dev_guard = crate::coordinator::DEVICE.lock();
-        let dev = dev_guard.as_mut().ok_or(SocketError::CreationFailed)?;
-        if !sock.init(&mut dev.bus) {
-            return Err(SocketError::CreationFailed);
-        }
+        let dev = net
+            .device
+            .as_mut()
+            .ok_or(SocketError::CreationFailed)?;
+        sock.init(&mut dev.bus)?;
 
-        sockets_guard[sn as usize] = Some(sock);
+        net.sockets[sn as usize] = Some(sock);
 
         Ok(Self { sn })
     }
 
     fn accept(&mut self) -> Result<(), SocketError> {
-        let mut sockets_guard = crate::coordinator::SOCKETS.lock();
-        let sock = sockets_guard[self.sn as usize]
+        let net = &mut *crate::coordinator::NET.lock();
+
+        let dev = net.device.as_mut().ok_or(SocketError::AcceptFailed)?;
+        let sock = net.sockets[self.sn as usize]
             .as_mut()
             .ok_or(SocketError::AcceptFailed)?;
 
-        let mut dev_guard = crate::coordinator::DEVICE.lock();
-        let dev = dev_guard.as_mut().ok_or(SocketError::AcceptFailed)?;
-        if sock.init(&mut dev.bus) {
-            Ok(())
-        } else {
-            Err(SocketError::AcceptFailed)
-        }
+        sock.init(&mut dev.bus)
+            .map_err(|_| SocketError::AcceptFailed)
     }
 
     fn disconnect_client(&mut self) -> Result<(), SocketError> {
@@ -326,47 +279,38 @@ impl Socket for W5500SocketHandle {
         Ok(())
     }
 
-    fn read_packet(&mut self) -> Result<Option<RxPacket<'_, Self>>, SocketError> {
-        let mut sockets_guard = crate::coordinator::SOCKETS.lock();
-        let sock = sockets_guard[self.sn as usize]
+    fn read_packet(&mut self, buf: &mut [u8]) -> Result<Option<usize>, SocketError> {
+        let net = &mut *crate::coordinator::NET.lock();
+
+        let dev = net.device.as_mut().ok_or(SocketError::ReadFailed)?;
+        let sock = net.sockets[self.sn as usize]
             .as_mut()
             .ok_or(SocketError::ReadFailed)?;
 
-        let mut dev_guard = crate::coordinator::DEVICE.lock();
-        let dev = dev_guard.as_mut().ok_or(SocketError::ReadFailed)?;
-
-        let slice = match sock.read(&mut dev.bus) {
-            Some(s) => unsafe { core::slice::from_raw_parts(s.as_ptr(), s.len()) },
-            None => return Ok(None),
-        };
-
-        Ok(Some(RxPacket::new(self, slice)))
+        Ok(sock.read(&mut dev.bus, buf))
     }
 
     fn write(&mut self, data: &[u8]) -> Result<usize, SocketError> {
-        let mut sockets_guard = crate::coordinator::SOCKETS.lock();
-        let sock = sockets_guard[self.sn as usize]
+        let net = &mut *crate::coordinator::NET.lock();
+
+        let dev = net.device.as_mut().ok_or(SocketError::WriteFailed)?;
+        let sock = net.sockets[self.sn as usize]
             .as_mut()
             .ok_or(SocketError::WriteFailed)?;
 
-        let mut dev_guard = crate::coordinator::DEVICE.lock();
-        let dev = dev_guard.as_mut().ok_or(SocketError::WriteFailed)?;
-
-        match sock.write(&mut dev.bus, data) {
-            Ok(n) => Ok(n),
-            Err(_) => Err(SocketError::WriteFailed),
-        }
+        sock.write(&mut dev.bus, data)
     }
 
     fn write_buffer_available(&mut self) -> usize {
-        let mut sockets_guard = crate::coordinator::SOCKETS.lock();
-        if let Some(sock) = sockets_guard[self.sn as usize].as_mut() {
-            let mut dev_guard = crate::coordinator::DEVICE.lock();
-            if let Some(dev) = dev_guard.as_mut() {
-                return sock.write_buffer_available(&mut dev.bus);
-            }
+        let net = &mut *crate::coordinator::NET.lock();
+
+        let Some(dev) = net.device.as_mut() else {
+            return 0;
+        };
+        match net.sockets[self.sn as usize].as_mut() {
+            Some(sock) => sock.write_buffer_available(&mut dev.bus),
+            None => 0,
         }
-        0
     }
 
     fn flush(&mut self) -> Result<(), SocketError> {
@@ -376,12 +320,12 @@ impl Socket for W5500SocketHandle {
 
 impl Drop for W5500SocketHandle {
     fn drop(&mut self) {
-        let mut sockets_guard = crate::coordinator::SOCKETS.lock();
-        if let Some(mut sock) = sockets_guard[self.sn as usize].take() {
-            let mut dev_guard = crate::coordinator::DEVICE.lock();
-            if let Some(dev) = dev_guard.as_mut() {
-                sock.close(&mut dev.bus);
-            }
+        let net = &mut *crate::coordinator::NET.lock();
+        let Some(mut sock) = net.sockets[self.sn as usize].take() else {
+            return;
+        };
+        if let Some(dev) = net.device.as_mut() {
+            sock.close(&mut dev.bus);
         }
     }
 }
