@@ -13,6 +13,11 @@ use rust_esprit::{
 };
 
 pub const EVT_DHCP_ASSIGN: u32 = 1 << 0;
+pub const EVT_DISCON_SOCK0: u32 = 1 << 1;
+pub const EVT_DISCON_SOCK1: u32 = 1 << 2;
+pub const EVT_DISCON_SOCK2: u32 = 1 << 3;
+pub const EVT_DISCON_SOCK3: u32 = 1 << 4;
+pub const EVT_DISCON_MASK: u32 = 0x1E;
 pub const EVT_INTR: u32 = 1 << 28;
 
 pub const MAX_SOCKETS: usize = 4;
@@ -68,6 +73,21 @@ pub fn trigger_coordinator_interrupt() {
                 ptr as *const rs_rtos::c_fast_event::lnfast_event_group_c,
                 EVT_INTR,
             );
+        }
+    }
+}
+
+pub fn trigger_coordinator_disconnect(sn: u8) {
+    if (sn as usize) < MAX_SOCKETS {
+        let bit = 1 << (1 + sn);
+        let ptr = EVENT_GROUP_RAW.load(core::sync::atomic::Ordering::Acquire);
+        if !ptr.is_null() {
+            unsafe {
+                rs_rtos::c_fast_event::lnfast_event_group_set_events(
+                    ptr as *const rs_rtos::c_fast_event::lnfast_event_group_c,
+                    bit,
+                );
+            }
         }
     }
 }
@@ -134,7 +154,7 @@ pub extern "C" fn w5500_coordinator_task(_param: *mut c_void) {
     let mut tick_counter: u32 = 0;
 
     loop {
-        let _events = event_group.wait_events(EVT_DHCP_ASSIGN | EVT_INTR, 50);
+        let events = event_group.wait_events(EVT_DHCP_ASSIGN | EVT_INTR | EVT_DISCON_MASK, 50);
 
         tick_counter = tick_counter.wrapping_add(1);
         let is_second_tick = (tick_counter % 20) == 0;
@@ -185,6 +205,19 @@ pub extern "C" fn w5500_coordinator_task(_param: *mut c_void) {
             CoordinatorState::Running => {
                 let mut dev_guard = DEVICE.lock();
                 if let Some(dev) = dev_guard.as_mut() {
+                    // 1. Handle explicit software disconnect requests
+                    if (events & EVT_DISCON_MASK) != 0 {
+                        let mut sockets_guard = SOCKETS.lock();
+                        for sn in 0..MAX_SOCKETS {
+                            if (events & (1 << (1 + sn))) != 0 {
+                                if let Some(sock) = sockets_guard[sn].as_mut() {
+                                    sock.handle_disconnect(&mut dev.bus);
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Handle hardware interrupts from W5500
                     let sir = dev.bus.read_u8(SIR, CREG_BLOCK);
 
                     if sir != 0 {
@@ -208,12 +241,10 @@ pub extern "C" fn w5500_coordinator_task(_param: *mut c_void) {
                                             sock.invoke(SocketEvent::Connected);
                                         }
                                         if (sn_ir & Sn_IR_DISCON) != 0 {
-                                            sock.set_state(crate::socket::SocketState::Closing);
-                                            sock.invoke(SocketEvent::Disconnect);
+                                            sock.handle_disconnect(&mut dev.bus);
                                         }
                                         if (sn_ir & Sn_IR_TIMEOUT) != 0 {
-                                            sock.set_state(crate::socket::SocketState::Error);
-                                            sock.invoke(SocketEvent::Error);
+                                            sock.handle_disconnect(&mut dev.bus);
                                         }
                                     }
                                 }

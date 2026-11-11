@@ -115,13 +115,26 @@ impl W5500Socket {
         bus.write_u8(Sn_IR, sreg_block(self.sn), 0xFF);
         self.state = SocketState::Closed;
         self.is_sending = false;
+        self.rx_len = 0;
     }
 
-    /// Disconnect connected peer (sends TCP FIN).
+    /// Disconnect connected peer (sends TCP FIN), closes socket and restarts listening.
     pub fn disconnect(&mut self, bus: &mut W5500Bus) {
-        if self.state == SocketState::Connected {
-            self.send_command(bus, Sn_CR_DISCON);
+        self.handle_disconnect(bus);
+    }
+
+    /// Handles disconnect event (local or remote), cleans up socket and re-listens.
+    pub fn handle_disconnect(&mut self, bus: &mut W5500Bus) {
+        if self.state == SocketState::Connected || self.state == SocketState::Closing {
             self.state = SocketState::Closing;
+            if let Ok(s) = self.status(bus) {
+                if s == SocketStatus::Established || s == SocketStatus::CloseWait {
+                    self.send_command(bus, Sn_CR_DISCON);
+                }
+            }
+            self.close(bus);
+            self.init(bus);
+            self.invoke(SocketEvent::Disconnect);
         }
     }
 
@@ -177,7 +190,6 @@ impl W5500Socket {
         let freesize = bus.read_stable_u16(Sn_TX_FSR, sreg_block(self.sn)) as usize;
         let to_send = data.len().min(freesize);
         if to_send == 0 {
-            self.is_sending = true;
             return Ok(0);
         }
 
@@ -218,30 +230,20 @@ impl W5500Socket {
                         self.invoke(SocketEvent::Connected);
                     }
                     SocketStatus::Closed => {
-                        self.state = SocketState::Error;
-                        self.invoke(SocketEvent::Error);
+                        self.init(bus);
                     }
                     _ => {}
                 }
             }
             SocketState::Connected => {
                 if status == SocketStatus::Closed || status == SocketStatus::CloseWait {
-                    self.state = SocketState::Closing;
-                    if status == SocketStatus::CloseWait {
-                        self.send_command(bus, Sn_CR_DISCON);
-                    } else {
-                        self.close(bus);
-                    }
-                    self.invoke(SocketEvent::Disconnect);
+                    self.handle_disconnect(bus);
                 }
             }
-            SocketState::Closing => {
-                if status == SocketStatus::Closed {
-                    // Re-listen on same port
-                    self.init(bus);
-                }
+            SocketState::Closing | SocketState::Closed | SocketState::Error => {
+                self.close(bus);
+                self.init(bus);
             }
-            SocketState::Closed | SocketState::Error => {}
         }
     }
 }
@@ -320,13 +322,7 @@ impl Socket for W5500SocketHandle {
     }
 
     fn disconnect_client(&mut self) -> Result<(), SocketError> {
-        let mut sockets_guard = crate::coordinator::SOCKETS.lock();
-        if let Some(sock) = sockets_guard[self.sn as usize].as_mut() {
-            let mut dev_guard = crate::coordinator::DEVICE.lock();
-            if let Some(dev) = dev_guard.as_mut() {
-                sock.disconnect(&mut dev.bus);
-            }
-        }
+        crate::coordinator::trigger_coordinator_disconnect(self.sn);
         Ok(())
     }
 

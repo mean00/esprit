@@ -84,6 +84,7 @@ impl<H: SocketRunnerHandler, S: Socket, const WRITE_BUF_SIZE: usize> SocketRunne
 
     /// Disconnects the active client.
     pub fn disconnect_client(&mut self) {
+        self.write_index = 0;
         if let Some(ref mut socket) = self.socket {
             let _ = socket.disconnect_client();
         }
@@ -215,6 +216,7 @@ impl<H: SocketRunnerHandler, S: Socket, const WRITE_BUF_SIZE: usize> SocketRunne
         if (events & disc_bit) != 0 {
             events &= !disc_bit;
             self.connected = false;
+            self.write_index = 0;
             self.handler.on_disconnected();
             self.disconnect_client();
         }
