@@ -1,0 +1,14 @@
+[package]
+name = "rs_w5500"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rust_esprit = { path = "../../rust_esprit", default-features = false }
+rs_rtos = { path = "../../rs_rtos" }
+rs_socketrunner = { path = "../rs_socketrunner" }
+cty = "0.2.2"
+ufmt = { version = "0.2.0", default-features = false }
+
+[features]
+default = []
