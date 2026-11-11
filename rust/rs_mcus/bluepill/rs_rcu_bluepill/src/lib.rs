@@ -5,55 +5,7 @@
 
 mod registers;
 
-
-/// The peripheral identifiers, mapping to lnPeripherals.h
-#[repr(u32)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Peripheral {
-    None = 0,
-    Spi0,
-    Spi1,
-    Spi2,
-    Uart0,
-    Uart1,
-    Uart2,
-    Uart3,
-    Uart4,
-    I2c0,
-    I2c1,
-    Can0,
-    Can1,
-    Dac,
-    Pmu,
-    Bkp,
-    Wwdgt,
-    Timer0,
-    Timer1,
-    Timer2,
-    Timer3,
-    Timer4,
-    Timer5,
-    Timer6,
-    Usb,
-    Adc0,
-    Adc1,
-    GpioA,
-    GpioB,
-    GpioC,
-    GpioD,
-    GpioE,
-    Afio,
-    Dma0,
-    Dma1,
-    Ethernet,
-    UsbHsCh32v3x,
-    UsbFsOtgCh32v3x,
-
-    Apb1 = 100,
-    Apb2,
-    SysClock,
-}
-
+pub use rs_esprit::rcu::{Peripheral, Rcu as RcuTrait};
 
 use registers::*;
 
@@ -212,6 +164,28 @@ pub fn get_clock(periph: Peripheral) -> u32 {
 /// Idiomatic struct interface for Reset and Clock Unit (RCU/RCC).
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Rcu;
+
+impl rs_esprit::rcu::Rcu for Rcu {
+    #[inline(always)]
+    fn enable(periph: Peripheral) {
+        enable(periph);
+    }
+
+    #[inline(always)]
+    fn disable(periph: Peripheral) {
+        disable(periph);
+    }
+
+    #[inline(always)]
+    fn reset(periph: Peripheral) {
+        reset(periph);
+    }
+
+    #[inline(always)]
+    fn get_clock(periph: Peripheral) -> u32 {
+        get_clock(periph)
+    }
+}
 
 impl Rcu {
     #[inline(always)]

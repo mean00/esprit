@@ -35,7 +35,9 @@ rs_gpio_wrapped = { path = "../wrapped/rs_gpio_wrapped", optional = true }
 rs_exti_wrapped = { path = "../wrapped/rs_exti_wrapped", optional = true }
 rs_uart_wrapped = { path = "../wrapped/rs_uart_wrapped", optional = true }
 rs_adc_wrapped = { path = "../wrapped/rs_adc_wrapped", optional = true }
+rs_rcu_rp2xxx = { path = "../rs_mcus/rp2xxx/rs_rcu_rp2xxx", optional = true }
 rs_spi_rp2xxx = { path = "../rs_mcus/rp2xxx/rs_spi_rp2xxx", optional = true }
+rs_dma_rp2xxx = { path = "../rs_mcus/rp2xxx/rs_dma_rp2xxx", optional = true }
 rs_i2c_rp2xxx = { path = "../rs_mcus/rp2xxx/rs_i2c_rp2xxx", optional = true }
 rs_timer_rp2xxx = { path = "../rs_mcus/rp2xxx/rs_timer_rp2xxx", optional = true }
 rs_adc_rp2xxx = { path = "../rs_mcus/rp2xxx/rs_adc_rp2xxx", optional = true }
@@ -84,7 +86,9 @@ bluepill64 = ["bluepill", "dep:rs_pinout48_bluepill", "rs_pinout48_bluepill/blue
 # built on RP2xxx (esprit/rust/CMakeLists.txt), so those modules are backed by
 # the panicking stubs in esprit/rust/rs_mcus/rp2xxx/ instead.
 rp2040 = [
+    "dep:rs_rcu_rp2xxx",
     "dep:rs_spi_rp2xxx",
+    "dep:rs_dma_rp2xxx",
     "dep:rs_i2c_rp2xxx",
     "dep:rs_timer_rp2xxx",
     "dep:rs_adc_rp2xxx",

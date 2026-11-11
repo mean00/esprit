@@ -1,42 +1,17 @@
 //! SocketRunner engine implementation.
 
-use core::ffi::c_void;
 use rs_rtos::event::EventGroup;
 
-use crate::c_socket::{ln_set_connected_state, LnSocketCallback};
 use crate::constants::*;
-use crate::socket::LnSocket;
+use crate::socket::Socket;
 use crate::types::*;
 
-/// Context passed to the C-style socket callback.
-pub struct RunnerEventBridge {
-    event_group: EventGroup,
-    shift: u32,
-}
-
-impl RunnerEventBridge {
-    pub fn new(event_group: EventGroup, shift: u32) -> Self {
-        Self { event_group, shift }
-    }
-}
-
-/// Trampoline callback for incoming lnSocket events.
-extern "C" fn runner_socket_cb_trampoline(evt: u32, arg: *mut c_void) {
-    if arg.is_null() {
-        return;
-    }
-    let bridge = unsafe { &*(arg as *const RunnerEventBridge) };
-    if let Some(sock_evt) = SocketEvent::from_u32(evt) {
-        let revt = sock_evt.to_runner_event();
-        if revt != RunnerEvent::NONE {
-            bridge.event_group.set_events(revt.shifted(bridge.shift));
-        }
-    }
-}
+#[unsafe(no_mangle)]
+pub extern "C" fn ln_set_connected_state(_state: bool) {}
 
 /// Helper function to perform forced write on a socket, waiting for `CanWrite` if needed.
-fn forced_write_all(
-    socket: &mut LnSocket,
+fn forced_write_all<S: Socket>(
+    socket: &mut S,
     event_group: &EventGroup,
     shift: u32,
     mut data: &[u8],
@@ -56,35 +31,37 @@ fn forced_write_all(
 /// Generic, memory-safe SocketRunner server engine.
 ///
 /// `H` is the user-provided handler implementing `SocketRunnerHandler`.
+/// `S` is the socket driver implementing `Socket`.
 /// `WRITE_BUF_SIZE` is the staging buffer capacity in bytes (defaults to `DEFAULT_WRITE_BUFFER_SIZE`).
-pub struct SocketRunner<H: SocketRunnerHandler, const WRITE_BUF_SIZE: usize = DEFAULT_WRITE_BUFFER_SIZE> {
+pub struct SocketRunner<
+    H: SocketRunnerHandler,
+    S: Socket,
+    const WRITE_BUF_SIZE: usize = DEFAULT_WRITE_BUFFER_SIZE,
+> {
     port: u16,
     shift: u32,
     event_group: EventGroup,
-    bridge: RunnerEventBridge,
-    socket: Option<LnSocket>,
+    socket: Option<S>,
     connected: bool,
     write_buffer: [u8; WRITE_BUF_SIZE],
     write_index: usize,
     pub handler: H,
 }
 
-impl<H: SocketRunnerHandler> SocketRunner<H, DEFAULT_WRITE_BUFFER_SIZE> {
+impl<H: SocketRunnerHandler, S: Socket> SocketRunner<H, S, DEFAULT_WRITE_BUFFER_SIZE> {
     /// Creates a new SocketRunner instance with the default write buffer size (64 bytes).
     pub fn new(port: u16, event_group: EventGroup, shift: u32, handler: H) -> Self {
         Self::with_buffer_size(port, event_group, shift, handler)
     }
 }
 
-impl<H: SocketRunnerHandler, const WRITE_BUF_SIZE: usize> SocketRunner<H, WRITE_BUF_SIZE> {
+impl<H: SocketRunnerHandler, S: Socket, const WRITE_BUF_SIZE: usize> SocketRunner<H, S, WRITE_BUF_SIZE> {
     /// Creates a new SocketRunner instance with a custom write buffer capacity.
     pub fn with_buffer_size(port: u16, event_group: EventGroup, shift: u32, handler: H) -> Self {
-        let bridge = RunnerEventBridge::new(event_group.clone(), shift);
         Self {
             port,
             shift,
             event_group,
-            bridge,
             socket: None,
             connected: false,
             write_buffer: [0u8; WRITE_BUF_SIZE],
@@ -108,7 +85,7 @@ impl<H: SocketRunnerHandler, const WRITE_BUF_SIZE: usize> SocketRunner<H, WRITE_
     /// Disconnects the active client.
     pub fn disconnect_client(&mut self) {
         if let Some(ref mut socket) = self.socket {
-            socket.disconnect_client();
+            let _ = socket.disconnect_client();
         }
     }
 
@@ -121,11 +98,8 @@ impl<H: SocketRunnerHandler, const WRITE_BUF_SIZE: usize> SocketRunner<H, WRITE_
 
     /// Starts the server socket, enables async mode, and starts accepting.
     pub fn start_server(&mut self) -> Result<(), SocketError> {
-        let cb: LnSocketCallback = runner_socket_cb_trampoline;
-        let bridge_ptr = &self.bridge as *const RunnerEventBridge as *mut c_void;
-
-        let mut socket = unsafe { LnSocket::create(self.port, cb, bridge_ptr)? };
-        socket.async_mode()?;
+        let listener = SocketListener::from_event_group(self.event_group.clone(), self.shift);
+        let mut socket = S::create(self.port, listener)?;
         socket.accept()?;
         self.socket = Some(socket);
         Ok(())
@@ -133,7 +107,7 @@ impl<H: SocketRunnerHandler, const WRITE_BUF_SIZE: usize> SocketRunner<H, WRITE_
 
     /// Reads incoming packet data using zero-copy semantics.
     /// The returned `RxPacket` releases the receive buffer automatically on Drop.
-    pub fn read_packet(&mut self) -> Result<Option<RxPacket<'_, LnSocket>>, SocketError> {
+    pub fn read_packet(&mut self) -> Result<Option<RxPacket<'_, S>>, SocketError> {
         match self.socket.as_mut() {
             Some(socket) => socket.read_packet(),
             None => Err(SocketError::NotConnected),
@@ -144,19 +118,12 @@ impl<H: SocketRunnerHandler, const WRITE_BUF_SIZE: usize> SocketRunner<H, WRITE_
     /// The receive buffer is automatically released when `f` returns.
     pub fn with_incoming_packet<R>(&mut self, f: impl FnOnce(&[u8]) -> R) -> Result<Option<R>, SocketError> {
         let socket = self.socket.as_mut().ok_or(SocketError::NotConnected)?;
-        let mut n: u32 = 0;
-        let mut data_ptr: *mut u8 = core::ptr::null_mut();
-        let status = unsafe { crate::c_socket::ln_socket_read(socket.raw(), &mut n, &mut data_ptr) };
-        if status != (SocketStatus::Ok as u32) {
-            return Err(SocketError::ReadFailed);
+        if let Some(packet) = socket.read_packet()? {
+            let res = f(&packet);
+            drop(packet);
+            return Ok(Some(res));
         }
-        if n == 0 || data_ptr.is_null() {
-            return Ok(None);
-        }
-        let slice = unsafe { core::slice::from_raw_parts(data_ptr, n as usize) };
-        let res = f(slice);
-        socket.release_read_data();
-        Ok(Some(res))
+        Ok(None)
     }
 
     /// Reads incoming data directly into the provided slice buffer.
@@ -172,25 +139,15 @@ impl<H: SocketRunnerHandler, const WRITE_BUF_SIZE: usize> SocketRunner<H, WRITE_
     /// Directly echoes all pending incoming data back to the client.
     pub fn echo_incoming(&mut self) -> Result<usize, SocketError> {
         let mut total_echoed = 0;
+        let mut buf = [0u8; 128];
         loop {
-            let socket = self.socket.as_mut().ok_or(SocketError::NotConnected)?;
-            let mut n: u32 = 0;
-            let mut data_ptr: *mut u8 = core::ptr::null_mut();
-            let status = unsafe { crate::c_socket::ln_socket_read(socket.raw(), &mut n, &mut data_ptr) };
-            if status != (SocketStatus::Ok as u32) {
-                return Err(SocketError::ReadFailed);
-            }
-            if n == 0 || data_ptr.is_null() {
+            let n = self.read_into(&mut buf)?;
+            if n == 0 {
                 break;
             }
-            let slice = unsafe { core::slice::from_raw_parts(data_ptr, n as usize) };
-            let write_res = self.write(slice);
-            let flush_res = self.flush();
-            let socket = self.socket.as_mut().ok_or(SocketError::NotConnected)?;
-            socket.release_read_data();
-            write_res?;
-            flush_res?;
-            total_echoed += n as usize;
+            self.write(&buf[..n])?;
+            self.flush()?;
+            total_echoed += n;
         }
         Ok(total_echoed)
     }
@@ -241,18 +198,14 @@ impl<H: SocketRunnerHandler, const WRITE_BUF_SIZE: usize> SocketRunner<H, WRITE_
         // 1. Link Up
         if (events & RunnerEvent::UP.0) != 0 {
             events &= !RunnerEvent::UP.0;
-            unsafe {
-                ln_set_connected_state(true);
-            }
+            ln_set_connected_state(true);
             self.cleanup();
             let _ = self.start_server();
         }
 
         // 2. Link Down
         if (events & RunnerEvent::DOWN.0) != 0 {
-            unsafe {
-                ln_set_connected_state(false);
-            }
+            ln_set_connected_state(false);
             self.cleanup();
             return;
         }

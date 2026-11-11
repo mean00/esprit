@@ -1,6 +1,8 @@
 //! Shared types, enums, traits, and RAII guards for SocketRunner.
 
+use core::ffi::c_void;
 use core::ops::Deref;
+use rs_rtos::event::EventGroup;
 use crate::constants::*;
 
 // ---------------------------------------------------------------------------
@@ -80,7 +82,7 @@ impl core::ops::BitAnd for RunnerEvent {
 //  Socket Events & Status Enums
 // ---------------------------------------------------------------------------
 
-/// C-ABI compatible socket event enumeration matching `lnSocketEvent`.
+/// Socket event enumeration.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SocketEvent {
@@ -94,7 +96,7 @@ pub enum SocketEvent {
 }
 
 impl SocketEvent {
-    /// Converts a raw C integer value to `SocketEvent`.
+    /// Converts an integer value to `SocketEvent`.
     pub fn from_u32(val: u32) -> Option<Self> {
         match val {
             0 => Some(Self::Ignore),
@@ -118,6 +120,64 @@ impl SocketEvent {
             Self::Error => RunnerEvent::ERROR,
             Self::Custom => RunnerEvent::CUSTOM_EVENT,
             Self::Ignore => RunnerEvent::NONE,
+        }
+    }
+}
+
+/// Asynchronous notification listener for socket lifecycle events.
+#[derive(Clone)]
+pub enum SocketListener {
+    /// Dispatches events to a FreeRTOS `EventGroup` at the given slot bit shift.
+    EventGroup {
+        event_group: EventGroup,
+        shift: u32,
+    },
+    /// Dispatches events to a custom callback function.
+    Callback {
+        callback: fn(SocketEvent, usize),
+        ctx: usize,
+    },
+    /// Dispatches events to a legacy C ABI callback function.
+    CCallback {
+        callback: extern "C" fn(u32, *mut c_void),
+        arg: *mut c_void,
+    },
+    None,
+}
+
+impl SocketListener {
+    pub fn from_event_group(event_group: EventGroup, shift: u32) -> Self {
+        Self::EventGroup { event_group, shift }
+    }
+
+    pub fn from_callback(callback: fn(SocketEvent, usize), ctx: usize) -> Self {
+        Self::Callback { callback, ctx }
+    }
+
+    pub fn from_c_callback(callback: extern "C" fn(u32, *mut c_void), arg: *mut c_void) -> Self {
+        Self::CCallback { callback, arg }
+    }
+
+    pub fn none() -> Self {
+        Self::None
+    }
+
+    #[inline(always)]
+    pub fn notify(&self, event: SocketEvent) {
+        match self {
+            Self::EventGroup { event_group, shift } => {
+                let revt = event.to_runner_event();
+                if revt != RunnerEvent::NONE {
+                    event_group.set_events(revt.shifted(*shift));
+                }
+            }
+            Self::Callback { callback, ctx } => {
+                (callback)(event, *ctx);
+            }
+            Self::CCallback { callback, arg } => {
+                (callback)(event as u32, *arg);
+            }
+            Self::None => {}
         }
     }
 }

@@ -5,7 +5,6 @@
 
 #![no_std]
 
-pub mod c_socket;
 pub mod constants;
 pub mod runner;
 pub mod socket;

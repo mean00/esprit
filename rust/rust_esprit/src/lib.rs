@@ -164,6 +164,7 @@ cfg_if::cfg_if! {
         pub(crate) use c_api::rn_gpio_rp2040_c;
         pub(crate) use rs_i2c_rp2xxx as rn_i2c_c;
         pub(crate) use rs_spi_rp2xxx as rn_spi_c;
+        pub(crate) use rs_dma_rp2xxx as rn_dma_c;
         pub(crate) use c_api::rn_serial_c;
         pub(crate) use rs_adc_rp2xxx as rn_timing_adc_c;
         pub(crate) use rs_adc_rp2xxx as rn_simple_adc_c;
@@ -346,6 +347,25 @@ pub use {
     rs_adc_bluepill, rs_afio_bluepill, rs_dma_bluepill, rs_exti_bluepill, rs_gpio_bluepill,
     rs_i2c_bluepill, rs_multi_pulse_bluepill, rs_rcu_bluepill, rs_spi_bluepill, rs_timer_bluepill,
     rs_uart_bluepill,
+};
+
+#[cfg(feature = "rp2040")]
+pub mod rp2xxx {
+    //! Low-level RP2xxx (RP2040 / RP2350) peripheral driver crates.
+    pub use rs_adc_rp2xxx as adc;
+    pub use rs_dma_rp2xxx as dma;
+    pub use rs_gpio_rp2xxx as gpio;
+    pub use rs_i2c_rp2xxx as i2c;
+    pub use rs_multi_pulse_rp2xxx as multi_pulse;
+    pub use rs_rcu_rp2xxx as rcu;
+    pub use rs_spi_rp2xxx as spi;
+    pub use rs_timer_rp2xxx as timer;
+}
+
+#[cfg(feature = "rp2040")]
+pub use {
+    rs_adc_rp2xxx, rs_dma_rp2xxx, rs_gpio_rp2xxx, rs_i2c_rp2xxx, rs_multi_pulse_rp2xxx,
+    rs_rcu_rp2xxx, rs_spi_rp2xxx, rs_timer_rp2xxx,
 };
 
 // ---------------------------------------------------------------------------

@@ -156,6 +156,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rs_dma_rp2xxx"
+version = "0.1.0"
+dependencies = [
+ "portable-atomic",
+ "rs_esprit",
+ "rs_rp2xxx",
+]
+
+[[package]]
 name = "rs_esprit"
 version = "0.1.0"
 dependencies = [
@@ -194,6 +203,7 @@ name = "rs_gpio_rp2xxx"
 version = "0.1.0"
 dependencies = [
  "rs_esprit",
+ "rs_rp2xxx",
 ]
 
 [[package]]
@@ -252,7 +262,20 @@ name = "rs_rcu_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_esprit",
 ]
+
+[[package]]
+name = "rs_rcu_rp2xxx"
+version = "0.1.0"
+dependencies = [
+ "rs_esprit",
+ "rs_rp2xxx",
+]
+
+[[package]]
+name = "rs_rp2xxx"
+version = "0.1.0"
 
 [[package]]
 name = "rs_rtos"
@@ -276,6 +299,14 @@ dependencies = [
 [[package]]
 name = "rs_spi_rp2xxx"
 version = "0.1.0"
+dependencies = [
+ "portable-atomic",
+ "rs_dma_rp2xxx",
+ "rs_esprit",
+ "rs_gpio_rp2xxx",
+ "rs_rcu_rp2xxx",
+ "rs_rp2xxx",
+]
 
 [[package]]
 name = "rs_spi_wrapped"
@@ -351,6 +382,7 @@ dependencies = [
  "rs_adc_wrapped",
  "rs_afio_bluepill",
  "rs_dma_bluepill",
+ "rs_dma_rp2xxx",
  "rs_esprit",
  "rs_exti_bluepill",
  "rs_exti_wrapped",
@@ -364,6 +396,7 @@ dependencies = [
  "rs_multi_pulse_rp2xxx",
  "rs_pinout48_bluepill",
  "rs_rcu_bluepill",
+ "rs_rcu_rp2xxx",
  "rs_rtos",
  "rs_spi_bluepill",
  "rs_spi_rp2xxx",

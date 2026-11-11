@@ -310,6 +310,62 @@ pub mod gpio {
     }
 }
 
+pub mod rcu {
+    #[repr(u32)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    pub enum Peripheral {
+        None = 0,
+        Spi0,
+        Spi1,
+        Spi2,
+        Uart0,
+        Uart1,
+        Uart2,
+        Uart3,
+        Uart4,
+        I2c0,
+        I2c1,
+        Can0,
+        Can1,
+        Dac,
+        Pmu,
+        Bkp,
+        Wwdgt,
+        Timer0,
+        Timer1,
+        Timer2,
+        Timer3,
+        Timer4,
+        Timer5,
+        Timer6,
+        Usb,
+        Adc0,
+        Adc1,
+        GpioA,
+        GpioB,
+        GpioC,
+        GpioD,
+        GpioE,
+        Afio,
+        Dma0,
+        Dma1,
+        Ethernet,
+        UsbHsCh32v3x,
+        UsbFsOtgCh32v3x,
+
+        Apb1 = 100,
+        Apb2,
+        SysClock,
+    }
+
+    pub trait Rcu {
+        fn enable(periph: Peripheral);
+        fn disable(periph: Peripheral);
+        fn reset(periph: Peripheral);
+        fn get_clock(periph: Peripheral) -> u32;
+    }
+}
+
 pub use rs_rtos as rtos;
 pub use rs_rtos::sync;
 pub use rs_rtos::queue;
@@ -329,3 +385,4 @@ pub use timer::{Timer, TimerHandler, DelayTimer};
 pub use i2c::{I2c, I2cHandler, I2cConfig};
 pub use adc::{SimpleAdc, TimingAdc, AdcHandler};
 pub use gpio::{GpioPin, GpioInterruptHandler, EdgeTrigger, GpioMode, Exti};
+pub use rcu::{Peripheral, Rcu};
