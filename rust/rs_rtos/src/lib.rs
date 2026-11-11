@@ -67,5 +67,6 @@ pub use event::EventGroup;
 pub use timer::PeriodicTimer;
 pub use task::{
     current, delay_ms, delay_us, sleep, sleep_ms, spawn, spawn_raw, tick_count, time_ms, time_us,
-    time_us64, yield_now, Duration, Instant, TaskEntry, TaskHandle, ms_to_ticks,
+    time_us64, yield_now, CTaskEntry, Duration, Instant, TaskEntry, TaskHandle, TaskStorage,
+    ms_to_ticks,
 };

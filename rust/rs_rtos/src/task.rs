@@ -355,6 +355,103 @@ pub fn spawn_raw(
     }
 }
 
+// ---- statically allocated tasks ----
+
+/// Task entry point in the C ABI, i.e. what `xTaskCreate*()` expects.
+///
+/// A safe `extern "C" fn(*mut c_void)` coerces into it, which is what a task
+/// body written in Rust looks like.
+pub type CTaskEntry = unsafe extern "C" fn(param: *mut c_void);
+
+/// Stack **and** control block of a statically allocated task.
+///
+/// Put one in a `static` and call [`TaskStorage::spawn`] on it once: the task
+/// then lives in `.bss`.  Use this instead of [`spawn`] / [`spawn_raw`], which
+/// take the stack and the TCB from `configTOTAL_HEAP_SIZE`, whenever the stack
+/// is big enough to matter.
+///
+/// # Example
+/// ```ignore
+/// static NET_TASK: TaskStorage<1024> = TaskStorage::new(); // 4 KiB stack
+/// NET_TASK.spawn("net", 5, net_entry, core::ptr::null_mut());
+/// ```
+pub struct TaskStorage<const STACK_WORDS: usize> {
+    stack: UnsafeCell<[rn_freertos_c::StackType_t; STACK_WORDS]>,
+    /// The `*Static()` API initialises it, so it starts out uninitialised.
+    tcb: UnsafeCell<mem::MaybeUninit<rn_freertos_c::StaticTask_t>>,
+    /// Set by the single `spawn()`; the kernel owns the buffers from then on.
+    spawned: AtomicBool,
+}
+
+// SAFETY: after the one allowed `spawn()` the kernel owns both buffers and no
+// other accessor exposes them (`spawned` rejects a second task).
+unsafe impl<const STACK_WORDS: usize> Sync for TaskStorage<STACK_WORDS> {}
+
+impl<const STACK_WORDS: usize> TaskStorage<STACK_WORDS> {
+    /// Zeroed storage, constructible in a `static`.
+    pub const fn new() -> Self {
+        Self {
+            stack: UnsafeCell::new([0; STACK_WORDS]),
+            tcb: UnsafeCell::new(mem::MaybeUninit::uninit()),
+            spawned: AtomicBool::new(false),
+        }
+    }
+
+    /// Create the task that runs `entry` on this storage.
+    ///
+    /// # Panics
+    /// If this storage already backs a task, or if the kernel refuses to create
+    /// the task.
+    pub fn spawn(
+        &'static self,
+        name: &str,
+        priority: u32,
+        entry: CTaskEntry,
+        param: *mut c_void,
+    ) -> TaskHandle {
+        // Test-and-set under a critical section: the kernel's `.bss` buffers are
+        // handed over exactly once, whatever the caller does.
+        {
+            let _section = crate::critical::CriticalSection::enter();
+            assert!(
+                !self.spawned.load(Ordering::Acquire),
+                "TaskStorage::spawn: storage already used by another task"
+            );
+            self.spawned.store(true, Ordering::Release);
+        }
+
+        let mut name_buf = [0u8; 32];
+        let copy_len = name.len().min(31);
+        name_buf[..copy_len].copy_from_slice(&name.as_bytes()[..copy_len]);
+
+        // SAFETY: both buffers belong to this storage, they outlive the task
+        // (`&'static self`) and are handed over exactly once (asserted above).
+        let raw = unsafe {
+            rn_freertos_c::xTaskCreateStatic(
+                Some(entry),
+                name_buf.as_ptr() as *const cty::c_char,
+                STACK_WORDS as rn_freertos_c::StackType_t,
+                param,
+                priority as rn_freertos_c::UBaseType_t,
+                self.stack.get().cast(),
+                self.tcb.get().cast(),
+            )
+        };
+        assert!(
+            !raw.is_null(),
+            "TaskStorage::spawn: xTaskCreateStatic returned NULL"
+        );
+        // SAFETY: the kernel just created a task and gave us its handle.
+        unsafe { TaskHandle::from_raw(raw) }
+    }
+}
+
+impl<const STACK_WORDS: usize> Default for TaskStorage<STACK_WORDS> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ---------------------------------------------------------------------------
 //  Instant (std‑like monotonic time)
 // ---------------------------------------------------------------------------
