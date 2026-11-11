@@ -109,8 +109,9 @@ set(RP_LN_SOURCES
 # Rust-owned on a LN_ENABLE_RUST build: rs_spi_rp2xxx replaces ln_rp_spi.cpp and the
 # unique id is read from the registers by the Rust driver (rp_uniqid.cpp has no
 # caller). Both files stay in a non-Rust build.
+list(APPEND RP_LN_SOURCES ${RP_COMMON_FOLDER}/ln_rp_spi.cpp)
 if(NOT LN_ENABLE_RUST)
-  list(APPEND RP_LN_SOURCES ${RP_COMMON_FOLDER}/ln_rp_spi.cpp ${RP_COMMON_FOLDER}/rp_uniqid.cpp)
+  list(APPEND RP_LN_SOURCES ${RP_COMMON_FOLDER}/rp_uniqid.cpp)
 endif()
 
 set(RP_LN_SRCS

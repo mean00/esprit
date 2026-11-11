@@ -33,3 +33,5 @@ rust/libraries/*/target/
 rust/rs_esprit/target/
 rust/rs_rtos/target/
 rust/wrapped/*/target/
+rust/rs_mcus/*/target/
+rust/rs_mcus/*/*/target/
