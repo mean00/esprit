@@ -11,14 +11,14 @@
 //! The map is complete on purpose — a driver only uses part of it.
 #![allow(dead_code)]
 
-// --- Bases (datasheet §2.2 "Address map") ---------------------------------
+// --- Bases re-exported from rs_rp2xxx ---------------------------------
 
 /// Single-cycle I/O block: the GPIO function of the CPU.
-pub const SIO_BASE: u32 = 0xd000_0000;
+pub use rs_rp2xxx::common::SIO_BASE;
 /// Per-GPIO function select and overrides.
-pub const IO_BANK0_BASE: u32 = 0x4001_4000;
+pub use rs_rp2xxx::rp2040::IO_BANK0_BASE;
 /// Per-GPIO pad control (drive strength, pulls, input/output enable).
-pub const PADS_BANK0_BASE: u32 = 0x4001_c000;
+pub use rs_rp2xxx::rp2040::PADS_BANK0_BASE;
 
 // --- SIO registers (offsets from SIO_BASE) --------------------------------
 // The SET/CLR/XOR registers are write-1-to-act and cannot be read back: they are

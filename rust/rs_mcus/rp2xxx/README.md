@@ -93,6 +93,16 @@ firmware (C++ SWD pins + Rust target-reset line, which is what
 It is reached as `rust_esprit::gpio_rp2xxx` (enabled by the `rp2040` feature). The
 first consumer is the probe board table: `swindle/rs/rs_swindle_board/src/rp2xxx/`.
 
+## RCU backend (`rs_rcu_rp2xxx`)
+
+Pure-Rust Reset and Clock Unit driver for RP2040 and RP2350:
+implements the `rs_esprit::rcu::Rcu` super trait on the RP2xxx RESETS and CLOCKS
+blocks (`registers.rs`). It is the RP2xxx counterpart of `rs_rcu_bluepill`,
+providing `enable()`, `disable()`, `reset()`, and `get_clock()`.
+
+It is used by peripheral drivers such as `rs_spi_rp2xxx` to unreset peripherals
+and query bus/peripheral frequencies via `Rcu::enable()` and `Rcu::get_clock()`.
+
 ## Naming
 
 Crate names mirror the Bluepill siblings (`rs_adc_bluepill` → `rs_adc_rp2xxx`)

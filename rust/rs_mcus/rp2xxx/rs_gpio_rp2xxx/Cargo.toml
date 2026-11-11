@@ -18,3 +18,4 @@ edition = "2024"
 
 [dependencies]
 rs_esprit = { path = "../../../rs_esprit" }
+rs_rp2xxx = { path = "../rs_rp2xxx" }

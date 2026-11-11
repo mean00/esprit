@@ -1,0 +1,11 @@
+[package]
+name = "rs_rp2xxx"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+rp2040 = []
+rp2350 = []
+
+[dependencies]

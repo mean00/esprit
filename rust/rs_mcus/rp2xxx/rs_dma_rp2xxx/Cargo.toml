@@ -1,0 +1,9 @@
+[package]
+name = "rs_dma_rp2xxx"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+portable-atomic = { version = "1.15.0", features = ["critical-section"] }
+rs_esprit = { path = "../../../rs_esprit" }
+rs_rp2xxx = { path = "../rs_rp2xxx" }

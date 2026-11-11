@@ -2,3 +2,11 @@
 name = "rs_spi_rp2xxx"
 version = "0.1.0"
 edition = "2024"
+
+[dependencies]
+portable-atomic = { version = "1.15.0", features = ["critical-section"] }
+rs_esprit = { path = "../../../rs_esprit" }
+rs_dma_rp2xxx = { path = "../rs_dma_rp2xxx" }
+rs_gpio_rp2xxx = { path = "../rs_gpio_rp2xxx" }
+rs_rcu_rp2xxx = { path = "../rs_rcu_rp2xxx" }
+rs_rp2xxx = { path = "../rs_rp2xxx" }

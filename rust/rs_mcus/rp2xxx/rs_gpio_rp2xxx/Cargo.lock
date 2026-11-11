@@ -27,7 +27,12 @@ name = "rs_gpio_rp2xxx"
 version = "0.1.0"
 dependencies = [
  "rs_esprit",
+ "rs_rp2xxx",
 ]
+
+[[package]]
+name = "rs_rp2xxx"
+version = "0.1.0"
 
 [[package]]
 name = "rs_rtos"

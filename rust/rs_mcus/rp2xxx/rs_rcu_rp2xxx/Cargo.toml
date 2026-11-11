@@ -1,0 +1,12 @@
+[package]
+name = "rs_rcu_rp2xxx"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rs_esprit = { path = "../../../rs_esprit" }
+rs_rp2xxx = { path = "../rs_rp2xxx" }
+
+[features]
+rp2040 = []
+rp2350 = []
