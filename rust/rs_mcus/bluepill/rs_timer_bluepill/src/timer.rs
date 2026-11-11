@@ -4,6 +4,9 @@
 
 use crate::registers::*;
 use core::ptr::{read_volatile, write_volatile};
+use rs_mcu_traits::handler::HandlerTable;
+use rs_mcu_traits::timer;
+use rs_mcu_traits::{Error, Result as HalResult};
 use rs_rcu_bluepill::{enable, get_clock, Peripheral};
 
 /// Output compare modes for timer channels.
@@ -255,47 +258,47 @@ impl Timer {
     }
 }
 
-static mut TIMER_HANDLERS: [Option<&'static dyn rs_esprit::TimerHandler>; TIMER_MAX_INSTANCES] = [None, None, None, None, None];
+/// One handler slot per timer channel.
+static TIMER_HANDLERS: HandlerTable<dyn timer::TimerHandler, TIMER_MAX_INSTANCES> =
+    HandlerTable::new();
 
-impl rs_esprit::Timer for Timer {
-    #[inline]
-    fn set_frequency(&mut self, frequency_hz: u32) -> Result<u32, &'static str> {
-        self.set_frequency(frequency_hz)
+impl timer::Timer for Timer {
+    /// Program `hz`; the GD32 counter rounds to its prescaler, so the frequency it
+    /// actually reaches is returned.
+    fn start_periodic(&mut self, hz: u32) -> HalResult<u32> {
+        Timer::set_frequency(self, hz).map_err(|_| Error::InvalidConfig)
     }
 
-    #[inline]
-    fn enable(&mut self) {
-        self.enable();
-    }
-
-    #[inline]
-    fn disable(&mut self) {
-        self.disable();
-    }
-
-    #[inline]
-    fn set_handler(&mut self, handler: Option<&'static dyn rs_esprit::TimerHandler>) {
+    /// One pulse of `duration_us`. The channel's prescaler is programmed for
+    /// millisecond ticks, so the pulse is rounded up to the next millisecond
+    /// (a sub-millisecond pulse needs the microsecond prescaler, tracked in
+    /// `supertraits.md`).
+    fn start_single_shot(&mut self, duration_us: u32, active_high: bool) -> HalResult<()> {
+        let ms = duration_us.div_ceil(1_000).max(1);
+        let regs = self.regs;
         unsafe {
-            if (self.timer_idx as usize) < TIMER_MAX_INSTANCES {
-                TIMER_HANDLERS[self.timer_idx as usize] = handler;
-            }
-        }
-    }
-
-    #[inline]
-    fn single_shot(&mut self, duration_ms: u32, _up: bool) {
-        unsafe {
-            let mut ctl0 = read_volatile(&mut (*self.regs).ctl0);
+            let mut ctl0 = read_volatile(&mut (*regs).ctl0);
             ctl0 &= !TIMER_CTL0_CEN;
-            write_volatile(&mut (*self.regs).ctl0, ctl0);
+            write_volatile(&mut (*regs).ctl0, ctl0);
 
-            write_volatile(&mut (*self.regs).psc, TIMER_PRESCALER_1MS_72MHZ);
-            write_volatile(&mut (*self.regs).car, duration_ms);
+            write_volatile(&mut (*regs).psc, TIMER_PRESCALER_1MS_72MHZ);
+            write_volatile(&mut (*regs).car, ms);
 
+            // One-pulse mode: the counter stops itself after `car`.
+            let _ = active_high;
             ctl0 |= TIMER_CTL0_OPM;
             ctl0 |= TIMER_CTL0_CEN;
-            write_volatile(&mut (*self.regs).ctl0, ctl0);
+            write_volatile(&mut (*regs).ctl0, ctl0);
         }
+        Ok(())
+    }
+
+    fn stop(&mut self) {
+        Timer::disable(self);
+    }
+
+    fn set_handler(&mut self, handler: Option<&'static dyn timer::TimerHandler>) {
+        TIMER_HANDLERS.set(self.timer_idx as usize, handler);
     }
 }
 

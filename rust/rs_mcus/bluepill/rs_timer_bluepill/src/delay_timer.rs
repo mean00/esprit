@@ -9,10 +9,29 @@ use crate::registers::*;
 use crate::timer::Timer;
 use core::ffi::c_void;
 use core::ptr::{read_volatile, write_volatile};
+use rs_mcu_traits::handler::HandlerTable;
+use rs_mcu_traits::timer;
+use rs_mcu_traits::Result as HalResult;
 use rs_rcu_bluepill::{get_clock, Peripheral};
 
 /// C-style timer interrupt handler callback function pointer.
 pub type DelayTimerCallback = Option<unsafe extern "C" fn(cookie: *mut c_void)>;
+
+/// One handler slot per timer channel (the same channels `rs_timer_bluepill` uses).
+static DELAY_HANDLERS: HandlerTable<dyn timer::DelayHandler, TIMER_MAX_INSTANCES> =
+    HandlerTable::new();
+
+/// Adapter from the family's C-style callback to the typed handler of the trait.
+///
+/// The cookie is the timer index, which is how the trampoline finds the handler
+/// the caller installed.
+unsafe extern "C" fn delay_trampoline(cookie: *mut c_void) {
+    // SAFETY: the handler was installed before the interrupt was enabled, and the
+    // interrupt is the only reader.
+    if let Some(handler) = unsafe { DELAY_HANDLERS.isr_get(cookie as usize) } {
+        handler.on_elapsed();
+    }
+}
 
 unsafe extern "C" {
     #[link_name = "\u{1}_Z17lnEnableInterruptRK5LnIRQ"]
@@ -162,29 +181,32 @@ impl DelayTimer {
     }
 }
 
-impl rs_esprit::DelayTimer for DelayTimer {
-    #[inline]
-    fn arm(&mut self, duration_us: u32) {
-        self.arm(duration_us);
+impl timer::DelayTimer for DelayTimer {
+    /// Arm the one-shot delay, in microseconds (the timer runs at 1 MHz).
+    fn arm_us(&mut self, duration_us: u32) -> HalResult<()> {
+        DelayTimer::arm(self, duration_us);
+        Ok(())
     }
 
-    #[inline]
-    fn set_interrupt(
-        &mut self,
-        handler: Option<unsafe extern "C" fn(cookie: *mut core::ffi::c_void)>,
-        cookie: *mut core::ffi::c_void,
-    ) {
-        self.set_interrupt(handler, cookie);
+    /// Typed handler: the family keeps its C-style callback, and the trampoline
+    /// below looks the handler up by timer index (the cookie).
+    fn set_handler(&mut self, handler: Option<&'static dyn timer::DelayHandler>) {
+        DELAY_HANDLERS.set(self.timer_idx as usize, handler);
+        match handler {
+            Some(_) => {
+                let cookie = self.timer_idx as usize as *mut core::ffi::c_void;
+                self.set_interrupt(Some(delay_trampoline), cookie);
+            }
+            None => self.set_interrupt(None, core::ptr::null_mut()),
+        }
     }
 
-    #[inline]
     fn enable_interrupt(&mut self) {
-        self.enable_interrupt();
+        DelayTimer::enable_interrupt(self);
     }
 
-    #[inline]
     fn disable_interrupt(&mut self) {
-        self.disable_interrupt();
+        DelayTimer::disable_interrupt(self);
     }
 }
 

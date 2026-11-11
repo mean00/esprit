@@ -21,22 +21,31 @@ endif()
 
 # lnFast_EventGroup_c.cpp is not dead: the Rust side (rs_rtos / event.rs) calls it.
 #
-# The GPIO / EXTI / CPU-id bridges exist *only* for the Rust side. When the pure-Rust
+# The GPIO / CPU-id bridges exist *only* for the Rust side. When the pure-Rust
 # backends own those peripherals (LN_ENABLE_RUST on the bluepill and RP2xxx targets:
-# rs_gpio_bluepill / rs_gpio_rp2xxx, rs_exti_bluepill, the Rust CpuId), nothing calls
-# them any more and the linker drops every one of their symbols. ESP32 keeps them:
-# its Rust path goes through these esprit c_api bindings.
-set(_esprit_rust_c_bridges ${C}/lnGPIO_c.cpp ${C}/lnExti_c.cpp ${C}/lnCpuID_c.cpp)
+# rs_gpio_bluepill / rs_gpio_rp2xxx, the Rust CpuId), nothing calls them any more
+# and the linker drops every one of their symbols. ESP32 keeps them: its Rust path
+# goes through these esprit c_api bindings.
+#
+# The EXTI bridge (lnExti_c.cpp) is gone: Rust reaches pin interrupts through
+# `rs_mcu_traits::exti::Exti`, implemented by `rs_exti_bluepill`,
+# `rs_exti_rp2xxx` (IO_BANK0) and `rs_exti_wrapped` — nothing on the Rust side
+# calls `lnExti*_c` any more. C++ still uses `lnExtiAttachInterrupt` directly.
+set(_esprit_rust_c_bridges ${C}/lnGPIO_c.cpp ${C}/lnCpuID_c.cpp)
 if(LN_ENABLE_RUST)
   if(USE_RP2040 OR USE_RP2350)
-    set(_esprit_rust_c_bridges ${C}/lnGPIO_c.cpp ${C}/lnExti_c.cpp)
+    set(_esprit_rust_c_bridges ${C}/lnGPIO_c.cpp)
   elseif(NOT ("${LN_MCU}" STREQUAL "ESP32"))
-    message(STATUS "Rust GPIO/EXTI/CPU-id bridges: not built (the Rust backends own them)")
+    message(STATUS "Rust GPIO/CPU-id bridges: not built (the Rust backends own them)")
     set(_esprit_rust_c_bridges "")
   endif()
 endif()
 target_sources(esprit_c_bindings PRIVATE ${EXTRA} ${C}/lnFast_EventGroup_c.cpp ${_esprit_rust_c_bridges})
-if(NOT (LN_ENABLE_RUST AND NOT (USE_RP2040 OR USE_RP2350)))
+# lnSerial_c.cpp is only for the backends that reach the UART through it: the
+# ESP32 `rs_uart_wrapped` crate and every non-Rust build. On a Rust build of the
+# bluepill / RP2xxx the UART is `rs_uart_bluepill` / `rs_uart_rp2xxx`, i.e. the
+# `rs_mcu_traits::uart::Uart` super trait, and nothing calls `lnserial_*`.
+if(NOT LN_ENABLE_RUST OR "${LN_MCU}" STREQUAL "ESP32")
   target_sources(esprit_c_bindings PRIVATE ${C}/lnSerial_c.cpp)
 endif()
 if(LN_ENABLE_USBD)
@@ -75,10 +84,8 @@ if(NOT (USE_RP2040 OR USE_RP2350))
   if(NOT LN_ENABLE_RUST)
     cond_build(LN_ENABLE_I2C lnI2C_c.cpp)
   endif()
-else()
-  # RP2xxx has no lnTimingAdc, but it does have the C++ lnSimpleADC driver
-  # (mcus/arm_rp2xxx/src/ln_rp_adc.cpp).  This bridge lets rs_adc_rp2xxx, the
-  # Rust ADC backend used on RP2040/RP2350, drive it.
-  target_sources(esprit_c_bindings PRIVATE ${C}/ln_rp_simple_adc_c.cpp)
 endif()
+# No ADC bridge on RP2xxx any more: `rs_adc_rp2xxx` is a pure-Rust driver on the
+# ADC block, so neither the C++ `lnSimpleADC` (mcus/arm_rp2xxx/src/ln_rp_adc.cpp)
+# nor the `ln_rp_simple_adc_c.cpp` shim that exposed it is part of a Rust build.
 target_link_libraries(esprit_c_bindings PRIVATE esprit_dev)

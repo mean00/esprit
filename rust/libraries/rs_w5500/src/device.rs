@@ -3,7 +3,7 @@
 use crate::bus::W5500Bus;
 use crate::registers::*;
 use rs_rtos::task::delay_ms;
-use rust_esprit::{GpioMode, GpioPin, Pin};
+use rust_esprit::{Gpio, Pin, PinMode, set_spi_pins};
 
 /// Pin map of the W5500 SPI interface.
 ///
@@ -35,8 +35,8 @@ const SOFT_RESET_MS: u32 = 10;
 /// Core W5500 controller abstraction.
 pub struct W5500Device {
     pub bus: W5500Bus,
-    pub reset: GpioPin,
-    pub intr: GpioPin,
+    pub reset: Pin,
+    pub intr: Pin,
 }
 
 // SAFETY: the device lives in a `Mutex`, so only one task borrows it at a time.
@@ -45,28 +45,24 @@ unsafe impl Send for W5500Device {}
 impl W5500Device {
     /// Initialize GPIOs, SPI bus, and execute a hardware reset.
     pub fn new(spi_instance: u32, pins: W5500Pins) -> Self {
-        let mut mosi = GpioPin::new(pins.mosi);
-        let mut miso = GpioPin::new(pins.miso);
-        let mut clk = GpioPin::new(pins.clk);
-        let mut cs = GpioPin::new(pins.cs);
-        let mut reset = GpioPin::new(pins.reset);
-        let mut intr = GpioPin::new(pins.intr);
+        let mut cs = pins.cs;
+        let mut reset = pins.reset;
+        let mut intr = pins.intr;
 
-        // Setup SPI function on pins
-        mosi.set_mode(GpioMode::Spi);
-        miso.set_mode(GpioMode::Spi);
-        clk.set_mode(GpioMode::Spi);
+        // Route MOSI/MISO/CLK to the SPI peripheral: which instance they reach is
+        // a property of the pads, so the bus asks for the routing, not for a mode.
+        set_spi_pins(&[pins.mosi, pins.miso, pins.clk]);
 
-        // Chip-select pin
-        cs.set_high();
-        cs.set_mode(GpioMode::Output);
+        // Chip-select pin: idle high before it becomes an output.
+        Gpio::write(&mut cs, true);
+        let _ = Gpio::set_mode(&mut cs, PinMode::Output);
 
         // Reset pin
-        reset.set_high();
-        reset.set_mode(GpioMode::Output);
+        Gpio::write(&mut reset, true);
+        let _ = Gpio::set_mode(&mut reset, PinMode::Output);
 
         // Interrupt pin
-        intr.set_mode(GpioMode::InputPullUp);
+        let _ = Gpio::set_mode(&mut intr, PinMode::InputPullUp);
 
         delay_ms(PINS_SETTLE_MS);
 
@@ -80,9 +76,9 @@ impl W5500Device {
 
     /// Pulse the hardware reset line.
     pub fn hardware_reset(&mut self) {
-        self.reset.set_low();
+        Gpio::write(&mut self.reset, false);
         delay_ms(RESET_LOW_MS);
-        self.reset.set_high();
+        Gpio::write(&mut self.reset, true);
         delay_ms(RESET_RECOVERY_MS);
     }
 

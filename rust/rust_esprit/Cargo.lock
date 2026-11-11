@@ -3,27 +3,6 @@
 version = 4
 
 [[package]]
-name = "atomic-polyfill"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cf2bce30dfe09ef0bfaef228b9d414faaf7e563035494d7fe092dba54b300f4"
-dependencies = [
- "critical-section",
-]
-
-[[package]]
-name = "autocfg"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
-
-[[package]]
-name = "byteorder"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
-
-[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -40,45 +19,6 @@ name = "cty"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
-
-[[package]]
-name = "embedded-hal"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
-
-[[package]]
-name = "hash32"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
-dependencies = [
- "byteorder",
-]
-
-[[package]]
-name = "heapless"
-version = "0.7.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdc6457c0eb62c71aac4bc17216026d8410337c4126773b9c5daba343f17964f"
-dependencies = [
- "atomic-polyfill",
- "hash32",
- "rustc_version",
- "spin",
- "stable_deref_trait",
- "ufmt-write",
-]
-
-[[package]]
-name = "lock_api"
-version = "0.4.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96936507f153605bddfcda068dd804796c84324ed2510809e5b2a624c81da765"
-dependencies = [
- "autocfg",
- "scopeguard",
-]
 
 [[package]]
 name = "portable-atomic"
@@ -113,17 +53,22 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_dma_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
- "rs_timer_bluepill",
+ "rs_rtos",
 ]
 
 [[package]]
 name = "rs_adc_rp2xxx"
 version = "0.1.0"
 dependencies = [
- "rs_esprit",
+ "rs_dma_rp2xxx",
+ "rs_gpio_rp2xxx",
+ "rs_mcu_traits",
+ "rs_rcu_rp2xxx",
+ "rs_rp2xxx",
+ "rs_rtos",
 ]
 
 [[package]]
@@ -131,7 +76,7 @@ name = "rs_adc_wrapped"
 version = "0.1.0"
 dependencies = [
  "cty",
- "rs_esprit",
+ "rs_mcu_traits",
 ]
 
 [[package]]
@@ -151,8 +96,9 @@ name = "rs_dma_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
- "rs_esprit",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
+ "rs_rtos",
 ]
 
 [[package]]
@@ -160,15 +106,8 @@ name = "rs_dma_rp2xxx"
 version = "0.1.0"
 dependencies = [
  "portable-atomic",
- "rs_esprit",
+ "rs_mcu_traits",
  "rs_rp2xxx",
-]
-
-[[package]]
-name = "rs_esprit"
-version = "0.1.0"
-dependencies = [
- "cty",
  "rs_rtos",
 ]
 
@@ -178,8 +117,17 @@ version = "0.1.0"
 dependencies = [
  "rs_afio_bluepill",
  "rs_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
+]
+
+[[package]]
+name = "rs_exti_rp2xxx"
+version = "0.1.0"
+dependencies = [
+ "portable-atomic",
+ "rs_mcu_traits",
+ "rs_rp2xxx",
 ]
 
 [[package]]
@@ -187,7 +135,7 @@ name = "rs_exti_wrapped"
 version = "0.1.0"
 dependencies = [
  "cty",
- "rs_esprit",
+ "rs_mcu_traits",
 ]
 
 [[package]]
@@ -195,14 +143,14 @@ name = "rs_gpio_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
- "rs_esprit",
+ "rs_mcu_traits",
 ]
 
 [[package]]
 name = "rs_gpio_rp2xxx"
 version = "0.1.0"
 dependencies = [
- "rs_esprit",
+ "rs_mcu_traits",
  "rs_rp2xxx",
 ]
 
@@ -211,7 +159,7 @@ name = "rs_gpio_wrapped"
 version = "0.1.0"
 dependencies = [
  "cty",
- "rs_esprit",
+ "rs_mcu_traits",
 ]
 
 [[package]]
@@ -219,22 +167,29 @@ name = "rs_i2c_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
 ]
 
 [[package]]
 name = "rs_i2c_rp2xxx"
 version = "0.1.0"
+dependencies = [
+ "rs_mcu_traits",
+]
 
 [[package]]
 name = "rs_i2c_wrapped"
 version = "0.1.0"
 dependencies = [
  "cty",
- "rs_esprit",
+ "rs_mcu_traits",
 ]
+
+[[package]]
+name = "rs_mcu_traits"
+version = "0.1.0"
 
 [[package]]
 name = "rs_multi_pulse_bluepill"
@@ -242,11 +197,15 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
 ]
 
 [[package]]
 name = "rs_multi_pulse_rp2xxx"
 version = "0.1.0"
+dependencies = [
+ "rs_mcu_traits",
+]
 
 [[package]]
 name = "rs_pinout48_bluepill"
@@ -262,14 +221,14 @@ name = "rs_rcu_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
- "rs_esprit",
+ "rs_mcu_traits",
 ]
 
 [[package]]
 name = "rs_rcu_rp2xxx"
 version = "0.1.0"
 dependencies = [
- "rs_esprit",
+ "rs_mcu_traits",
  "rs_rp2xxx",
 ]
 
@@ -282,6 +241,7 @@ name = "rs_rtos"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
+ "critical-section",
  "cty",
 ]
 
@@ -291,9 +251,10 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_dma_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
+ "rs_rtos",
 ]
 
 [[package]]
@@ -302,10 +263,11 @@ version = "0.1.0"
 dependencies = [
  "portable-atomic",
  "rs_dma_rp2xxx",
- "rs_esprit",
  "rs_gpio_rp2xxx",
+ "rs_mcu_traits",
  "rs_rcu_rp2xxx",
  "rs_rp2xxx",
+ "rs_rtos",
 ]
 
 [[package]]
@@ -313,7 +275,7 @@ name = "rs_spi_wrapped"
 version = "0.1.0"
 dependencies = [
  "cty",
- "rs_esprit",
+ "rs_mcu_traits",
 ]
 
 [[package]]
@@ -322,8 +284,8 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_dma_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
  "rs_pinout48_bluepill",
  "rs_rcu_bluepill",
 ]
@@ -331,13 +293,16 @@ dependencies = [
 [[package]]
 name = "rs_timer_rp2xxx"
 version = "0.1.0"
+dependencies = [
+ "rs_mcu_traits",
+]
 
 [[package]]
 name = "rs_timer_wrapped"
 version = "0.1.0"
 dependencies = [
  "cty",
- "rs_esprit",
+ "rs_mcu_traits",
 ]
 
 [[package]]
@@ -353,10 +318,21 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_dma_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
  "rs_rtos",
+]
+
+[[package]]
+name = "rs_uart_rp2xxx"
+version = "0.1.0"
+dependencies = [
+ "portable-atomic",
+ "rs_gpio_rp2xxx",
+ "rs_mcu_traits",
+ "rs_rcu_rp2xxx",
+ "rs_rp2xxx",
 ]
 
 [[package]]
@@ -364,7 +340,7 @@ name = "rs_uart_wrapped"
 version = "0.1.0"
 dependencies = [
  "cty",
- "rs_esprit",
+ "rs_mcu_traits",
 ]
 
 [[package]]
@@ -374,17 +350,14 @@ dependencies = [
  "cfg-if",
  "critical-section",
  "cty",
- "embedded-hal",
- "heapless",
- "portable-atomic",
  "rs_adc_bluepill",
  "rs_adc_rp2xxx",
  "rs_adc_wrapped",
  "rs_afio_bluepill",
  "rs_dma_bluepill",
  "rs_dma_rp2xxx",
- "rs_esprit",
  "rs_exti_bluepill",
+ "rs_exti_rp2xxx",
  "rs_exti_wrapped",
  "rs_gpio_bluepill",
  "rs_gpio_rp2xxx",
@@ -392,6 +365,7 @@ dependencies = [
  "rs_i2c_bluepill",
  "rs_i2c_rp2xxx",
  "rs_i2c_wrapped",
+ "rs_mcu_traits",
  "rs_multi_pulse_bluepill",
  "rs_multi_pulse_rp2xxx",
  "rs_pinout48_bluepill",
@@ -406,45 +380,10 @@ dependencies = [
  "rs_timer_wrapped",
  "rs_tinyusb",
  "rs_uart_bluepill",
+ "rs_uart_rp2xxx",
  "rs_uart_wrapped",
  "ufmt",
 ]
-
-[[package]]
-name = "rustc_version"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
-dependencies = [
- "semver",
-]
-
-[[package]]
-name = "scopeguard"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
-
-[[package]]
-name = "semver"
-version = "1.0.26"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56e6fa9c48d24d85fb3de5ad847117517440f6beceb7798af16b4a87d616b8d0"
-
-[[package]]
-name = "spin"
-version = "0.9.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
-dependencies = [
- "lock_api",
-]
-
-[[package]]
-name = "stable_deref_trait"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "syn"

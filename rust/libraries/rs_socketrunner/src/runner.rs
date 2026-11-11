@@ -99,7 +99,7 @@ impl<H: SocketRunnerHandler, S: Socket, const WRITE_BUF_SIZE: usize> SocketRunne
 
     /// Starts the server socket, enables async mode, and starts accepting.
     pub fn start_server(&mut self) -> Result<(), SocketError> {
-        let listener = SocketListener::from_event_group(self.event_group.clone(), self.shift);
+        let listener = SocketListener::new(self.event_group.clone(), self.shift);
         let mut socket = S::create(self.port, listener)?;
         socket.accept()?;
         self.socket = Some(socket);

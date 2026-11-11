@@ -5,9 +5,21 @@
 
 mod registers;
 
-pub use rs_esprit::rcu::{Peripheral, Rcu as RcuTrait};
+// Family-specific bits of the AHB map: CH32V3 decodes `AHBENR` 9..12 for
+// RNG/SDIO/USBHS/USB-FS-OTG, the ARM parts leave them reserved. One selection
+// point; `ch32v3x` wins if both features are set (see `rs_bluepill`).
+#[cfg(feature = "ch32v3x")]
+#[path = "registers_ch32v3x.rs"]
+mod registers_chip;
+
+#[cfg(not(feature = "ch32v3x"))]
+#[path = "registers_stm32.rs"]
+mod registers_chip;
+
+pub use rs_mcu_traits::rcu::Rcu as RcuTrait;
 
 use registers::*;
+use registers_chip::*;
 
 struct PeripheralInfo {
     bus: u8,
@@ -52,8 +64,10 @@ fn get_periph_info(periph: Peripheral) -> Option<PeripheralInfo> {
         Peripheral::Dma0 => Some(PeripheralInfo { bus: BUS_AHB, mask: RCU_AHB_DMA0 }),
         Peripheral::Dma1 => Some(PeripheralInfo { bus: BUS_AHB, mask: RCU_AHB_DMA1 }),
         Peripheral::Ethernet => Some(PeripheralInfo { bus: BUS_AHB, mask: RCU_AHB_ETHMAC }),
-        Peripheral::UsbHsCh32v3x => Some(PeripheralInfo { bus: BUS_AHB, mask: RCU_AHB_USBHS_CH32V3X }),
-        Peripheral::UsbFsOtgCh32v3x => Some(PeripheralInfo { bus: BUS_AHB, mask: RCU_AHB_USBFS_OTG_CH32V3X }),
+        Peripheral::UsbHsCh32v3x => AHB_USBHS.map(|mask| PeripheralInfo { bus: BUS_AHB, mask }),
+        Peripheral::UsbFsOtgCh32v3x => {
+            AHB_USBFS_OTG.map(|mask| PeripheralInfo { bus: BUS_AHB, mask })
+        }
         _ => None,
     }
 }
@@ -165,7 +179,62 @@ pub fn get_clock(periph: Peripheral) -> u32 {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Rcu;
 
-impl rs_esprit::rcu::Rcu for Rcu {
+/// The peripherals of the GD32F3 / CH32V3 family that have a reset gate and/or a
+/// clock of their own.
+///
+/// This enum belongs to the *family*, not to the contract: `rs_mcu_traits::rcu::Rcu`
+/// has no idea what a `UsbHsCh32v3x` is (see `supertraits.md` §2, rule R2).
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Peripheral {
+    None = 0,
+    Spi0,
+    Spi1,
+    Spi2,
+    Uart0,
+    Uart1,
+    Uart2,
+    Uart3,
+    Uart4,
+    I2c0,
+    I2c1,
+    Can0,
+    Can1,
+    Dac,
+    Pmu,
+    Bkp,
+    Wwdgt,
+    Timer0,
+    Timer1,
+    Timer2,
+    Timer3,
+    Timer4,
+    Timer5,
+    Timer6,
+    Usb,
+    Adc0,
+    Adc1,
+    GpioA,
+    GpioB,
+    GpioC,
+    GpioD,
+    GpioE,
+    Afio,
+    Dma0,
+    Dma1,
+    Ethernet,
+    UsbHsCh32v3x,
+    UsbFsOtgCh32v3x,
+
+    /// Clock-only entries: they have a frequency but no reset bit.
+    Apb1 = 100,
+    Apb2,
+    SysClock,
+}
+
+impl rs_mcu_traits::rcu::Rcu for Rcu {
+    type Peripheral = Peripheral;
+
     #[inline(always)]
     fn enable(periph: Peripheral) {
         enable(periph);
@@ -182,7 +251,7 @@ impl rs_esprit::rcu::Rcu for Rcu {
     }
 
     #[inline(always)]
-    fn get_clock(periph: Peripheral) -> u32 {
+    fn clock_hz(periph: Peripheral) -> u32 {
         get_clock(periph)
     }
 }

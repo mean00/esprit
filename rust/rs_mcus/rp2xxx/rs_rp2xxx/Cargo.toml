@@ -4,7 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = []
+# Which chip's address map this crate is built for. The drivers (`rs_gpio_rp2xxx`,
+# `rs_spi_rp2xxx`, `rs_dma_rp2xxx`, `rs_rcu_rp2xxx`) forward the same pair and read
+# the root re-export, so exactly one of them must be enabled by the build
+# (`rust_esprit`'s `rp2040` / `rp2350`). `rp2350` wins if both are set — see
+# src/lib.rs; that is the normal state, because `rust_esprit`'s `rp2350` implies
+# its `rp2040` "RP2xxx platform" feature.
+default = ["rp2040"]
 rp2040 = []
 rp2350 = []
 

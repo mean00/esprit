@@ -34,17 +34,14 @@ name = "rs_dma_rp2xxx"
 version = "0.1.0"
 dependencies = [
  "portable-atomic",
- "rs_esprit",
+ "rs_mcu_traits",
  "rs_rp2xxx",
+ "rs_rtos",
 ]
 
 [[package]]
-name = "rs_esprit"
+name = "rs_mcu_traits"
 version = "0.1.0"
-dependencies = [
- "cty",
- "rs_rtos",
-]
 
 [[package]]
 name = "rs_rp2xxx"

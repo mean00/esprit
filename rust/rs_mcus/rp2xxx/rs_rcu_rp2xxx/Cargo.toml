@@ -4,9 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rs_esprit = { path = "../../../rs_esprit" }
+rs_mcu_traits = { path = "../../traits" }
 rs_rp2xxx = { path = "../rs_rp2xxx" }
 
 [features]
-rp2040 = []
-rp2350 = []
+# Chip address map (CMake: USE_RP2040 / USE_RP2350, forwarded by rust_esprit).
+# `RESETS_BASE`, the CLOCKS offsets and the reset-bit layout differ between the
+# chips, so exactly one of these must be set; `rp2350` wins when both are
+# (rust_esprit's `rp2350` implies its `rp2040`). With neither set the chip is
+# detected at runtime from SYSINFO.CHIP_ID (see is_rp2040()).
+rp2040 = ["rs_rp2xxx/rp2040"]
+rp2350 = ["rs_rp2xxx/rp2350"]

@@ -1,6 +1,5 @@
 //! Shared types, enums and traits for SocketRunner.
 
-use core::ffi::c_void;
 use rs_rtos::event::EventGroup;
 use crate::constants::*;
 
@@ -82,34 +81,17 @@ impl core::ops::BitAnd for RunnerEvent {
 // ---------------------------------------------------------------------------
 
 /// Socket event enumeration.
-#[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SocketEvent {
-    Ignore = 0,
     Connected = 1,
     Disconnect = 2,
     DataAvailable = 3,
     WriteAvailable = 4,
     Error = 5,
-    Custom = 6,
 }
 
 impl SocketEvent {
-    /// Converts an integer value to `SocketEvent`.
-    pub fn from_u32(val: u32) -> Option<Self> {
-        match val {
-            0 => Some(Self::Ignore),
-            1 => Some(Self::Connected),
-            2 => Some(Self::Disconnect),
-            3 => Some(Self::DataAvailable),
-            4 => Some(Self::WriteAvailable),
-            5 => Some(Self::Error),
-            6 => Some(Self::Custom),
-            _ => None,
-        }
-    }
-
-    /// Maps the socket event to corresponding `RunnerEvent`.
+    /// Maps the socket event to the corresponding [`RunnerEvent`] bit.
     pub fn to_runner_event(self) -> RunnerEvent {
         match self {
             Self::Connected => RunnerEvent::CONNECTED,
@@ -117,81 +99,30 @@ impl SocketEvent {
             Self::DataAvailable => RunnerEvent::DATA_AVAILABLE,
             Self::WriteAvailable => RunnerEvent::CAN_WRITE,
             Self::Error => RunnerEvent::ERROR,
-            Self::Custom => RunnerEvent::CUSTOM_EVENT,
-            Self::Ignore => RunnerEvent::NONE,
         }
     }
 }
 
 /// Asynchronous notification listener for socket lifecycle events.
+///
+/// A backend reports its events through this: they become the runner's slot bits
+/// in the shared [`EventGroup`].
 #[derive(Clone)]
-pub enum SocketListener {
-    /// Dispatches events to a FreeRTOS `EventGroup` at the given slot bit shift.
-    EventGroup {
-        event_group: EventGroup,
-        shift: u32,
-    },
-    /// Dispatches events to a custom callback function.
-    Callback {
-        callback: fn(SocketEvent, usize),
-        ctx: usize,
-    },
-    /// Dispatches events to a legacy C ABI callback function.
-    CCallback {
-        callback: extern "C" fn(u32, *mut c_void),
-        arg: *mut c_void,
-    },
-    None,
+pub struct SocketListener {
+    event_group: EventGroup,
+    shift: u32,
 }
 
-// SAFETY: the `CCallback` cookie is an opaque pointer that is only handed back to
-// the C callback; nothing here dereferences it, so a listener can move between
-// tasks. (The `fn` pointers are `Send` already.)
-unsafe impl Send for SocketListener {}
-
 impl SocketListener {
-    pub fn from_event_group(event_group: EventGroup, shift: u32) -> Self {
-        Self::EventGroup { event_group, shift }
-    }
-
-    pub fn from_callback(callback: fn(SocketEvent, usize), ctx: usize) -> Self {
-        Self::Callback { callback, ctx }
-    }
-
-    pub fn from_c_callback(callback: extern "C" fn(u32, *mut c_void), arg: *mut c_void) -> Self {
-        Self::CCallback { callback, arg }
-    }
-
-    pub fn none() -> Self {
-        Self::None
+    pub fn new(event_group: EventGroup, shift: u32) -> Self {
+        Self { event_group, shift }
     }
 
     #[inline(always)]
     pub fn notify(&self, event: SocketEvent) {
-        match self {
-            Self::EventGroup { event_group, shift } => {
-                let revt = event.to_runner_event();
-                if revt != RunnerEvent::NONE {
-                    event_group.set_events(revt.shifted(*shift));
-                }
-            }
-            Self::Callback { callback, ctx } => {
-                (callback)(event, *ctx);
-            }
-            Self::CCallback { callback, arg } => {
-                (callback)(event as u32, *arg);
-            }
-            Self::None => {}
-        }
+        self.event_group
+            .set_events(event.to_runner_event().shifted(self.shift));
     }
-}
-
-/// Socket operation status.
-#[repr(u32)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum SocketStatus {
-    Ok = 0,
-    Error = 1,
 }
 
 /// Strongly-typed socket runner errors.

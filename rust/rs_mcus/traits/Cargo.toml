@@ -1,0 +1,20 @@
+[package]
+name = "rs_mcu_traits"
+version = "0.1.0"
+edition = "2024"
+
+# MCU-agnostic peripheral contracts of the esprit Rust stack: one file per super
+# trait, no chip names, and no dependencies at all — not `rust_esprit`, not
+# `rs_rtos`, not a family crate. A driver crate implements these for its own
+# hardware (`rs_mcus/bluepill/*`, `rs_mcus/rp2xxx/*`, `wrapped/*`) and only the
+# user-facing `rust_esprit` re-exports them.
+#
+# See ../../../supertraits.md at the repository root for the design and the
+# migration plan.
+
+[features]
+# Nothing yet: the traits are plain `core`-only contract types. A family crate
+# selects its own chip features, never this one.
+default = []
+
+[dependencies]

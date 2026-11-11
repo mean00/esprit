@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rs_esprit = { path = "../../rs_esprit" }
+rs_mcu_traits = { path = "../../rs_mcus/traits" }
 cty = "0.2.2"

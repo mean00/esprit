@@ -1,19 +1,18 @@
-//! Hardware microsecond DelayTimer example.
+//! One-shot microsecond delay through the MCU-agnostic super trait.
 //!
-//! Follows Esprit Rust Rule 1 (No Magic Numbers), Rule 2 (Two-Tier Architecture),
-//! Rule 4 (Mandatory Examples), and Rule 6 (Idiomatic Rust & C++ Parity).
-//!
-//! Demonstrates configuring a one-shot microsecond alarm with an interrupt callback.
+//! `rs_mcu_traits::timer::DelayTimer` — `arm_us` starts the countdown and the
+//! typed [`DelayHandler`] runs in the timer interrupt. No cookie, no `extern "C"`.
 
 #![no_std]
 #![no_main]
 
-use core::ffi::c_void;
 use core::panic::PanicInfo;
 use core::sync::atomic::{AtomicBool, Ordering};
+use rs_mcu_traits::timer::{self, DelayHandler, DelayTimer as DelayTimerTrait};
 use rs_timer_bluepill::DelayTimer;
 
 struct DummyAlloc;
+
 unsafe impl core::alloc::GlobalAlloc for DummyAlloc {
     unsafe fn alloc(&self, _layout: core::alloc::Layout) -> *mut u8 {
         core::ptr::null_mut()
@@ -24,29 +23,32 @@ unsafe impl core::alloc::GlobalAlloc for DummyAlloc {
 #[global_allocator]
 static ALLOCATOR: DummyAlloc = DummyAlloc;
 
+/// Set from the timer interrupt, so it is an atomic.
+struct Expiry;
+
+impl DelayHandler for Expiry {
+    fn on_elapsed(&self) {
+        EXPIRED.store(true, Ordering::SeqCst);
+    }
+}
+
+static EXPIRY: Expiry = Expiry;
 static EXPIRED: AtomicBool = AtomicBool::new(false);
 
 const DELAY_TIMER_INDEX: u32 = 1; // Hardware timer 1 (TIM2)
 const DELAY_US: u32 = 1_000; // 1,000 µs (1 ms)
 
-unsafe extern "C" fn on_delay_timer_irq(_cookie: *mut c_void) {
-    EXPIRED.store(true, Ordering::SeqCst);
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn main() -> ! {
     // Initialize DelayTimer on hardware timer 1 (TIM2)
-    if let Ok(mut dt) = DelayTimer::new(DELAY_TIMER_INDEX) {
-        dt.set_interrupt(Some(on_delay_timer_irq), core::ptr::null_mut());
+    if let Ok(mut timer) = DelayTimer::new(DELAY_TIMER_INDEX) {
+        DelayTimerTrait::set_handler(&mut timer, Some(&EXPIRY));
+        DelayTimerTrait::enable_interrupt(&mut timer);
         // Arm for 1000 microseconds
-        dt.arm(DELAY_US);
+        let _ = DelayTimerTrait::arm_us(&mut timer, DELAY_US);
     }
 
-    loop {
-        if EXPIRED.load(Ordering::SeqCst) {
-            // Delay expired
-            break;
-        }
+    while !EXPIRED.load(Ordering::SeqCst) {
         core::hint::spin_loop();
     }
 
@@ -59,3 +61,4 @@ pub extern "C" fn main() -> ! {
 fn panic(_info: &PanicInfo) -> ! {
     loop {}
 }
+

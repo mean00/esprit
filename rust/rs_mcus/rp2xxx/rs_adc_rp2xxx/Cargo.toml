@@ -3,5 +3,30 @@ name = "rs_adc_rp2xxx"
 version = "0.1.0"
 edition = "2024"
 
+# Pure-Rust ADC for the RP2040 / RP2350: the `rs_mcu_traits::adc` super traits
+# (`SimpleAdc`, `TimingAdc`, `AdcHandler`) implemented straight on the ADC block
+# (`registers.rs`) and the DMA driver, with no C driver and no C ABI in between.
+#
+# Simple reads are polled; the multi-sample path is DMA-driven and paced by the
+# ADC's own DREQ, and its asynchronous form completes in the DMA interrupt.
+#
+# Chip selection mirrors the sibling crates: the base address comes from
+# `rs_rp2xxx`'s root re-export, and the numbers that differ (AINSEL/RROBIN width,
+# pin → channel table, DREQ_ADC) live in `registers_rp2040.rs` / `registers_rp2350.rs`.
+
+[features]
+# Chip map (CMake: USE_RP2040 / USE_RP2350, forwarded by rust_esprit). Exactly one
+# must be set; `rp2350` wins when both are (rust_esprit's `rp2350` implies its
+# `rp2040` — see rs_rp2xxx/src/lib.rs).
+default = ["rp2040"]
+rp2040 = ["rs_rp2xxx/rp2040"]
+rp2350 = ["rs_rp2xxx/rp2350"]
+
 [dependencies]
-rs_esprit = { path = "../../../rs_esprit" }
+rs_rtos = { path = "../../../rs_rtos" }
+rs_mcu_traits = { path = "../../traits" }
+rs_rp2xxx = { path = "../rs_rp2xxx" }
+rs_dma_rp2xxx = { path = "../rs_dma_rp2xxx" }
+rs_gpio_rp2xxx = { path = "../rs_gpio_rp2xxx" }
+rs_rcu_rp2xxx = { path = "../rs_rcu_rp2xxx" }
+

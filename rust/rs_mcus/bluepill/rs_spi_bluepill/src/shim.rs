@@ -2,12 +2,14 @@
 //! `lnSPI_c.h`.  They replace `lnSPI_c.cpp` in the Rust builds.
 //!
 //! Handles are instance numbers (`ln_spi_c *` is never dereferenced), and the
-//! `Spi` objects live in [`SPI_INSTANCES`], which keeps the CS pin, the
-//! settings and the claimed DMA channel alive between calls — the previous
-//! version rebuilt a `Spi` per call, which silently dropped all of that.
+//! `Spi` objects live in [`SPI_SLOTS`] together with their handle refcount, which
+//! keeps the CS pin, the settings and the claimed DMA channel alive between calls
+//! — the previous version rebuilt a `Spi` per call, which silently dropped all of
+//! that.
 
 use crate::*;
 use core::ffi::c_void;
+use rs_rtos::sync_cell::SyncCell;
 
 /// Opaque handle, same shape as the C++ `ln_spi_c`.
 #[repr(C)]
@@ -29,14 +31,6 @@ pub struct lnSPISettings {
 /// `typedef void lnSpiCallback(void *cookie);`
 pub type lnSpiCallback = ::core::option::Option<unsafe extern "C" fn(cookie: *mut c_void)>;
 
-/// The `Spi` objects created through the C ABI, one per instance.
-pub(crate) static mut SPI_INSTANCES: [Option<Spi>; SPI_MAX_INSTANCES] = [None, None, None];
-
-/// Number of live handles per instance (`rcSPI` in `lnSPI_c.cpp`): the object is
-/// only destroyed when the last handle is deleted, so two `Spi` objects on the
-/// same instance do not free the bus from under each other.
-static mut SPI_HANDLES: [u32; SPI_MAX_INSTANCES] = [0; SPI_MAX_INSTANCES];
-
 /// Handles are not pointers: they only have to be unique and non-null, and the
 /// instance number is all the state needed (`ln_spi_c` is opaque and never
 /// dereferenced).  The offset keeps instance 0 away from `NULL`, which the C
@@ -54,18 +48,49 @@ pub fn unpack_handle(handle: *mut ln_spi_c) -> u32 {
     (handle as usize).saturating_sub(HANDLE_BIAS) as u32
 }
 
+/// One instance: the `Spi` object and the number of live handles on it, kept in
+/// the same slot so the two can never disagree.
+struct SpiSlot {
+    spi: Option<Spi>,
+    /// `rcSPI` in `lnSPI_c.cpp`: the object is only destroyed when the last handle
+    /// is deleted, so two `Spi` objects on one instance do not free the bus from
+    /// under each other.
+    handles: u32,
+}
+
+/// The `Spi` objects created through the C ABI, one slot per instance.
+///
+/// A `SyncCell` rather than a `static mut` (rule §6): `with_spi` takes `&mut` for
+/// exactly the duration of one call, and every access states the invariant — the
+/// C ABI is driven from one task per instance, which is also what
+/// `lnSPI_c.cpp`'s plain `static lnSPI *` array assumed.
+static SPI_SLOTS: SyncCell<[SpiSlot; SPI_MAX_INSTANCES]> = SyncCell::new(
+    [const {
+        SpiSlot {
+            spi: None,
+            handles: 0,
+        }
+    }; SPI_MAX_INSTANCES],
+);
+
 /// Run `f` on the `Spi` behind `handle`, or return `default` when there is none.
+///
+/// Deliberately not a critical section: `f` may run a whole DMA transfer, so the
+/// cell is entered through the documented one-owner-per-instance contract instead.
 #[inline(always)]
 fn with_spi<R>(handle: *mut ln_spi_c, default: R, f: impl FnOnce(&mut Spi) -> R) -> R {
     let index = unpack_handle(handle) as usize;
-    if index < SPI_MAX_INSTANCES {
-        // SAFETY: the objects in the table never move, and the C ABI is called
-        // from one context at a time per instance.
-        if let Some(spi) = unsafe { SPI_INSTANCES[index].as_mut() } {
-            return f(spi);
+    if index >= SPI_MAX_INSTANCES {
+        return default;
+    }
+    // SAFETY: one task drives the C ABI for a given instance, and `f` is the only
+    // user of the object while it runs.
+    unsafe {
+        match SPI_SLOTS.as_mut()[index].spi.as_mut() {
+            Some(spi) => f(spi),
+            None => default,
         }
     }
-    default
 }
 
 #[unsafe(no_mangle)]
@@ -74,13 +99,14 @@ pub extern "C" fn lnspi_create(instance: u32, pinCs: i32) -> *mut ln_spi_c {
     if index >= SPI_MAX_INSTANCES {
         return core::ptr::null_mut();
     }
-    // SAFETY: see `with_spi`; creating twice returns the same object, like the
-    // reference counting in `lnSPI_c.cpp`.
+    // SAFETY: see `with_spi`; creating twice returns the same object and only
+    // bumps the reference count, like `lnSPI_c.cpp`.
     unsafe {
-        if SPI_INSTANCES[index].is_none() {
-            SPI_INSTANCES[index] = Some(Spi::new(instance, pinCs));
+        let slot = &mut SPI_SLOTS.as_mut()[index];
+        if slot.spi.is_none() {
+            slot.spi = Some(Spi::new(instance, pinCs));
         }
-        SPI_HANDLES[index] += 1;
+        slot.handles = slot.handles.saturating_add(1);
     }
     pack_handle(instance)
 }
@@ -88,19 +114,24 @@ pub extern "C" fn lnspi_create(instance: u32, pinCs: i32) -> *mut ln_spi_c {
 #[unsafe(no_mangle)]
 pub extern "C" fn lnspi_delete(handle: *mut ln_spi_c) {
     let index = unpack_handle(handle) as usize;
-    if index < SPI_MAX_INSTANCES {
-        // SAFETY: see `with_spi`.  Dropping the last handle releases the CS pin
-        // and the DMA channel (`Drop for Spi`, `DmaChannel::drop`).
-        unsafe {
-            if SPI_HANDLES[index] > 0 {
-                SPI_HANDLES[index] -= 1;
+    if index >= SPI_MAX_INSTANCES {
+        return;
+    }
+    // SAFETY: see `with_spi`. Dropping the last handle releases the CS pin and the
+    // DMA channel (`Drop for Spi`, `DmaChannel::drop`).
+    unsafe {
+        let slot = &mut SPI_SLOTS.as_mut()[index];
+        // A NULL handle unpacks to instance 0 with no handle having been taken;
+        // the refcount is what tells the two apart, so nothing is torn down.
+        if slot.handles == 0 {
+            return;
+        }
+        slot.handles -= 1;
+        if slot.handles == 0 {
+            if let Some(spi) = slot.spi.as_mut() {
+                spi.end();
             }
-            if SPI_HANDLES[index] == 0 {
-                if let Some(spi) = SPI_INSTANCES[index].as_mut() {
-                    spi.end();
-                }
-                SPI_INSTANCES[index] = None;
-            }
+            slot.spi = None;
         }
     }
 }

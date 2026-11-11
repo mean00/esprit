@@ -131,6 +131,21 @@ impl EventGroup {
         }
     }
 
+    /// Adopt an event group created elsewhere.
+    ///
+    /// Used when the owner is not Rust — e.g. the hosted build, where the C++
+    /// GDB server thread owns a Qt-backed `lnFastEventGroup` and the Rust
+    /// `SocketRunner` has to wait on that very object.
+    ///
+    /// # Safety
+    /// `raw` must be a live event group for as long as the result is used, and
+    /// no other `EventGroup` may be built from it.
+    pub unsafe fn from_raw(raw: *mut c_void) -> Self {
+        Self {
+            inner: EventGroupRef::Static(raw),
+        }
+    }
+
     /// Take ownership of the underlying C object
     /// It means the calling thread will be the one receiving the events
     pub fn take_ownership(&mut self) {

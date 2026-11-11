@@ -9,6 +9,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
+name = "critical-section"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
+
+[[package]]
 name = "cty"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -32,6 +38,7 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_esprit",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
 ]
 
@@ -39,7 +46,9 @@ dependencies = [
 name = "rs_esprit"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "cty",
+ "rs_mcu_traits",
  "rs_rtos",
 ]
 
@@ -48,8 +57,12 @@ name = "rs_gpio_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
- "rs_esprit",
+ "rs_mcu_traits",
 ]
+
+[[package]]
+name = "rs_mcu_traits"
+version = "0.1.0"
 
 [[package]]
 name = "rs_pinout48_bluepill"
@@ -65,6 +78,7 @@ name = "rs_rcu_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_mcu_traits",
 ]
 
 [[package]]

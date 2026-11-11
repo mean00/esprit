@@ -13,12 +13,15 @@
 
 // --- Bases re-exported from rs_rp2xxx ---------------------------------
 
-/// Single-cycle I/O block: the GPIO function of the CPU.
+/// Single-cycle I/O block: the GPIO function of the CPU (same address on both chips).
 pub use rs_rp2xxx::common::SIO_BASE;
-/// Per-GPIO function select and overrides.
-pub use rs_rp2xxx::rp2040::IO_BANK0_BASE;
-/// Per-GPIO pad control (drive strength, pulls, input/output enable).
-pub use rs_rp2xxx::rp2040::PADS_BANK0_BASE;
+
+/// Per-GPIO function select (`IO_BANK0_BASE`) and pad control
+/// (`PADS_BANK0_BASE`, drive strength / pulls / input-output enable). They differ
+/// between the chips (RP2040 `0x4001_4000` / `0x4001_c000`, RP2350 `0x4002_8000` /
+/// `0x4003_8000`), so they come from `rs_rp2xxx`'s root re-export — the chip is
+/// chosen in `rs_rp2xxx/src/lib.rs`, once, not here.
+pub use rs_rp2xxx::{IO_BANK0_BASE, PADS_BANK0_BASE};
 
 // --- SIO registers (offsets from SIO_BASE) --------------------------------
 // The SET/CLR/XOR registers are write-1-to-act and cannot be read back: they are

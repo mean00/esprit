@@ -1,7 +1,9 @@
 //! High-throughput PWM with circular DMA transfer example (`DmaTimer`).
 //!
-//! Follows Esprit Rust Rule 1 (No Magic Numbers), Rule 2 (Two-Tier Architecture),
-//! Rule 4 (Mandatory Examples), and Rule 6 (Idiomatic Rust & C++ Parity).
+//! The contracts behind it are `rs_mcu_traits::pwm::Pwm` (the waveform) and
+//! `rs_mcu_traits::dma::Dma` (the channel that streams the compare values);
+//! `DmaTimer` is the family helper that pairs a timer channel with a DMA channel,
+//! which is a chip-level detail the traits deliberately do not model.
 //!
 //! Demonstrates streaming compare values to a timer channel via DMA to generate
 //! arbitrary pulse sequences (e.g. for WS2812B LEDs or stepped waveforms).

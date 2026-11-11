@@ -29,8 +29,10 @@ use core::ptr::{read_volatile, write_volatile};
 
 use registers::*;
 use rs_dma_bluepill::{DmaChannel, DmaEngine};
-use rs_esprit::{BinarySemaphore, SpiBitOrder, SpiConfig, SpiMode, SpiRxHandler, SpiTxHandler};
+use rs_rtos::BinarySemaphore;
 use rs_gpio_bluepill::{Mode, Pin};
+use rs_mcu_traits::spi::{self, SpiHandler};
+use rs_mcu_traits::{Error, Result};
 use rs_rcu_bluepill::{enable, get_clock, Peripheral};
 
 pub mod shim;
@@ -183,9 +185,8 @@ pub struct Spi {
     /// Completion of an `async_write`, called from the DMA interrupt.
     callback: lnSpiCallback,
     callback_cookie: *mut c_void,
-    /// `rs_esprit::Spi` handlers.
-    rx_handler: Option<&'static dyn SpiRxHandler>,
-    tx_handler: Option<&'static dyn SpiTxHandler>,
+    /// `rs_mcu_traits::spi::Spi` handler (one for both directions).
+    handler: Option<&'static dyn SpiHandler>,
 }
 
 impl Spi {
@@ -225,8 +226,7 @@ impl Spi {
             use_dma: true,
             callback: None,
             callback_cookie: core::ptr::null_mut(),
-            rx_handler: None,
-            tx_handler: None,
+            handler: None,
         };
         me.set_ssel(pin_cs); // output, idle high (CS is active low)
         me.set_disabled();
@@ -778,7 +778,7 @@ impl Spi {
         if let Some(callback) = callback {
             unsafe { callback(cookie) };
         }
-        if let Some(handler) = self.tx_handler {
+        if let Some(handler) = self.handler {
             handler.on_tx_complete();
         }
     }
@@ -816,81 +816,120 @@ impl Drop for Spi {
     }
 }
 
-impl rs_esprit::Spi for Spi {
-    fn configure(&mut self, config: &SpiConfig) -> bool {
+impl spi::Spi for Spi {
+    fn configure(&mut self, config: &spi::SpiConfig) -> Result<()> {
         self.speed_hz = config.speed_hz;
         self.data_mode = match config.mode {
-            SpiMode::Mode0 => spiDataMode_SPI_MODE0,
-            SpiMode::Mode1 => spiDataMode_SPI_MODE1,
-            SpiMode::Mode2 => spiDataMode_SPI_MODE2,
-            SpiMode::Mode3 => spiDataMode_SPI_MODE3,
+            spi::SpiMode::Mode0 => spiDataMode_SPI_MODE0,
+            spi::SpiMode::Mode1 => spiDataMode_SPI_MODE1,
+            spi::SpiMode::Mode2 => spiDataMode_SPI_MODE2,
+            spi::SpiMode::Mode3 => spiDataMode_SPI_MODE3,
         };
         self.bit_order = match config.bit_order {
-            SpiBitOrder::MsbFirst => spiBitOrder_SPI_MSBFIRST,
-            SpiBitOrder::LsbFirst => spiBitOrder_SPI_LSBFIRST,
+            spi::BitOrder::MsbFirst => spiBitOrder_SPI_MSBFIRST,
+            spi::BitOrder::LsbFirst => spiBitOrder_SPI_LSBFIRST,
         };
         self.begin(config.data_size as u32);
-        true
+        Ok(())
     }
 
-    fn transfer8(&mut self, val: u8) -> u8 {
-        let rx = Spi::transfer8(self, val);
-        if let Some(handler) = self.rx_handler {
-            handler.on_rx_byte(rx);
+    fn set_speed(&mut self, speed_hz: u32) -> Result<()> {
+        Spi::set_speed(self, speed_hz);
+        Ok(())
+    }
+
+    /// One byte exchange; the driver's per-instance handler gets the byte back.
+    fn transfer(&mut self, byte: u8) -> u8 {
+        let rx = Spi::transfer8(self, byte);
+        if let Some(handler) = self.handler {
+            handler.on_rx(rx);
         }
         rx
     }
 
-    /// Start a DMA write; `SpiTxHandler::on_tx_complete` runs in the DMA
-    /// interrupt when the transfer ends.
-    fn write_async(&mut self, data: &[u8]) -> bool {
-        self.async_write8(data, None, core::ptr::null_mut(), false)
-    }
+    // ---- blocking blocks: the driver's DMA/polled paths, not a byte loop ------
 
-    fn set_rx_handler(&mut self, handler: Option<&'static dyn SpiRxHandler>) {
-        self.rx_handler = handler;
-    }
-
-    fn set_tx_handler(&mut self, handler: Option<&'static dyn SpiTxHandler>) {
-        self.tx_handler = handler;
-    }
-
-    fn set_speed(&mut self, speed_hz: u32) {
-        Spi::set_speed(self, speed_hz);
-    }
-
-    fn set_dma_mode(&mut self, enable: bool) {
-        Spi::set_dma_mode(self, enable);
-    }
-
-    fn set_ssel(&mut self, ssel: i32) {
-        Spi::set_ssel(self, ssel);
-    }
-
-    fn wait_done(&mut self) -> bool {
-        self.wait_for_completion()
-    }
-
-    fn write_slice8(&mut self, data: &[u8]) -> bool {
-        self.block_write8(data)
-    }
-
-    fn write_slice16(&mut self, data: &[u16]) -> bool {
-        self.block_write16(data)
-    }
-
-    fn fill8(&mut self, count: u32, val: u8) -> bool {
-        self.block_write8_repeat(count, val)
-    }
-
-    fn fill16(&mut self, count: u32, val: u16) -> bool {
-        self.block_write16_repeat(count, val)
-    }
-
-    fn transfer_exact(&mut self, tx: &[u8], rx: &mut [u8]) -> bool {
-        if tx.len() != rx.len() {
-            return false;
+    fn write_slice(&mut self, data: &[u8]) -> Result<()> {
+        if self.block_write8(data) {
+            Ok(())
+        } else {
+            Err(Error::Io)
         }
-        self.transfer(tx, rx)
+    }
+
+    fn write_slice16(&mut self, data: &[u16]) -> Result<()> {
+        if self.block_write16(data) {
+            Ok(())
+        } else {
+            Err(Error::Io)
+        }
+    }
+
+    // `read_slice` keeps the trait's byte-loop default: this port has no
+    // read-only DMA path (the receive data register is read by `transfer`).
+
+    fn fill(&mut self, count: u32, byte: u8) -> Result<()> {
+        if self.block_write8_repeat(count, byte) {
+            Ok(())
+        } else {
+            Err(Error::Io)
+        }
+    }
+
+    fn fill16(&mut self, count: u32, word: u16) -> Result<()> {
+        if self.block_write16_repeat(count, word) {
+            Ok(())
+        } else {
+            Err(Error::Io)
+        }
+    }
+
+    fn transfer_in_place(&mut self, tx: &[u8], rx: &mut [u8]) -> Result<()> {
+        if tx.len() != rx.len() {
+            return Err(Error::InvalidConfig);
+        }
+        if self.transfer(tx, rx) {
+            Ok(())
+        } else {
+            Err(Error::Io)
+        }
+    }
+
+    // ---- asynchronous: DMA, completion in the interrupt ----------------------
+
+    fn start_write(&mut self, data: &[u8]) -> Result<()> {
+        // The completion goes through `handler.on_tx_complete`, so no raw callback.
+        if self.async_write8(data, None, core::ptr::null_mut(), false) {
+            Ok(())
+        } else {
+            Err(Error::Io)
+        }
+    }
+
+    fn start_write16(&mut self, data: &[u16]) -> Result<()> {
+        if self.async_write16(data, None, core::ptr::null_mut(), false) {
+            Ok(())
+        } else {
+            Err(Error::Io)
+        }
+    }
+
+    fn is_busy(&self) -> bool {
+        !self.dma.is_transfer_complete()
+    }
+
+    fn wait_idle(&mut self) -> Result<()> {
+        if self.wait_async() {
+            Ok(())
+        } else {
+            Err(Error::Timeout)
+        }
+    }
+
+    /// One handler covers both directions: the GD32 port raises a single
+    /// interrupt, and the trait's [`spi::SpiHandler`] answers both.
+    fn set_handler(&mut self, handler: Option<&'static dyn spi::SpiHandler>) {
+        self.handler = handler;
     }
 }
+

@@ -7,6 +7,9 @@ pub mod registers;
 
 use registers::*;
 use rs_rcu_bluepill::{Peripheral, enable};
+use rs_mcu_traits::handler::HandlerTable;
+use rs_mcu_traits::i2c;
+use rs_mcu_traits::{Error, Result};
 use core::ptr::{read_volatile, write_volatile};
 
 /// Idiomatic struct representing an I2C master/slave hardware peripheral.
@@ -188,87 +191,86 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
 }
 
 const I2C_MAX_INSTANCES: usize = 2;
-static mut I2C_HANDLERS: [Option<&'static dyn rs_esprit::I2cHandler>; I2C_MAX_INSTANCES] = [None, None];
 
-impl rs_esprit::I2c for I2c {
-    fn configure(&mut self, config: &rs_esprit::I2cConfig) -> bool {
-        self.set_speed(config.speed_hz);
-        self.set_address(config.own_address as u32);
-        true
+
+/// One handler slot per I²C instance.
+static HANDLERS: HandlerTable<dyn i2c::I2cHandler, I2C_MAX_INSTANCES> = HandlerTable::new();
+
+/// Chunks one asynchronous transaction can carry (the sequence registers hold a
+/// handful, and the driver's own API takes up to three).
+const MAX_SCAN_CHUNKS: usize = 3;
+/// Bounded poll budget for [`i2c::I2c::wait_idle`] on this block.
+const BUSY_POLL_LIMIT: u32 = 1_000_000;
+
+impl i2c::I2c for I2c {
+    fn configure(&mut self, config: &i2c::I2cConfig) -> Result<()> {
+        I2c::set_speed(self, config.speed_hz);
+        I2c::set_address(self, config.own_address as u32);
+        Ok(())
     }
 
-    fn write_to(&mut self, target: u16, data: &[u8]) -> bool {
-        let res = self.write_to(target as u32, data.len() as u32, data.as_ptr());
-        if res {
-            unsafe {
-                if (self.instance as usize) < I2C_MAX_INSTANCES {
-                    if let Some(handler) = I2C_HANDLERS[self.instance as usize] {
-                        handler.on_tx_complete();
+    fn set_speed(&mut self, speed_hz: u32) -> Result<()> {
+        I2c::set_speed(self, speed_hz);
+        Ok(())
+    }
+
+    /// The GD32 I²C block has no scatter/gather: the transaction is a START, the
+    /// operations in order, a STOP.
+    fn transfer(&mut self, target: u8, operations: &mut [i2c::Operation<'_>]) -> Result<()> {
+        if !I2c::begin(self, target as u32) {
+            return Err(Error::Io);
+        }
+        for operation in operations.iter_mut() {
+            match operation {
+                i2c::Operation::Write(data) => {
+                    if !I2c::write(self, data.len() as u32, data.as_ptr()) {
+                        return Err(Error::Io);
                     }
                 }
-            }
-        }
-        res
-    }
-
-    fn read_from(&mut self, target: u16, buffer: &mut [u8]) -> bool {
-        let res = self.read_from(target as u32, buffer.len() as u32, buffer.as_mut_ptr());
-        if res {
-            unsafe {
-                if (self.instance as usize) < I2C_MAX_INSTANCES {
-                    if let Some(handler) = I2C_HANDLERS[self.instance as usize] {
+                i2c::Operation::Read(buffer) => {
+                    if !I2c::read(self, buffer.len() as u32, buffer.as_mut_ptr()) {
+                        return Err(Error::Io);
+                    }
+                    if let Some(handler) = HANDLERS.get(self.instance as usize) {
                         handler.on_rx_buffer(buffer);
                     }
                 }
             }
         }
-        res
-    }
-
-    fn set_handler(&mut self, handler: Option<&'static dyn rs_esprit::I2cHandler>) {
-        unsafe {
-            if (self.instance as usize) < I2C_MAX_INSTANCES {
-                I2C_HANDLERS[self.instance as usize] = handler;
-            }
+        if let Some(handler) = HANDLERS.get(self.instance as usize) {
+            handler.on_tx_complete();
         }
+        Ok(())
     }
 
-    fn set_speed(&mut self, speed_hz: u32) {
-        self.set_speed(speed_hz);
-    }
-
-    fn set_address(&mut self, address: u32) {
-        self.set_address(address);
-    }
-
-    fn set_dma_mode(&mut self, enable: bool) {
-        self.set_dma_mode(enable);
-    }
-
-    fn begin(&mut self, target: u8) -> bool {
-        self.begin(target as u32)
-    }
-
-    fn write(&mut self, data: &[u8]) -> bool {
-        self.write(data.len() as u32, data.as_ptr())
-    }
-
-    fn read(&mut self, buffer: &mut [u8]) -> bool {
-        self.read(buffer.len() as u32, buffer.as_mut_ptr())
-    }
-
-    fn multi_write_to(&mut self, target: u8, chunks: &[&[u8]]) -> bool {
-        let nb = chunks.len();
-        if nb == 0 || nb > 3 {
-            return false;
+    /// Asynchronous multi-chunk write: the GD32 block chains the chunks with a
+    /// repeated start and finishes with a STOP, all from its event interrupt, so
+    /// `multi_write_to` returns as soon as the sequence is queued.
+    ///
+    /// `wait_idle` keeps the trait's default on this family: the completion is
+    /// reported through `on_tx_complete`, not through a pollable busy flag.
+    fn start_write_chunks(&mut self, target: u8, chunks: &[&[u8]]) -> Result<()> {
+        if chunks.is_empty() || chunks.len() > MAX_SCAN_CHUNKS {
+            return Err(Error::InvalidConfig);
         }
-        let mut lengths: [u32; 3] = [0, 0, 0];
-        let mut ptrs: [*const u8; 3] = [core::ptr::null(), core::ptr::null(), core::ptr::null()];
-        for i in 0..nb {
-            lengths[i] = chunks[i].len() as u32;
-            ptrs[i] = chunks[i].as_ptr();
+        let mut lengths = [0u32; MAX_SCAN_CHUNKS];
+        let mut pointers = [core::ptr::null::<u8>(); MAX_SCAN_CHUNKS];
+        for (index, chunk) in chunks.iter().enumerate() {
+            lengths[index] = chunk.len() as u32;
+            pointers[index] = chunk.as_ptr();
         }
-        self.multi_write_to(target as u32, nb as u32, lengths.as_ptr(), ptrs.as_mut_ptr())
+        let started = I2c::multi_write_to(
+            self,
+            target as u32,
+            chunks.len() as u32,
+            lengths.as_ptr(),
+            pointers.as_mut_ptr(),
+        );
+        if started { Ok(()) } else { Err(Error::Io) }
+    }
+
+    fn set_handler(&mut self, handler: Option<&'static dyn i2c::I2cHandler>) {
+        HANDLERS.set(self.instance as usize, handler);
     }
 }
 

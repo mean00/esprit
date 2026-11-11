@@ -1,0 +1,26 @@
+[package]
+name = "rs_uart_rp2xxx"
+version = "0.1.0"
+edition = "2024"
+
+# UART (PL011) for the RP2040 / RP2350: the `rs_mcu_traits::uart::Uart`
+# super trait on `UART0`/`UART1`. Frame/rate from `clk_peri` (rs_rcu_rp2xxx),
+# pads muxed through rs_gpio_rp2xxx, one handler slot per instance.
+#
+# No interrupt is wired yet (the RX-timeout path needs NVIC plumbing), so `on_rx`
+# is delivered from `read()`; the blocking paths are complete.
+
+[features]
+# Chip address map (CMake: USE_RP2040 / USE_RP2350). The UART bases come from
+# `rs_rp2xxx`'s root re-export, so exactly one of these must be set; `rp2350`
+# wins when both are (rust_esprit's `rp2350` implies its `rp2040`).
+default = ["rp2040"]
+rp2040 = ["rs_rp2xxx/rp2040"]
+rp2350 = ["rs_rp2xxx/rp2350"]
+
+[dependencies]
+portable-atomic = { version = "1.15.0", features = ["critical-section"] }
+rs_gpio_rp2xxx = { path = "../rs_gpio_rp2xxx" }
+rs_mcu_traits = { path = "../../traits" }
+rs_rcu_rp2xxx = { path = "../rs_rcu_rp2xxx" }
+rs_rp2xxx = { path = "../rs_rp2xxx" }

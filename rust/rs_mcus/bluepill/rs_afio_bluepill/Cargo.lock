@@ -15,8 +15,13 @@ name = "rs_bluepill"
 version = "0.1.0"
 
 [[package]]
+name = "rs_mcu_traits"
+version = "0.1.0"
+
+[[package]]
 name = "rs_rcu_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_mcu_traits",
 ]

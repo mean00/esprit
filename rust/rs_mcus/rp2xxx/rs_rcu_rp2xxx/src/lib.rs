@@ -2,106 +2,30 @@
 
 //! Reset and Clock Unit (RCU) driver for RP2040 and RP2350.
 //!
-//! Implements the `rs_esprit::rcu::Rcu` super trait, handling peripheral reset
+//! Implements the `rs_mcu_traits::rcu::Rcu` super trait, handling peripheral reset
 //! and clock management via the RP2xxx RESETS and CLOCKS blocks.
 
 pub mod registers;
-pub mod shim;
+
+// The chip-specific half of the map: reset-bit table, USB/ADC clock indices and
+// the `Peripheral` → reset-bit mapping. This is the **one** place the chip is
+// chosen — `rp2350` wins when both features are set, because `rust_esprit`'s
+// `rp2350` implies its `rp2040`. The `#[path]`s keep the files flat in `src/`.
+#[cfg(feature = "rp2350")]
+#[path = "registers_rp2350.rs"]
+mod registers_chip;
+
+#[cfg(not(feature = "rp2350"))]
+#[path = "registers_rp2040.rs"]
+mod registers_chip;
 
 pub use registers::*;
-pub use shim::*;
+pub use registers_chip::*;
 
-pub use rs_esprit::rcu::{Peripheral, Rcu as RcuTrait};
+pub use rs_mcu_traits::rcu::Rcu as RcuTrait;
 
 unsafe extern "C" {
     fn clock_get_hz(clk_index: u32) -> u32;
-}
-
-/// Detect if running on RP2040 (PART == 2) or RP2350.
-#[inline(always)]
-pub fn is_rp2040() -> bool {
-    #[cfg(feature = "rp2040")]
-    {
-        true
-    }
-    #[cfg(feature = "rp2350")]
-    {
-        false
-    }
-    #[cfg(not(any(feature = "rp2040", feature = "rp2350")))]
-    {
-        let chip_id = unsafe {
-            core::ptr::read_volatile(
-                (rs_rp2xxx::common::SYSINFO_BASE + SYSINFO_CHIP_ID_OFFSET) as *const u32,
-            )
-        };
-        let part = (chip_id >> SYSINFO_CHIP_ID_PART_LSB) & SYSINFO_CHIP_ID_PART_MASK;
-        part == SYSINFO_CHIP_ID_PART_RP2040
-    }
-}
-
-/// Dynamic or cfg-based RESETS peripheral base address.
-#[inline(always)]
-pub fn resets_base() -> u32 {
-    if is_rp2040() {
-        rs_rp2xxx::rp2040::RESETS_BASE
-    } else {
-        rs_rp2xxx::rp2350::RESETS_BASE
-    }
-}
-
-/// Dynamic or cfg-based CLOCKS peripheral base address.
-#[inline(always)]
-pub fn clocks_base() -> u32 {
-    if is_rp2040() {
-        rs_rp2xxx::rp2040::CLOCKS_BASE
-    } else {
-        rs_rp2xxx::rp2350::CLOCKS_BASE
-    }
-}
-
-/// Map a high-level Peripheral identifier to its bitmask in the RESETS register.
-pub fn get_reset_bit(periph: Peripheral) -> Option<u32> {
-    if is_rp2040() {
-        match periph {
-            Peripheral::Spi0 => Some(rp2040_resets::SPI0),
-            Peripheral::Spi1 => Some(rp2040_resets::SPI1),
-            Peripheral::Dma0 | Peripheral::Dma1 => Some(rp2040_resets::DMA),
-            Peripheral::Adc0 | Peripheral::Adc1 => Some(rp2040_resets::ADC),
-            Peripheral::I2c0 => Some(rp2040_resets::I2C0),
-            Peripheral::I2c1 => Some(rp2040_resets::I2C1),
-            Peripheral::Uart0 => Some(rp2040_resets::UART0),
-            Peripheral::Uart1 => Some(rp2040_resets::UART1),
-            Peripheral::Timer0 | Peripheral::Timer1 => Some(rp2040_resets::TIMER),
-            Peripheral::Usb => Some(rp2040_resets::USBCTRL),
-            Peripheral::GpioA
-            | Peripheral::GpioB
-            | Peripheral::GpioC
-            | Peripheral::GpioD
-            | Peripheral::GpioE => Some(rp2040_resets::IO_BANK0),
-            _ => None,
-        }
-    } else {
-        match periph {
-            Peripheral::Spi0 => Some(rp2350_resets::SPI0),
-            Peripheral::Spi1 => Some(rp2350_resets::SPI1),
-            Peripheral::Dma0 | Peripheral::Dma1 => Some(rp2350_resets::DMA),
-            Peripheral::Adc0 | Peripheral::Adc1 => Some(rp2350_resets::ADC),
-            Peripheral::I2c0 => Some(rp2350_resets::I2C0),
-            Peripheral::I2c1 => Some(rp2350_resets::I2C1),
-            Peripheral::Uart0 => Some(rp2350_resets::UART0),
-            Peripheral::Uart1 => Some(rp2350_resets::UART1),
-            Peripheral::Timer0 => Some(rp2350_resets::TIMER0),
-            Peripheral::Timer1 => Some(rp2350_resets::TIMER1),
-            Peripheral::Usb => Some(rp2350_resets::USBCTRL),
-            Peripheral::GpioA
-            | Peripheral::GpioB
-            | Peripheral::GpioC
-            | Peripheral::GpioD
-            | Peripheral::GpioE => Some(rp2350_resets::IO_BANK0),
-            _ => None,
-        }
-    }
 }
 
 /// Take a peripheral out of reset and enable its clocks if applicable.
@@ -109,7 +33,7 @@ pub fn enable(periph: Peripheral) {
     // If it's a peripheral requiring clk_peri, ensure CLK_PERI is enabled
     match periph {
         Peripheral::Spi0 | Peripheral::Spi1 | Peripheral::Uart0 | Peripheral::Uart1 => {
-            let clk_peri_ctrl = (clocks_base() + CLOCKS_CLK_PERI_CTRL_OFFSET) as *mut u32;
+            let clk_peri_ctrl = (CLOCKS_BASE + CLOCKS_CLK_PERI_CTRL_OFFSET) as *mut u32;
             unsafe {
                 let val = core::ptr::read_volatile(clk_peri_ctrl);
                 if (val & CLOCKS_CLK_PERI_CTRL_ENABLE_MASK) == 0 {
@@ -126,8 +50,8 @@ pub fn enable(periph: Peripheral) {
     if let Some(mask) = get_reset_bit(periph) {
         unsafe {
             // Atomic clear on RESET register: write mask to CLR alias
-            let reset_clr = (resets_base() + ATOMIC_CLR_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
-            let done_reg = (resets_base() + RESETS_RESET_DONE_OFFSET) as *const u32;
+            let reset_clr = (RESETS_BASE + ATOMIC_CLR_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
+            let done_reg = (RESETS_BASE + RESETS_RESET_DONE_OFFSET) as *const u32;
             core::ptr::write_volatile(reset_clr, mask);
             while (core::ptr::read_volatile(done_reg) & mask) != mask {
                 core::hint::spin_loop();
@@ -141,7 +65,7 @@ pub fn disable(periph: Peripheral) {
     if let Some(mask) = get_reset_bit(periph) {
         unsafe {
             // Atomic set on RESET register: write mask to SET alias
-            let reset_set = (resets_base() + ATOMIC_SET_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
+            let reset_set = (RESETS_BASE + ATOMIC_SET_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
             core::ptr::write_volatile(reset_set, mask);
         }
     }
@@ -151,9 +75,9 @@ pub fn disable(periph: Peripheral) {
 pub fn reset(periph: Peripheral) {
     if let Some(mask) = get_reset_bit(periph) {
         unsafe {
-            let reset_set = (resets_base() + ATOMIC_SET_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
-            let reset_clr = (resets_base() + ATOMIC_CLR_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
-            let done_reg = (resets_base() + RESETS_RESET_DONE_OFFSET) as *const u32;
+            let reset_set = (RESETS_BASE + ATOMIC_SET_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
+            let reset_clr = (RESETS_BASE + ATOMIC_CLR_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
+            let done_reg = (RESETS_BASE + RESETS_RESET_DONE_OFFSET) as *const u32;
             core::ptr::write_volatile(reset_set, mask);
             core::ptr::write_volatile(reset_clr, mask);
             while (core::ptr::read_volatile(done_reg) & mask) != mask {
@@ -165,7 +89,6 @@ pub fn reset(periph: Peripheral) {
 
 /// Query the peripheral clock frequency in Hz.
 pub fn get_clock(periph: Peripheral) -> u32 {
-    let rp2040 = is_rp2040();
     match periph {
         Peripheral::Spi0 | Peripheral::Spi1 | Peripheral::Uart0 | Peripheral::Uart1 => {
             let hz = unsafe { clock_get_hz(CLK_PERI_INDEX) };
@@ -190,12 +113,7 @@ pub fn get_clock(periph: Peripheral) -> u32 {
             }
         }
         Peripheral::Usb => {
-            let idx = if rp2040 {
-                CLK_USB_INDEX_RP2040
-            } else {
-                CLK_USB_INDEX_RP2350
-            };
-            let hz = unsafe { clock_get_hz(idx) };
+            let hz = unsafe { clock_get_hz(CLK_USB_INDEX) };
             if hz == 0 {
                 DEFAULT_USB_CLOCK_HZ
             } else {
@@ -203,12 +121,7 @@ pub fn get_clock(periph: Peripheral) -> u32 {
             }
         }
         Peripheral::Adc0 | Peripheral::Adc1 => {
-            let idx = if rp2040 {
-                CLK_ADC_INDEX_RP2040
-            } else {
-                CLK_ADC_INDEX_RP2350
-            };
-            let hz = unsafe { clock_get_hz(idx) };
+            let hz = unsafe { clock_get_hz(CLK_ADC_INDEX) };
             if hz == 0 {
                 DEFAULT_ADC_CLOCK_HZ
             } else {
@@ -227,11 +140,52 @@ pub fn get_clock(periph: Peripheral) -> u32 {
     }
 }
 
-/// Struct implementing the `rs_esprit::rcu::Rcu` super trait.
+/// Struct implementing the `rs_mcu_traits::rcu::Rcu` super trait.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Rcu;
 
-impl rs_esprit::rcu::Rcu for Rcu {
+/// The peripherals of the RP2xxx family that have a reset gate and/or a clock of
+/// their own.
+///
+/// Family-owned on purpose: the contract (`rs_mcu_traits::rcu::Rcu`) only knows
+/// `Self::Peripheral`, so nothing GD32-shaped (`UsbHsCh32v3x`, `Can0`, …) leaks
+/// into the RP2040/RP2350 backend, and vice versa (supertraits.md §2, rule R2).
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Peripheral {
+    None = 0,
+    /// `ADC` (one block, shared by both "instances" of the old enum).
+    Adc0,
+    Adc1,
+    /// Both DMA engines drive the single `DMA` block.
+    Dma0,
+    Dma1,
+    I2c0,
+    I2c1,
+    /// `IO_BANK0` / `PADS_BANK0`: the GPIO pads of every port.
+    GpioA,
+    GpioB,
+    GpioC,
+    GpioD,
+    GpioE,
+    Spi0,
+    Spi1,
+    /// `TIMER0`/`TIMER1` on the RP2350, the single `TIMER` on the RP2040.
+    Timer0,
+    Timer1,
+    Uart0,
+    Uart1,
+    Usb,
+
+    /// Clock-only entries: they have a frequency but no reset bit.
+    Apb1 = 100,
+    Apb2,
+    SysClock,
+}
+
+impl rs_mcu_traits::rcu::Rcu for Rcu {
+    type Peripheral = Peripheral;
+
     #[inline(always)]
     fn enable(periph: Peripheral) {
         enable(periph);
@@ -248,7 +202,7 @@ impl rs_esprit::rcu::Rcu for Rcu {
     }
 
     #[inline(always)]
-    fn get_clock(periph: Peripheral) -> u32 {
+    fn clock_hz(periph: Peripheral) -> u32 {
         get_clock(periph)
     }
 }

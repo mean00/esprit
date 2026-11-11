@@ -1,0 +1,29 @@
+[package]
+name = "rs_exti_rp2xxx"
+version = "0.1.0"
+edition = "2024"
+
+# External interrupts on the RP2040 / RP2350: the `rs_mcu_traits::exti::Exti`
+# super trait implemented on IO_BANK0 (a pin interrupt *is* the GPIO interrupt
+# there — there is no separate EXTI block).
+#
+# One shared ISR (`IO_IRQ_BANK0`) dispatches to the handler armed for the pin
+# that fired, through an `rs_mcu_traits::handler::HandlerTable` (lock-free, one
+# slot per pad, read from the interrupt).
+#
+# The register block moved between the chips (INTR0 at 0x0f0 on the RP2040,
+# 0x230 on the RP2350; 4 vs 6 words; 30 vs 48 pads; IRQ 13 vs 21), so those
+# numbers live in `registers_rp2040.rs` / `registers_rp2350.rs`.
+
+[features]
+# Chip map (CMake: USE_RP2040 / USE_RP2350, forwarded by rust_esprit). Exactly one
+# must be set; `rp2350` wins when both are (rust_esprit's `rp2350` implies its
+# `rp2040` — see rs_rp2xxx/src/lib.rs).
+default = ["rp2040"]
+rp2040 = ["rs_rp2xxx/rp2040"]
+rp2350 = ["rs_rp2xxx/rp2350"]
+
+[dependencies]
+rs_mcu_traits = { path = "../../traits" }
+rs_rp2xxx = { path = "../rs_rp2xxx" }
+portable-atomic = { version = "1.15.0", features = ["critical-section"] }

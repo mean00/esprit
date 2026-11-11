@@ -1,9 +1,10 @@
-//! Constants for the RP2040 DMA driver used by callers and configuration layers.
+//! Constants for the RP2xxx DMA driver that do **not** depend on the chip.
+//!
+//! The chip-specific numbers (channel count, DREQ numbers, the `CTRL_TRIG` field
+//! layout) live in `registers_rp2040.rs` / `registers_rp2350.rs`, selected by
+//! `registers.rs`.
 
 #![allow(dead_code)]
-
-/// Maximum number of DMA channels on the RP2040 (0..11).
-pub const DMA_MAX_CHANNELS: usize = 12;
 
 /// Default timeout in milliseconds for synchronous DMA transfers.
 pub const DMA_TIMEOUT_MS: u32 = 2000;
@@ -11,56 +12,8 @@ pub const DMA_TIMEOUT_MS: u32 = 2000;
 /// Default timeout in milliseconds for asynchronous DMA operations.
 pub const ASYNC_TIMEOUT_MS: u32 = 5000;
 
-/// Maximum spin loops for polling operations before giving up.
+/// Spin loops allowed for one polling wait (see `wait_until`).
 pub const POLL_LIMIT: u32 = 1_000_000;
-
-// --- DREQ (Data Request) Channel Selectors (Datasheet §2.5.3.1 Table 119) ---
-pub const DREQ_PIO0_TX0: u32 = 0;
-pub const DREQ_PIO0_TX1: u32 = 1;
-pub const DREQ_PIO0_TX2: u32 = 2;
-pub const DREQ_PIO0_TX3: u32 = 3;
-pub const DREQ_PIO0_RX0: u32 = 4;
-pub const DREQ_PIO0_RX1: u32 = 5;
-pub const DREQ_PIO0_RX2: u32 = 6;
-pub const DREQ_PIO0_RX3: u32 = 7;
-pub const DREQ_PIO1_TX0: u32 = 8;
-pub const DREQ_PIO1_TX1: u32 = 9;
-pub const DREQ_PIO1_TX2: u32 = 10;
-pub const DREQ_PIO1_TX3: u32 = 11;
-pub const DREQ_PIO1_RX0: u32 = 12;
-pub const DREQ_PIO1_RX1: u32 = 13;
-pub const DREQ_PIO1_RX2: u32 = 14;
-pub const DREQ_PIO1_RX3: u32 = 15;
-pub const DREQ_SPI0_TX: u32 = 16;
-pub const DREQ_SPI0_RX: u32 = 17;
-pub const DREQ_SPI1_TX: u32 = 18;
-pub const DREQ_SPI1_RX: u32 = 19;
-pub const DREQ_UART0_TX: u32 = 20;
-pub const DREQ_UART0_RX: u32 = 21;
-pub const DREQ_UART1_TX: u32 = 22;
-pub const DREQ_UART1_RX: u32 = 23;
-pub const DREQ_PWM_WRAP0: u32 = 24;
-pub const DREQ_PWM_WRAP1: u32 = 25;
-pub const DREQ_PWM_WRAP2: u32 = 26;
-pub const DREQ_PWM_WRAP3: u32 = 27;
-pub const DREQ_PWM_WRAP4: u32 = 28;
-pub const DREQ_PWM_WRAP5: u32 = 29;
-pub const DREQ_PWM_WRAP6: u32 = 30;
-pub const DREQ_PWM_WRAP7: u32 = 31;
-pub const DREQ_I2C0_TX: u32 = 32;
-pub const DREQ_I2C0_RX: u32 = 33;
-pub const DREQ_I2C1_TX: u32 = 34;
-pub const DREQ_I2C1_RX: u32 = 35;
-pub const DREQ_ADC: u32 = 36;
-pub const DREQ_XIP_STREAM: u32 = 37;
-pub const DREQ_XIP_SSIRX: u32 = 38;
-pub const DREQ_XIP_SSITX: u32 = 39;
-pub const DREQ_TIMER0: u32 = 0x3B;
-pub const DREQ_TIMER1: u32 = 0x3C;
-pub const DREQ_TIMER2: u32 = 0x3D;
-pub const DREQ_TIMER3: u32 = 0x3E;
-/// Permanent unpaced transfer (runs continuously without pacing).
-pub const DREQ_PERMANENT: u32 = 0x3F;
 
 /// Transfer priority level for scheduling.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -87,6 +40,43 @@ impl DmaTransferWidth {
             Self::HalfWord => 2,
             Self::Word => 4,
         }
+    }
+}
+
+/// How a DMA channel moves data: the element width, the DREQ that paces it, and
+/// the two flags `CTRL` carries.
+///
+/// Bundled because the four travel together and two of them are `bool`s: as loose
+/// arguments, `configure_tx(…, width, dreq, true, true)` said nothing about which
+/// `true` was "increment" and which was "start now".
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct DmaTransferConfig {
+    /// Width of one bus element (`CTRL.DATA_SIZE`).
+    pub width: DmaTransferWidth,
+    /// `CTRL.TREQ`: the DREQ that paces the transfer.
+    pub treq: u32,
+    /// Increment the moving address (`CTRL.INCR_READ` / `CTRL.INCR_WRITE`).
+    /// `false` keeps one address, which is how a FIFO port is fed.
+    pub increment: bool,
+    /// Write `CTRL_TRIG` (arm *and* start) instead of `AL1_CTRL` (arm only).
+    pub trigger: bool,
+}
+
+impl DmaTransferConfig {
+    /// A paced transfer that walks its moving address and starts on write — what
+    /// a buffer transfer wants.
+    pub const fn new(width: DmaTransferWidth, treq: u32) -> Self {
+        Self {
+            width,
+            treq,
+            increment: true,
+            trigger: true,
+        }
+    }
+
+    /// Feed one address repeatedly (`increment(false)`) or walk a buffer.
+    pub const fn increment(self, increment: bool) -> Self {
+        Self { increment, ..self }
     }
 }
 
@@ -121,3 +111,27 @@ pub struct DmaScatterBlock {
     pub write_addr: *mut u8,
     pub trans_count: u32,
 }
+
+// Layout tripwires (rule §2: anything shared with the hardware carries a
+// compile-time guard). Both blocks are handed to a DMA control channel as two
+// adjacent 32-bit words — `(TRANS_COUNT, READ_ADDR)` for alias 3 and
+// `(WRITE_ADDR, TRANS_COUNT_TRIG)` for alias 1 — so the order and the 8-byte size
+// are part of the hardware contract, not an implementation detail.
+//
+// 32-bit targets only: the layout is what the RP2040/RP2350 DMA sees, and it is
+// the only width this crate is built for. A hosted `cargo test` (64-bit pointers)
+// pads the blocks to 16 bytes, which says nothing about the target.
+#[cfg(target_pointer_width = "32")]
+const _: () = assert!(
+    core::mem::size_of::<DmaGatherBlock>() == 8
+        && core::mem::offset_of!(DmaGatherBlock, trans_count) == 0
+        && core::mem::offset_of!(DmaGatherBlock, read_addr) == 4,
+    "DmaGatherBlock is (TRANS_COUNT, READ_ADDR) — it is written into DMA alias 3, so the order and size are fixed"
+);
+#[cfg(target_pointer_width = "32")]
+const _: () = assert!(
+    core::mem::size_of::<DmaScatterBlock>() == 8
+        && core::mem::offset_of!(DmaScatterBlock, write_addr) == 0
+        && core::mem::offset_of!(DmaScatterBlock, trans_count) == 4,
+    "DmaScatterBlock is (WRITE_ADDR, TRANS_COUNT) — it is written into DMA alias 1, so the order and size are fixed"
+);

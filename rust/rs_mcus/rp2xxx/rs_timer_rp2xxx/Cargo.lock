@@ -3,5 +3,12 @@
 version = 4
 
 [[package]]
+name = "rs_mcu_traits"
+version = "0.1.0"
+
+[[package]]
 name = "rs_timer_rp2xxx"
 version = "0.1.0"
+dependencies = [
+ "rs_mcu_traits",
+]
