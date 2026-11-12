@@ -4,7 +4,8 @@
 pub mod ffi;
 pub use ffi::*;
 
-use rs_esprit::gpio::{GpioPin as GpioPinTrait, GpioInterruptHandler, GpioMode, EdgeTrigger};
+use rs_mcu_traits::gpio::{self, PinMode};
+use rs_mcu_traits::Result;
 
 pub struct GpioPinWrapped {
     pin: i32,
@@ -18,19 +19,35 @@ impl GpioPinWrapped {
     pub fn pin(&self) -> i32 {
         self.pin
     }
+
+    /// [`PinMode`] → the C `lnGpioMode` of the wrapped target.
+    fn raw_mode(mode: PinMode) -> lnGpioMode {
+        match mode {
+            PinMode::Input => lnGpioMode::lnINPUT_FLOATING,
+            PinMode::InputPullUp => lnGpioMode::lnINPUT_PULLUP,
+            PinMode::InputPullDown => lnGpioMode::lnINPUT_PULLDOWN,
+            PinMode::Output => lnGpioMode::lnOUTPUT,
+            PinMode::OutputOpenDrain => lnGpioMode::lnOUTPUT_OPEN_DRAIN,
+            PinMode::AlternatePushPull => lnGpioMode::lnALTERNATE_PP,
+            PinMode::AlternateOpenDrain => lnGpioMode::lnALTERNATE_OD,
+            PinMode::Analog => lnGpioMode::lnADC_MODE,
+        }
+    }
 }
 
-impl GpioPinTrait for GpioPinWrapped {
-    fn write(&mut self, value: bool) {
+impl gpio::Gpio for GpioPinWrapped {
+    fn pin_number(&self) -> u32 {
+        self.pin as u32
+    }
+
+    fn write(&mut self, high: bool) {
         unsafe {
-            lnDigitalWrite(self.pin as lnPin, value);
+            lnDigitalWrite(self.pin as lnPin, high);
         }
     }
 
     fn read(&self) -> bool {
-        unsafe {
-            lnDigitalRead(self.pin as lnPin)
-        }
+        unsafe { lnDigitalRead(self.pin as lnPin) }
     }
 
     fn toggle(&mut self) {
@@ -39,59 +56,24 @@ impl GpioPinTrait for GpioPinWrapped {
         }
     }
 
-    fn set_mode(&mut self, mode: GpioMode) {
-        let m = match mode {
-            GpioMode::Floating => lnGpioMode::lnFLOATING,
-            GpioMode::InputFloating => lnGpioMode::lnINPUT_FLOATING,
-            GpioMode::InputPullUp => lnGpioMode::lnINPUT_PULLUP,
-            GpioMode::InputPullDown => lnGpioMode::lnINPUT_PULLDOWN,
-            GpioMode::Output => lnGpioMode::lnOUTPUT,
-            GpioMode::OutputOpenDrain => lnGpioMode::lnOUTPUT_OPEN_DRAIN,
-            GpioMode::AlternatePushPull => lnGpioMode::lnALTERNATE_PP,
-            GpioMode::AlternateOpenDrain => lnGpioMode::lnALTERNATE_OD,
-            GpioMode::Pwm => lnGpioMode::lnPWM,
-            GpioMode::Adc => lnGpioMode::lnADC_MODE,
-            GpioMode::Dac => lnGpioMode::lnDAC_MODE,
-            GpioMode::Uart => lnGpioMode::lnUART,
-            GpioMode::Spi => lnGpioMode::lnSPI_MODE,
-            GpioMode::UartAlt => lnGpioMode::lnUART_Alt,
-        };
+    fn set_mode(&mut self, mode: PinMode) -> Result<()> {
         unsafe {
-            lnPinMode(self.pin as lnPin, m, 0);
+            lnPinMode(self.pin as lnPin, Self::raw_mode(mode), 0);
         }
+        Ok(())
     }
 
-    fn set_mode_speed(&mut self, mode: GpioMode, speed_mhz: u32) {
-        let m = match mode {
-            GpioMode::Floating => lnGpioMode::lnFLOATING,
-            GpioMode::InputFloating => lnGpioMode::lnINPUT_FLOATING,
-            GpioMode::InputPullUp => lnGpioMode::lnINPUT_PULLUP,
-            GpioMode::InputPullDown => lnGpioMode::lnINPUT_PULLDOWN,
-            GpioMode::Output => lnGpioMode::lnOUTPUT,
-            GpioMode::OutputOpenDrain => lnGpioMode::lnOUTPUT_OPEN_DRAIN,
-            GpioMode::AlternatePushPull => lnGpioMode::lnALTERNATE_PP,
-            GpioMode::AlternateOpenDrain => lnGpioMode::lnALTERNATE_OD,
-            GpioMode::Pwm => lnGpioMode::lnPWM,
-            GpioMode::Adc => lnGpioMode::lnADC_MODE,
-            GpioMode::Dac => lnGpioMode::lnDAC_MODE,
-            GpioMode::Uart => lnGpioMode::lnUART,
-            GpioMode::Spi => lnGpioMode::lnSPI_MODE,
-            GpioMode::UartAlt => lnGpioMode::lnUART_Alt,
-        };
+    fn set_mode_speed(&mut self, mode: PinMode, speed_mhz: u32) -> Result<()> {
         unsafe {
-            lnPinMode(self.pin as lnPin, m, speed_mhz as cty::c_uint);
+            lnPinMode(self.pin as lnPin, Self::raw_mode(mode), speed_mhz as cty::c_uint);
         }
+        Ok(())
     }
 
-    fn open_drain_close(&mut self, close: bool) {
+    fn open_drain(&mut self, drive_low: bool) -> Result<()> {
         unsafe {
-            lnOpenDrainClose(self.pin as lnPin, close);
+            lnOpenDrainClose(self.pin as lnPin, drive_low);
         }
+        Ok(())
     }
-
-    fn enable_interrupt(&mut self, _trigger: EdgeTrigger) -> bool {
-        true
-    }
-
-    fn set_handler(&mut self, _handler: Option<&'static dyn GpioInterruptHandler>) {}
 }

@@ -41,9 +41,6 @@ pub const SLOT_WIDTH_BITS: u32 = 6;
 /// Bitmask covering all local event bits within a single slot (bits 0..5).
 pub const SLOT_EVENT_MASK: u32 = (1 << SLOT_WIDTH_BITS) - 1;
 
-/// Bitmask covering legacy runner event bits (bits 0..4).
-pub const LEGACY_EVENT_MASK: u32 = 0x1F;
-
 /// Bitmask covering all global link events (bits 30..31).
 pub const GLOBAL_EVENT_MASK: u32 = (1 << LINK_UP_BIT) | (1 << LINK_DOWN_BIT);
 

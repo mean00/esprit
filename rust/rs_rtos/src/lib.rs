@@ -50,6 +50,8 @@ pub mod c_fast_event;
 mod kernel;
 
 pub mod critical;
+/// Static cells for driver state (task side, critical-section guarded).
+pub mod sync_cell;
 pub mod sync;
 pub mod queue;
 pub mod event;

@@ -15,12 +15,15 @@ use core::ffi::c_void;
 use core::ptr::{read_volatile, write_volatile};
 use registers::*;
 use rs_dma_bluepill::{DmaChannel, DmaEngine};
-use rs_esprit::BinarySemaphore;
-use rs_rcu_bluepill::{enable, Peripheral};
+use rs_mcu_traits::handler::HandlerTable;
+use rs_mcu_traits::uart;
+use rs_mcu_traits::{Error, Result};
+use rs_rcu_bluepill::{Peripheral, enable};
+use rs_rtos::BinarySemaphore;
 // The RX poll timer and the critical sections come from `rs_rtos` directly:
-// `rs_esprit::timer` is the *hardware* timer API (`rs_timer_bluepill`), a
+// `rs_timer_bluepill` is the *hardware* timer API, a
 // different thing from a FreeRTOS software timer (`PeriodicTimer`).
-use rs_rtos::{with_critical, PeriodicTimer};
+use rs_rtos::{PeriodicTimer, with_critical};
 
 pub(crate) fn uart_set_baudrate(instance: u32, speed: u32) -> bool {
     let regs = UartRegisters::ptr(instance);
@@ -313,7 +316,10 @@ impl UartRx {
                         write_volatile(&mut (*regs).ctl2, ctl2);
 
                         if let Some(ref mut dma) = self.dma {
-                            dma.attach_callback(uart_rx_dma_callback, self.instance as usize as *mut c_void);
+                            dma.attach_callback(
+                                uart_rx_dma_callback,
+                                self.instance as usize as *mut c_void,
+                            );
                             dma.begin_circular_rx_transfer(
                                 &(*regs).data as *const _ as u32,
                                 self.rx_buffer.as_ptr() as u32,
@@ -441,6 +447,17 @@ impl UartRx {
         });
     }
 
+    /// Install the "new data" notification of this receiver.
+    ///
+    /// It is called from the receive poll (a FreeRTOS software timer, i.e.
+    /// interrupt/timer-daemon context) with the receiver's event code
+    /// (`0` = data available, mirroring `lnSerialCore::Event`); `cookie` is
+    /// passed straight through.
+    pub fn set_event_callback(&mut self, cb: ln_serial_event_cb, cookie: *mut c_void) {
+        self.callback = cb;
+        self.callback_cookie = cookie;
+    }
+
     pub fn read(&mut self, to: &mut [u8]) -> usize {
         let (nb, ptr) = self.get_read_pointer();
         if nb <= 0 || ptr.is_null() {
@@ -468,70 +485,224 @@ impl Drop for UartRx {
     }
 }
 
-static mut UART_TX_HANDLERS: [Option<&'static dyn rs_esprit::UartTxHandler>; UART_MAX_INSTANCES] = [None, None, None];
-static mut UART_RX_HANDLERS: [Option<&'static dyn rs_esprit::UartRxHandler>; UART_MAX_INSTANCES] = [None, None, None];
+/// One handler slot per USART instance.
+static HANDLERS: HandlerTable<dyn uart::UartHandler, UART_MAX_INSTANCES> = HandlerTable::new();
 
-impl rs_esprit::UartTx for UartTx {
-    #[inline]
-    fn configure(&mut self, config: &rs_esprit::UartConfig) -> bool {
-        self.set_speed(config.baudrate)
+/// Buffered transmitters, one per instance: a [`BufferedTx`] must live in a
+/// `static` because its DMA completion callback uses its address as cookie.
+/// Only the instances opened with [`Uart::with_dma`] are initialised.
+static BUFFERED_TX: [BufferedTx; UART_MAX_INSTANCES] = [
+    BufferedTx::new(UART_INSTANCE_0),
+    BufferedTx::new(UART_INSTANCE_1),
+    BufferedTx::new(UART_INSTANCE_2),
+];
+
+/// Receiver notification, called from the RX poll (a FreeRTOS software timer)
+/// when the DMA ring grew: it only wakes the handler, the bytes stay in the
+/// ring for [`uart::Uart::read`] (`on_rx_available`'s contract).
+///
+/// The cookie is the instance number, exactly like `uart_rx_timer_cb`'s.
+extern "C" fn rx_available_trampoline(cookie: *mut c_void, _event: i32) {
+    let instance = cookie as usize;
+    if instance >= UART_MAX_INSTANCES {
+        return;
+    }
+    // SAFETY: `set_handler` published the handler before the receiver was
+    // enabled, and the slot is a `&'static dyn UartHandler` the poll only copies.
+    if let Some(handler) = unsafe { HANDLERS.isr_get(instance) } {
+        handler.on_rx_available();
+    }
+}
+
+/// The receive ring size of the super-trait view: the same default the C shim
+/// uses, so a caller gets the same buffering either way.
+const RX_BUFFER_SIZE: u32 = 256;
+
+/// One USART as the super trait sees it: the TX and RX halves of the same
+/// instance, behind one object.
+///
+/// The split [`UartTx`] / [`UartRx`] types stay public for the C ABI and for a
+/// caller that needs only one direction; this type is what
+/// [`rs_mcu_traits::uart::Uart`] is implemented for.
+pub struct Uart {
+    tx: UartTx,
+    rx: UartRx,
+    /// Buffered (DMA-ring) transmitter, when the port was opened with
+    /// [`Uart::with_dma`]. `None` means the plain blocking [`UartTx`].
+    buffered: Option<&'static BufferedTx>,
+}
+
+impl Uart {
+    /// Create both halves of `instance` (`0` … `2`) and apply the frame.
+    ///
+    /// The GD32 USART of this driver is 8N1 at the configured rate: any other
+    /// frame is refused by [`uart::Uart::configure`] instead of being silently
+    /// coerced.
+    pub fn new(instance: u32, config: &uart::UartConfig) -> Result<Self> {
+        let mut tx = UartTx::new(instance, false);
+        let mut rx = UartRx::new(instance, RX_BUFFER_SIZE, false);
+        tx.init();
+        rx.init();
+        let mut uart = Self {
+            tx,
+            rx,
+            buffered: None,
+        };
+        uart::Uart::configure(&mut uart, config)?;
+        uart::Uart::enable_rx(&mut uart, true)?;
+        Ok(uart)
     }
 
-    #[inline]
-    fn set_speed(&mut self, baudrate: u32) -> bool {
-        self.set_speed(baudrate)
-    }
-
-    #[inline]
-    fn transmit(&mut self, buffer: &[u8]) -> bool {
-        let res = self.transmit(buffer);
-        if res {
-            unsafe {
-                if let Some(handler) = UART_TX_HANDLERS[self.instance as usize] {
-                    handler.on_tx_complete();
-                }
-            }
+    /// The bridged configuration: a DMA-drained transmit **ring** (so
+    /// [`uart::Uart::try_write`] can be partial) on top of a DMA receive ring of
+    /// `RX_BUFFER_SIZE` bytes, whose growth is reported to the handler as
+    /// [`uart::UartHandler::on_rx_available`].
+    ///
+    /// This is the Rust equivalent of the C++ `createLnSerialRxTx(instance,
+    /// rx_buffer_size, /*dma*/ true)`: what a pass-through bridge needs. The
+    /// transmitter is the crate's [`BufferedTx`] (the same one the Rust logger
+    /// drives), so the bytes leave in the background instead of blocking the
+    /// caller for every byte.
+    pub fn with_dma(instance: u32, config: &uart::UartConfig) -> Result<Self> {
+        let index = instance as usize;
+        if index >= UART_MAX_INSTANCES {
+            return Err(Error::InvalidConfig);
         }
-        res
+        let buffered = &BUFFERED_TX[index];
+        buffered.init(config.baudrate);
+
+        // The transmitter half only drives the frame format and `flush`; the
+        // bytes go through `buffered`.
+        let mut tx = UartTx::new(instance, false);
+        let mut rx = UartRx::new(instance, RX_BUFFER_SIZE, true);
+        tx.init();
+        rx.init();
+        // Report "the ring grew" to the handler instead of keeping it private.
+        rx.set_event_callback(Some(rx_available_trampoline), index as *mut c_void);
+
+        let mut uart = Self {
+            tx,
+            rx,
+            buffered: Some(buffered),
+        };
+        uart::Uart::configure(&mut uart, config)?;
+        uart::Uart::enable_rx(&mut uart, true)?;
+        Ok(uart)
     }
 
-    #[inline]
-    fn transmit_no_block(&mut self, buffer: &[u8]) -> i32 {
-        if self.transmit(buffer) {
-            buffer.len() as i32
-        } else {
-            -1
-        }
+    /// This USART's number.
+    #[inline(always)]
+    pub fn instance(&self) -> u32 {
+        self.tx.instance
     }
 
-    #[inline]
-    fn set_tx_handler(&mut self, handler: Option<&'static dyn rs_esprit::UartTxHandler>) {
-        unsafe {
-            UART_TX_HANDLERS[self.instance as usize] = handler;
+    /// The transmit half, for a caller that needs the DMA path.
+    #[inline(always)]
+    pub fn transmitter(&mut self) -> &mut UartTx {
+        &mut self.tx
+    }
+
+    /// The receive half, for a caller that needs the ring buffer directly.
+    #[inline(always)]
+    pub fn receiver(&mut self) -> &mut UartRx {
+        &mut self.rx
+    }
+
+    /// Tell the handler that the transmitter is idle again, i.e. everything
+    /// queued has left (or the plain transmitter finished its transfer).
+    fn notify_tx_idle(&self) {
+        let idle = self.buffered.map(|b| b.pending() == 0).unwrap_or(true);
+        if idle && let Some(handler) = HANDLERS.get(self.instance() as usize) {
+            handler.on_tx_complete();
         }
     }
 }
 
-impl rs_esprit::UartRx for UartRx {
-    #[inline]
-    fn configure(&mut self, config: &rs_esprit::UartConfig) -> bool {
-        self.set_speed(config.baudrate)
-    }
-
-    #[inline]
-    fn set_speed(&mut self, baudrate: u32) -> bool {
-        self.set_speed(baudrate)
-    }
-
-    #[inline]
-    fn enable_rx(&mut self, enabled: bool) -> bool {
-        self.enable_rx(enabled)
-    }
-
-    #[inline]
-    fn set_rx_handler(&mut self, handler: Option<&'static dyn rs_esprit::UartRxHandler>) {
-        unsafe {
-            UART_RX_HANDLERS[self.instance as usize] = handler;
+impl uart::Uart for Uart {
+    fn configure(&mut self, config: &uart::UartConfig) -> Result<()> {
+        if config.data_bits != 8
+            || config.parity != uart::Parity::None
+            || config.stop_bits != uart::StopBits::One
+        {
+            return Err(Error::Unsupported);
         }
+        if !self.tx.set_speed(config.baudrate) {
+            return Err(Error::InvalidConfig);
+        }
+        Ok(())
+    }
+
+    fn set_baudrate(&mut self, baudrate: u32) -> Result<()> {
+        if self.tx.set_speed(baudrate) {
+            Ok(())
+        } else {
+            Err(Error::InvalidConfig)
+        }
+    }
+
+    /// Send into the transmit ring (`with_dma`) or block on the hardware
+    /// transmitter.
+    fn write(&mut self, data: &[u8]) -> Result<()> {
+        if let Some(buffered) = self.buffered {
+            buffered.write(data);
+            self.notify_tx_idle();
+            return Ok(());
+        }
+        if self.tx.transmit(data) {
+            self.notify_tx_idle();
+            Ok(())
+        } else {
+            Err(Error::Io)
+        }
+    }
+
+    /// Queue what the ring accepts and return the count; a partial count means
+    /// the caller has to come back (that is the bridge's `Blocked` state).
+    fn try_write(&mut self, data: &[u8]) -> Result<usize> {
+        let Some(buffered) = self.buffered else {
+            // The non-buffered transmitter has no queue of its own: it either
+            // sends everything or reports the failure.
+            return Err(Error::Unsupported);
+        };
+        let accepted = buffered.try_write(data);
+        self.notify_tx_idle();
+        Ok(accepted)
+    }
+
+    /// Wait until the transmit ring has drained (`with_dma`) — the plain
+    /// transmitter already waited inside `write`.
+    fn flush(&mut self) -> Result<()> {
+        if let Some(buffered) = self.buffered {
+            buffered.flush();
+        }
+        Ok(())
+    }
+
+    /// Drain what the receive ring holds.
+    ///
+    /// No handler call here: the notification is the receive poll's
+    /// [`uart::UartHandler::on_rx_available`], which fires when the ring grows.
+    /// Telling the handler again after the caller took the bytes would make it
+    /// look like more data arrived.
+    fn read(&mut self, buffer: &mut [u8]) -> Result<usize> {
+        Ok(self.rx.read(buffer))
+    }
+
+    /// The ring is filled by the receiver's interrupt/DMA, so "until idle" is the
+    /// same drain: there is no separate idle state to wait for.
+    fn read_until_idle(&mut self, buffer: &mut [u8]) -> Result<usize> {
+        self.read(buffer)
+    }
+
+    fn enable_rx(&mut self, enabled: bool) -> Result<()> {
+        if self.rx.enable_rx(enabled) {
+            Ok(())
+        } else {
+            Err(Error::Unsupported)
+        }
+    }
+
+    fn set_handler(&mut self, handler: Option<&'static dyn uart::UartHandler>) {
+        HANDLERS.set(self.instance() as usize, handler);
     }
 }

@@ -1,6 +1,7 @@
 //! SPI communication bus and register framing for the W5500.
 
-use rust_esprit::{BitOrder, GpioMode, GpioPin, Pin, Spi, SpiMode};
+use rust_esprit::hal::spi::{BitOrder, Spi as SpiTrait, SpiConfig, SpiMode};
+use rust_esprit::{Gpio, Pin, PinMode, SpiDriver};
 
 const SPI_CONTROL_READ: u8 = 0x00;
 const SPI_CONTROL_WRITE: u8 = 0x04;
@@ -8,7 +9,10 @@ const SPI_CONTROL_VDM: u8 = 0x00;
 
 /// The W5500's documented maximum SPI clock.
 const SPI_CLOCK_HZ: u32 = 30_000_000;
-const SPI_BITS_PER_WORD: u32 = 8;
+const SPI_BITS_PER_WORD: u8 = 8;
+
+/// "No chip select pin": the bus drives CS itself, so the SPI driver must not.
+const NO_CS: i32 = -1;
 
 /// Read chunk, small enough to use one static zero pattern as MOSI filler.
 const READ_CHUNK: usize = 64;
@@ -19,26 +23,36 @@ const STABLE_READ_TRIES: usize = 3;
 
 /// Bus interface managing SPI transactions and chip-select for the W5500.
 pub struct W5500Bus {
-    spi: Spi,
-    cs: GpioPin,
+    spi: SpiDriver,
+    cs: Pin,
 }
 
 // SAFETY: the bus lives in a `Mutex`, so only one task borrows it at a time;
-// `Spi` is just a handle to a C object that does not care which task drives it.
+// the SPI driver is a handle to a peripheral and does not care which task drives
+// it.
 unsafe impl Send for W5500Bus {}
 
 impl W5500Bus {
-    /// Initialize the SPI peripheral and chip-select GPIO.
-    pub fn new(spi_instance: u32, mut cs: GpioPin) -> Self {
-        cs.set_high();
-        cs.set_mode(GpioMode::Output);
+    /// Initialize the SPI peripheral and the chip-select pin.
+    ///
+    /// The pads of the bus are routed by [`W5500Device::new`] (they are mode
+    /// selections of their own); this only programs the port itself.
+    pub fn new(spi_instance: u32, mut cs: Pin) -> Self {
+        // Idle high before the pad becomes an output, so the slave is never
+        // selected while the mode changes.
+        Gpio::write(&mut cs, true);
+        let _ = Gpio::set_mode(&mut cs, PinMode::Output);
 
-        // Spi::new takes instance and CS pin. We pass Pin::NoPin because W5500Bus manages CS explicitly.
-        let mut spi = Spi::new(spi_instance, Pin::NoPin);
-        spi.set_data_mode(SpiMode::Mode0);
-        spi.set_speed(SPI_CLOCK_HZ);
-        spi.set_bit_order(BitOrder::MsbFirst);
-        spi.begin(SPI_BITS_PER_WORD);
+        let mut spi = SpiDriver::new(spi_instance, NO_CS);
+        let _ = SpiTrait::configure(
+            &mut spi,
+            &SpiConfig {
+                speed_hz: SPI_CLOCK_HZ,
+                mode: SpiMode::Mode0,
+                bit_order: BitOrder::MsbFirst,
+                data_size: SPI_BITS_PER_WORD,
+            },
+        );
 
         Self { spi, cs }
     }
@@ -50,12 +64,12 @@ impl W5500Bus {
             (addr & 0xFF) as u8,
             (block << 3) | SPI_CONTROL_WRITE | SPI_CONTROL_VDM,
         ];
-        self.cs.set_low();
-        self.spi.write_slice8(&header);
+        Gpio::write(&mut self.cs, false);
+        let _ = SpiTrait::write_slice(&mut self.spi, &header);
         if !data.is_empty() {
-            self.spi.write_slice8(data);
+            let _ = SpiTrait::write_slice(&mut self.spi, data);
         }
-        self.cs.set_high();
+        Gpio::write(&mut self.cs, true);
     }
 
     /// Read bytes from the given register address and block into `data`.
@@ -65,15 +79,15 @@ impl W5500Bus {
             (addr & 0xFF) as u8,
             (block << 3) | SPI_CONTROL_READ | SPI_CONTROL_VDM,
         ];
-        self.cs.set_low();
-        self.spi.write_slice8(&header);
+        Gpio::write(&mut self.cs, false);
+        let _ = SpiTrait::write_slice(&mut self.spi, &header);
 
         const ZEROES: [u8; READ_CHUNK] = [0u8; READ_CHUNK];
         for chunk in data.chunks_mut(READ_CHUNK) {
             let len = chunk.len();
-            self.spi.transfer8(&ZEROES[..len], chunk);
+            let _ = SpiTrait::transfer_in_place(&mut self.spi, &ZEROES[..len], chunk);
         }
-        self.cs.set_high();
+        Gpio::write(&mut self.cs, true);
     }
 
     /// Write an 8-bit register.

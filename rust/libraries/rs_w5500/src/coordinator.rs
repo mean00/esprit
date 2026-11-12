@@ -8,9 +8,7 @@ use core::ffi::c_void;
 use rs_rtos::event::EventGroup;
 use rs_rtos::sync::{Mutex, OnceLock};
 use rs_rtos::task::delay_ms;
-use rust_esprit::{
-    attach_interrupt, disable_interrupt, enable_interrupt, Edge, Pin, PinCallback,
-};
+use rust_esprit::{Edge, Exti, ExtiDriver, ExtiHandler, Gpio};
 
 pub const EVT_DISCON_SOCK0: u32 = discon_bit(0);
 pub const EVT_DISCON_SOCK1: u32 = discon_bit(1);
@@ -134,11 +132,18 @@ pub fn trigger_coordinator_disconnect(sn: u8) {
     }
 }
 
-/// Exti pin callback wrapper
+/// Handler of the W5500 INT line.
+///
+/// The line is active low and stays asserted while a socket has a pending
+/// interrupt, so the edge handler masks the pad and the coordinator task re-arms
+/// it once it has serviced the chip (`Exti::enable`). Masking from the interrupt
+/// prevents a storm; re-arming from the task makes the next falling edge count.
 pub struct IntrPinCallback;
-impl PinCallback for IntrPinCallback {
-    fn on_interrupt(&mut self, pin: Pin) {
-        disable_interrupt(pin);
+impl ExtiHandler for IntrPinCallback {
+    fn on_exti(&self, pin: u32) {
+        // A fresh handle is enough: `ExtiDriver` is a zero-sized handle over the
+        // family's registers, and its state lives in `static`s.
+        let _ = Exti::disable(&mut ExtiDriver::new(), pin);
         trigger_coordinator_interrupt();
     }
 }
@@ -173,11 +178,12 @@ pub extern "C" fn w5500_coordinator_task(_param: *mut c_void) {
         dev.bus.write_u8(SIMR, CREG_BLOCK, ((1 << MAX_SOCKETS) - 1) as u8);
         dev.bus.write_u8(IR, CREG_BLOCK, 0xFF);
 
-        (mac, dev.intr.pin())
+        (mac, dev.intr)
     };
 
-    attach_interrupt(intr_pin, Edge::Falling, &INTR_CALLBACK);
-    enable_interrupt(intr_pin);
+    // Arm the INT line on a falling edge (`attach` also enables it).
+    let intr_number = Gpio::pin_number(&intr_pin);
+    let _ = ExtiDriver::new().attach(intr_number, Edge::Falling, Some(&INTR_CALLBACK));
 
     // Wait for physical Ethernet link up (up to 3 seconds)
     for _ in 0..LINK_WAIT_TRIES {
@@ -313,12 +319,12 @@ pub extern "C" fn w5500_coordinator_task(_param: *mut c_void) {
                     sock.poll(&mut dev.bus);
                 }
 
-                // Re-enable EXTI interrupt
-                enable_interrupt(intr_pin);
+                // Re-enable the INT line for the next falling edge.
+                let _ = ExtiDriver::new().enable(intr_number);
 
                 // If pin is still asserted (active low), re-trigger
-                if dev.intr.is_low() {
-                    disable_interrupt(intr_pin);
+                if Gpio::is_low(&dev.intr) {
+                    let _ = ExtiDriver::new().disable(intr_number);
                     trigger_coordinator_interrupt();
                     delay_ms(INTR_RETRIGGER_MS);
                 }

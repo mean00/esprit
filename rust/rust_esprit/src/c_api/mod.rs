@@ -14,10 +14,7 @@
 
 #[cfg(feature = "cdc")]
 pub mod rn_cdc_c;
-pub mod rn_cpuid_c;
 pub mod rn_debug_c;
-pub mod rn_exti_c;
-pub mod rn_fast_event_c;
 pub mod rn_freertos_c;
 #[cfg(not(any(feature = "rp2040", feature = "esp32")))]
 pub mod rn_gpio_bp_c;
@@ -25,13 +22,6 @@ pub mod rn_gpio_bp_c;
 pub mod rn_gpio_esp32_c;
 #[cfg(feature = "rp2040")]
 pub mod rn_gpio_rp2040_c;
-pub mod rn_i2c_c;
-pub mod rn_spi_c;
 pub mod rn_timer_c;
-pub mod rn_timing_adc_c;
-pub mod rn_multi_pulse_c;
-pub mod rn_serial_c;
 #[cfg(feature = "cdc")]
 pub mod rn_usb_c;
-pub mod rn_simple_adc_c;
-pub mod rn_hw_stopwatch_c;

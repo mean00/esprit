@@ -270,10 +270,7 @@ pub extern "C" fn lnserial_rx_set_callback(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn lnserial_rx_get_read_pointer(
-    s: *mut ln_serial_rx_c,
-    to: *mut *mut u8,
-) -> i32 {
+pub extern "C" fn lnserial_rx_get_read_pointer(s: *mut ln_serial_rx_c, to: *mut *mut u8) -> i32 {
     let instance = unpack_rx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {

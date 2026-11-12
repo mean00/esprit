@@ -1,44 +1,21 @@
 #![allow(dead_code)]
 
-//! GPIO abstraction: pin identifiers ([`Pin`]), owned pins ([`GpioPin`])
-//! and pin modes ([`GpioMode`]).
+//! GPIO: the pin identifier of the current target, and the MCU-agnostic
+//! [`Gpio`] contract it implements.
 //!
-//! The raw C names (`lnPin`, `lnGpioMode`, `lnPinMode_c`, …) are re‑exported
-//! under `rust_esprit::raw` for advanced users.
-
-#[cfg(feature = "rp2040")]
-mod import_gpio {
-    pub(crate) use crate::rn_gpio_rp2040_c;
-    pub(crate) use crate::rn_gpio_rp2040_c as gpio;
-    pub use crate::rn_gpio_rp2040_c::lnPinMode_c;
-}
-
-#[cfg(feature = "esp32")]
-mod import_gpio {
-    pub(crate) use crate::rn_gpio_esp32_c;
-    pub(crate) use crate::rn_gpio_esp32_c as gpio;
-    pub use crate::rn_gpio_esp32_c::lnPinMode_c;
-}
-
-#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
-mod import_gpio {
-    pub use rs_gpio_bluepill as gpio;
-}
-
-// Internal FFI facade: other modules reach the raw GPIO functions through
-// `crate::gpio`.  The same items are re-exported publicly as `raw::…`.
-pub(crate) use import_gpio::gpio::lnDigitalRead;
-pub(crate) use import_gpio::gpio::lnDigitalToggle;
-pub(crate) use import_gpio::gpio::lnDigitalWrite;
-pub(crate) use import_gpio::gpio::lnGetGpioDirectionRegister;
-pub(crate) use import_gpio::gpio::lnGetGpioOffRegister;
-pub(crate) use import_gpio::gpio::lnGetGpioOnRegister;
-pub(crate) use import_gpio::gpio::lnGetGpioToggleRegister;
-pub(crate) use import_gpio::gpio::lnGetGpioValueRegister;
-pub(crate) use import_gpio::gpio::lnOpenDrainClose;
-pub(crate) use import_gpio::gpio::lnPin;
-pub(crate) use import_gpio::gpio::lnPinMode_c;
-pub(crate) use import_gpio::gpio::lnReadPort;
+//! The contract itself lives in `rs_mcu_traits::gpio` (one file per trait, see
+//! `supertraits.md`): [`Gpio`] and [`PinMode`]. This module only picks the pin
+//! **type** of the target — GD32 `Pin::PA0`…`PG15`, RP2xxx/ESP32 `Pin::GPIO0`… —
+//! so application code says `pin.set_mode(PinMode::Output)` on whatever chip it is
+//! compiled for.
+//!
+//! Pin **interrupts** are the external-interrupt controller's:
+//! `rust_esprit::{Exti, ExtiDriver, ExtiHandler, Edge}` (the contract is
+//! `rs_mcu_traits::exti`), not a method of the pad.
+//!
+//! The behaviour of a pad (mode, write, read, toggle, open drain) is the
+//! [`Gpio`] contract, implemented by the family driver crate; this module only
+//! names the target's pin type and holds the bus-routing glue.
 
 // ---------------------------------------------------------------------------
 //  Pin identifiers
@@ -46,297 +23,82 @@ pub(crate) use import_gpio::gpio::lnReadPort;
 
 /// Canonical pin identifier for the current target.
 ///
-/// This is the same type as `rust_esprit::raw::lnPin`; the available variants
-/// depend on the target — GD32 uses `Pin::PA0` … `Pin::PG15`, RP2040/RP2350
-/// and ESP32 use `Pin::GPIO0` … .
+/// This is `pin_types::lnPin`, the one pin type of the whole stack: GD32 uses
+/// `Pin::PA0` … `Pin::PG15`, RP2040/RP2350 and ESP32 use `Pin::GPIO0` … . Its
+/// behaviour (`set_mode`, `write`, `read`, …) is the [`Gpio`] contract.
 ///
 /// # Example
 /// ```ignore
 /// let led = Pin::PB6;
 /// ```
 #[doc(alias = "lnPin")]
-pub use import_gpio::gpio::lnPin as Pin;
-
-/// Legacy name for [`Pin`].
-#[deprecated(note = "use `Pin` instead")]
-#[doc(alias = "Pin")]
-pub type pin = Pin;
+pub use crate::pin_types::lnPin as Pin;
 
 /// Build a [`Pin`] from a raw numeric value (advanced).
 ///
-/// ESP32 only: on RP2040/RP2350 [`Pin`] is `rs_esprit::gpio::rp2xxx::Pin`, which
-/// brings its own `From<u32>` (a foreign type cannot gain one here).
+/// ESP32 only: on RP2040/RP2350 [`Pin`] is `rs_gpio_rp2xxx::Pin`, a foreign type
+/// that cannot gain an `impl` here — and deliberately has no infallible
+/// conversion either, because the raw value may name no pad. Use its checked
+/// `Pin::from_number` there instead.
 #[cfg(feature = "esp32")]
 impl From<u32> for Pin {
     fn from(val: u32) -> Self {
-        // SAFETY: `lnPin` is a C enum; this mirrors the cast historically
-        // performed by `pin_to_lnpin`.
+        // SAFETY: `lnPin` is a C enum; this mirrors the cast the C-facing pin
+        // tables use.
         unsafe { core::mem::transmute(val) }
     }
 }
 
 // ---------------------------------------------------------------------------
-//  Pin modes
+//  The contract (`rs_mcu_traits::gpio`)
 // ---------------------------------------------------------------------------
 
-/// GPIO pin mode.
-///
-/// Idiomatic replacement for the raw C `lnGpioMode` enum.  The variant order
-/// and values match the C enum exactly.
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-#[repr(u32)]
-pub enum GpioMode {
-    Floating = 0,
-    InputFloating = 1,
-    InputPullUp = 2,
-    InputPullDown = 3,
-    Output = 4,
-    OutputOpenDrain = 5,
-    AlternatePushPull = 6,
-    AlternateOpenDrain = 7,
-    Pwm = 8,
-    Adc = 9,
-    Dac = 10,
-    Uart = 11,
-    Spi = 12,
-    UartAlt = 13,
-}
+/// The MCU-agnostic GPIO trait, implemented by [`Pin`] for the current target.
+pub use rs_mcu_traits::gpio::Gpio;
 
-#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
-impl From<GpioMode> for crate::raw::lnGpioMode {
-    fn from(mode: GpioMode) -> Self {
-        use rs_gpio_bluepill::Mode::*;
-        match mode {
-            GpioMode::Floating => Floating,
-            GpioMode::InputFloating => InputFloating,
-            GpioMode::InputPullUp => InputPullup,
-            GpioMode::InputPullDown => InputPulldown,
-            GpioMode::Output => Output,
-            GpioMode::OutputOpenDrain => OutputOpenDrain,
-            GpioMode::AlternatePushPull => AlternatePushPull,
-            GpioMode::AlternateOpenDrain => AlternateOpenDrain,
-            GpioMode::Pwm => Pwm,
-            GpioMode::Adc => AdcMode,
-            GpioMode::Dac => DacMode,
-            GpioMode::Uart => Uart,
-            GpioMode::Spi => SpiMode,
-            GpioMode::UartAlt => UartAlt,
+/// Electrical/functional mode of a pad (`Input`, `Output`, `Analog`, …).
+pub use rs_mcu_traits::gpio::PinMode;
+
+// Pin *interrupts* are not part of this module: they are the external-interrupt
+// controller's (`rs_mcu_traits::exti`, re-exported as `rust_esprit::PinEdge` /
+// `rust_esprit::Exti` / `rust_esprit::ExtiHandler`).
+
+/// Route `pins` to the SPI peripheral of the current target.
+///
+/// The pin contract has no "SPI mode" on purpose (which *instance* a pad reaches
+/// is a family property, §R2 of `supertraits.md`), so a driver that owns a bus
+/// asks for the routing here:
+///
+/// * RP2040 / RP2350 — IO_BANK0 `FUNCSEL = 1` (SPI) on each pad;
+/// * GD32F3 / CH32V3 — the SPI alternate function on each pad;
+/// * ESP32 / wrapped — `PinMode::AlternatePushPull`.
+///
+/// The pads then reach the instance `rs_spi_*::Spi::new(instance, …)` talks to
+/// (`GPIO0`…`GPIO3` are SPI0 on an RP2xxx, `GPIO8`…`GPIO11` SPI1, and so on).
+pub fn set_spi_pins(pins: &[Pin]) {
+    #[cfg(feature = "rp2040")]
+    {
+        for pin in pins {
+            let mut pad = *pin;
+            // FUNCSEL 1 is SPI on every RP2xxx pad (datasheet Table 279).
+            pad.set_function(rs_gpio_rp2xxx::registers::FUNCSEL_SPI0);
         }
     }
-}
 
-#[cfg(any(feature = "rp2040", feature = "esp32"))]
-impl From<GpioMode> for crate::raw::lnGpioMode {
-    fn from(mode: GpioMode) -> Self {
-        use crate::raw::lnGpioMode::{
-            lnADC_MODE, lnALTERNATE_OD, lnALTERNATE_PP, lnDAC_MODE, lnFLOATING,
-            lnINPUT_FLOATING, lnINPUT_PULLDOWN, lnINPUT_PULLUP, lnOUTPUT,
-            lnOUTPUT_OPEN_DRAIN, lnPWM, lnSPI_MODE, lnUART, lnUART_Alt,
-        };
-        match mode {
-            GpioMode::Floating => lnFLOATING,
-            GpioMode::InputFloating => lnINPUT_FLOATING,
-            GpioMode::InputPullUp => lnINPUT_PULLUP,
-            GpioMode::InputPullDown => lnINPUT_PULLDOWN,
-            GpioMode::Output => lnOUTPUT,
-            GpioMode::OutputOpenDrain => lnOUTPUT_OPEN_DRAIN,
-            GpioMode::AlternatePushPull => lnALTERNATE_PP,
-            GpioMode::AlternateOpenDrain => lnALTERNATE_OD,
-            GpioMode::Pwm => lnPWM,
-            GpioMode::Adc => lnADC_MODE,
-            GpioMode::Dac => lnDAC_MODE,
-            GpioMode::Uart => lnUART,
-            GpioMode::Spi => lnSPI_MODE,
-            GpioMode::UartAlt => lnUART_Alt,
+    #[cfg(all(not(feature = "rp2040"), not(any(feature = "esp32", feature = "wrapped"))))]
+    {
+        for pin in pins {
+            // The GD32 alternate function, with the same 50 MHz drive the C++ uses.
+            rs_gpio_bluepill::set_mode(*pin, rs_gpio_bluepill::Mode::SpiMode, 50);
         }
     }
-}
 
-impl From<GpioMode> for u32 {
-    fn from(mode: GpioMode) -> u32 {
-        mode as u32
-    }
-}
-
-// ---------------------------------------------------------------------------
-//  Deprecated free functions (legacy names)
-// ---------------------------------------------------------------------------
-
-/// Set pin mode (output, input, etc.) with default speed 0 MHz.
-#[deprecated(note = "use `GpioPin::set_mode` instead")]
-pub fn pin_mode(pin: Pin, mode: GpioMode) {
-    unsafe { lnPinMode_c(pin, mode.into(), 0) }
-}
-
-/// Set pin mode with explicit I/O speed in MHz.
-#[deprecated(note = "use `GpioPin::set_mode_speed` instead")]
-pub fn pin_mode_speed(pin: Pin, mode: GpioMode, speed_mhz: u32) {
-    unsafe { lnPinMode_c(pin, mode.into(), speed_mhz) }
-}
-
-/// Drive the pin high (`true`) or low (`false`).
-#[deprecated(note = "use `GpioPin::write` instead")]
-pub fn digital_write(pin: Pin, val: bool) {
-    unsafe { lnDigitalWrite(pin, val) }
-}
-
-/// Toggle the output state of the pin.
-#[deprecated(note = "use `GpioPin::toggle` instead")]
-pub fn digital_toggle(pin: Pin) {
-    unsafe { lnDigitalToggle(pin) }
-}
-
-/// Read the current input level of the pin.
-#[deprecated(note = "use `GpioPin::is_high` instead")]
-pub fn digital_read(pin: Pin) -> bool {
-    unsafe { lnDigitalRead(pin) }
-}
-
-/// Convert a raw integer pin index to the canonical [`Pin`].
-///
-/// The platform pin types (e.g. `rnPin`) are C-compatible integer enums that
-/// differ per MCU; this helper casts them into the common `lnPin` expected by
-/// the low-level GPIO C API.
-#[deprecated(note = "use `Pin::from` instead")]
-pub fn pin_to_lnpin(pin: impl Into<i32>) -> Pin {
-    Pin::from(pin.into() as u32)
-}
-
-// ---------------------------------------------------------------------------
-//  Owned GPIO pin
-// ---------------------------------------------------------------------------
-
-/// An owned, copyable microcontroller GPIO pin.
-///
-/// Created via [`GpioPin::new`] (or `From<Pin>`) and configured with methods
-/// like `.set_mode()`, `.set_high()`, `.toggle()`, etc.
-///
-/// # Example
-/// ```ignore
-/// let mut led = GpioPin::new(Pin::PB6);
-/// led.set_mode(GpioMode::Output);
-/// led.set_high();
-/// ```
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct GpioPin {
-    pin: Pin,
-}
-
-impl From<Pin> for GpioPin {
-    fn from(pin: Pin) -> Self {
-        Self { pin }
-    }
-}
-
-impl From<GpioPin> for Pin {
-    fn from(pin: GpioPin) -> Self {
-        pin.pin
-    }
-}
-
-impl GpioPin {
-    /// Create a new pin from the canonical pin enum value.
-    pub fn new(pin: Pin) -> Self {
-        Self { pin }
-    }
-
-    /// Return the underlying pin identifier.
-    pub fn pin(self) -> Pin {
-        self.pin
-    }
-
-    /// Return the underlying pin identifier (same as [`GpioPin::pin`]).
-    #[inline]
-    pub fn raw(self) -> Pin {
-        self.pin
-    }
-
-    /// Return the port index for this pin (0 = PA, 1 = PB, ...).
-    pub fn port(self) -> u32 {
-        (self.pin as u32) >> 4
-    }
-
-    /// Return the bit number within the port (0..15).
-    pub fn bit(self) -> u32 {
-        (self.pin as u32) & 0xF
-    }
-
-    /// Set the pin mode.
-    pub fn set_mode(&mut self, mode: GpioMode) {
-        unsafe { lnPinMode_c(self.pin, mode.into(), 0) }
-    }
-
-    /// Set the pin mode with a target speed in MHz.
-    pub fn set_mode_speed(&mut self, mode: GpioMode, speed_mhz: u32) {
-        unsafe { lnPinMode_c(self.pin, mode.into(), speed_mhz) }
-    }
-
-    /// Drive the pin high (digital `1`).
-    pub fn set_high(&mut self) {
-        unsafe { lnDigitalWrite(self.pin, true) }
-    }
-
-    /// Drive the pin low (digital `0`).
-    pub fn set_low(&mut self) {
-        unsafe { lnDigitalWrite(self.pin, false) }
-    }
-
-    /// Write a boolean value to the pin (`true` = high, `false` = low).
-    pub fn write(&mut self, val: bool) {
-        unsafe { lnDigitalWrite(self.pin, val) }
-    }
-
-    /// Toggle the output state.
-    pub fn toggle(&mut self) {
-        unsafe { lnDigitalToggle(self.pin) }
-    }
-
-    /// Return `true` if the input reads as high.
-    pub fn is_high(&self) -> bool {
-        unsafe { lnDigitalRead(self.pin) }
-    }
-
-    /// Return `true` if the input reads as low.
-    pub fn is_low(&self) -> bool {
-        !self.is_high()
-    }
-
-    /// Read the entire GPIO port.
-    pub fn read_port(&self) -> u32 {
-        unsafe { lnReadPort(self.port()) }
-    }
-
-    /// Open-drain close/open helper.
-    pub fn open_drain_close(&mut self, close: bool) {
-        unsafe { lnOpenDrainClose(self.pin, close) }
-    }
-
-    // -- Fast I/O register access (expert) --
-
-    /// Get a pointer to the toggle register for this pin's port.
-    /// Writing `1 << bit()` toggles the pin with a single bus cycle.
-    pub fn toggle_register(&self) -> *mut u32 {
-        unsafe { lnGetGpioToggleRegister(self.port()) }
-    }
-
-    /// Get a pointer to the "on" (set) register for this pin's port.
-    pub fn on_register(&self) -> *mut u32 {
-        unsafe { lnGetGpioOnRegister(self.port()) }
-    }
-
-    /// Get a pointer to the "off" (clear) register for this pin's port.
-    pub fn off_register(&self) -> *mut u32 {
-        unsafe { lnGetGpioOffRegister(self.port()) }
-    }
-
-    /// Get a pointer to the direction register for this pin's port.
-    pub fn direction_register(&self) -> *mut u32 {
-        unsafe { lnGetGpioDirectionRegister(self.port()) }
-    }
-
-    /// Get a pointer to the input value register for this pin's port.
-    pub fn val_register(&self) -> *mut u32 {
-        unsafe { lnGetGpioValueRegister(self.port()) }
+    #[cfg(any(feature = "esp32", feature = "wrapped"))]
+    {
+        for pin in pins {
+            let mut pad = *pin;
+            let _ = Gpio::set_mode(&mut pad, PinMode::AlternatePushPull);
+        }
     }
 }
 

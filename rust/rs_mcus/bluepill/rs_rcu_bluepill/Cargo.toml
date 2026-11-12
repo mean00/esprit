@@ -5,4 +5,12 @@ edition = "2024"
 
 [dependencies]
 rs_bluepill = { path = "../rs_bluepill" }
-rs_esprit = { path = "../../../rs_esprit" }
+rs_mcu_traits = { path = "../../traits" }
+
+[features]
+# Same family selector as `rs_bluepill`: no feature = the ARM (STM32F1 /
+# GD32F30x) map on which `AHBENR` 9..12 stay reserved, `ch32v3x` = the CH32V3 one
+# that decodes RNG/SDIO/USBHS/USB-FS-OTG there. Forwarded to `rs_bluepill` so the
+# addresses and the clock bits can never disagree.
+stm32 = ["rs_bluepill/stm32"]
+ch32v3x = ["rs_bluepill/ch32v3x"]

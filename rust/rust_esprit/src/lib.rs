@@ -20,10 +20,10 @@
 //!
 //! * [`Pin`] — canonical pin identifier for the current target
 //!   (`Pin::PA5`, `Pin::PB6`, `Pin::GPIO10`, …).
-//! * [`GpioPin`] — owned pin value with a rich method set
-//!   (`set_mode`, `set_high`, `write`, `toggle`, `is_high`, …).
-//! * [`GpioMode`] — pin mode configuration (`GpioMode::Output`,
-//!   `GpioMode::InputPullUp`, …).
+//! * [`Gpio`] — the MCU-agnostic pin contract, implemented by [`Pin`] itself
+//!   (`set_mode`, `write`, `read`, `toggle`, `open_drain`, …).
+//! * [`PinMode`] — pin mode configuration (`PinMode::Output`,
+//!   `PinMode::InputPullUp`, …).
 //!
 //! ## Time, tasks and delay
 //!
@@ -40,16 +40,20 @@
 //!
 //! ## Buses and peripherals
 //!
-//! [`I2c`], [`Spi`], [`Serial`], [`SerialTx`], [`Timer`], [`MultiPulse`],
-//! [`AdcTiming`], [`AdcBuffer`], `Usb`, `Cdc`, plus the event enums
-//! (`CdcEvent`, `UsbEvent`, [`SerialEvent`]) and their handler traits.
+//! [`Uart`], [`UartDriver`], [`AdcDriver`], [`ScanAdc`], `Usb`, `Cdc`, plus the
+//! event enums (`CdcEvent`, `UsbEvent`) and their handler traits.
+//!
+//! The peripheral *contracts* (SPI, I²C, ADC, timers, DMA, PWM, RCU, GPIO) are
+//! re-exported from `rs_mcu_traits` under `hal` and as the `Hal*` names; the
+//! family driver that implements one is reachable as [`SpiDriver`],
+//! [`gpio_rp2xxx`], [`uart_rp2xxx`] or `rust_esprit::{bluepill, rp2xxx}`.
 //!
 //! (`Usb`/`Cdc` and their events are only available with the `cdc` feature.)
 //!
 //! ## External interrupts
 //!
-//! [`attach_interrupt`], [`detach_interrupt`], [`enable_interrupt`],
-//! [`disable_interrupt`], [`Edge`], [`PinCallback`].
+//! The [`Exti`] contract ([`Edge`], [`ExtiHandler`]) with the family driver as
+//! [`ExtiDriver`]: `attach(pin, edge, handler)`, `enable`, `disable`, `detach`.
 //!
 //! ## Logging
 //!
@@ -60,7 +64,6 @@
 //! * `rp2040` — RP2040 / RP2350 pin bindings (`Pin::GPIO10`, …).
 //! * `esp32` — ESP32 pin bindings.
 //! * `cdc` — USB and CDC‑ACM bindings.
-//! * `embedded-hal` — `embedded-hal` v1.0 trait implementations (`Delay`).
 //! * `fake_std` — FreeRTOS‑backed `std`‑compatible namespace
 //!   (`rust_esprit::std`).
 //! * `external_std` — run inside an existing `std` framework.
@@ -149,48 +152,23 @@ pub(crate) mod c_api;
 // Re-export the C‑FFI modules internally so that existing code (e.g.
 // `crate::rn_freertos_c::xQueueCreateMutex(...)`) continues to work.
 // These are **internal** bindings, not part of the public API.
-pub(crate) use c_api::rn_cpuid_c;
 pub(crate) use c_api::rn_debug_c;
-pub(crate) use c_api::rn_exti_c;
-pub(crate) use c_api::rn_fast_event_c;
 pub(crate) use c_api::rn_freertos_c;
 // `rn_timer_c` stays on the C API for every target: `task.rs` uses the real C
 // helpers (`lnGetUs`, `lnDelay_C`, …), which esprit provides everywhere.
-// The `Timer` wrapper itself selects its backend in timer.rs.
 pub(crate) use c_api::rn_timer_c;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "rp2040")] {
         pub(crate) use c_api::rn_gpio_rp2040_c;
-        pub(crate) use rs_i2c_rp2xxx as rn_i2c_c;
-        pub(crate) use rs_spi_rp2xxx as rn_spi_c;
-        pub(crate) use rs_dma_rp2xxx as rn_dma_c;
-        pub(crate) use c_api::rn_serial_c;
-        pub(crate) use rs_adc_rp2xxx as rn_timing_adc_c;
-        pub(crate) use rs_adc_rp2xxx as rn_simple_adc_c;
-        pub(crate) use rs_timer_rp2xxx as rn_hw_stopwatch_c;
-        pub(crate) use rs_multi_pulse_rp2xxx as rn_multi_pulse_c;
     } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
         #[cfg(feature = "esp32")]
         pub(crate) use c_api::rn_gpio_esp32_c;
-        pub(crate) use rs_i2c_wrapped as rn_i2c_c;
-        pub(crate) use rs_spi_wrapped as rn_spi_c;
-        pub(crate) use rs_uart_wrapped as rn_serial_c;
-        pub(crate) use rs_adc_wrapped as rn_timing_adc_c;
-        pub(crate) use rs_adc_wrapped as rn_simple_adc_c;
-        pub(crate) use c_api::rn_hw_stopwatch_c;
-        pub(crate) use c_api::rn_multi_pulse_c;
     } else {
         pub(crate) use c_api::rn_gpio_bp_c;
-        pub(crate) use rs_i2c_bluepill as rn_i2c_c;
-        pub(crate) use rs_spi_bluepill as rn_spi_c;
-        pub(crate) use rs_uart_bluepill as rn_serial_c;
-        pub(crate) use rs_adc_bluepill as rn_timing_adc_c;
-        pub(crate) use rs_adc_bluepill as rn_simple_adc_c;
-        pub(crate) use rs_timer_bluepill as rn_hw_stopwatch_c;
-        pub(crate) use c_api::rn_multi_pulse_c;
     }
 }
+
 
 // ---------------------------------------------------------------------------
 //  Private implementation modules
@@ -199,118 +177,133 @@ cfg_if::cfg_if! {
 //  implementation details and must not be used directly.
 // ---------------------------------------------------------------------------
 
-mod adc;
-mod cpu_id;
-mod exti;
 mod gpio;
-mod i2c;
-mod spi;
 pub use rs_rtos::{event, queue, sync, task};
 mod logger;
 /// The Esprit logger's C ABI (`lnDebug.cpp`) in Rust: CMake `USE_RUST_LOGGER`.
 #[cfg(feature = "rust_logger")]
 mod logger_c;
-mod multi_pulse;
-mod serial;
-mod timer;
 #[cfg(all(feature = "rust_logger", not(feature = "bluepill")))]
 compile_error!(
     "the `rust_logger` feature drives the debug UART through rs_uart_bluepill: it needs the `bluepill` platform backend"
 );
-#[cfg(feature = "embedded-hal")]
-mod hal;
-
-// ---------------------------------------------------------------------------
-//  Raw C FFI namespace — advanced, low-level use only
-// ---------------------------------------------------------------------------
-#[doc(hidden)]
-pub mod raw {
-    //! Raw C FFI layer (hidden from the main docs).
-    //!
-    //! The safe API at the crate root wraps these types and functions; most
-    //! users never need to touch them.  This module exists for advanced
-    //! callers that need to hand raw handles to C code or use the low‑level
-    //! GPIO/register functions directly.
-
-    /// `usize`-sized unsigned integer used by the C HAL.
-    pub use cty::c_uint as size_t;
-
-    // ---- GPIO ----
-    /// Canonical pin enum (the same type as the crate-root `Pin`).
-    pub use crate::pin_types::lnPin;
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "rp2040")] {
-            pub use crate::rn_gpio_rp2040_c::{
-                lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
-                lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
-                lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
-            };
-        } else if #[cfg(feature = "esp32")] {
-            pub use crate::rn_gpio_esp32_c::{
-                lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
-                lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
-                lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
-            };
-        } else {
-            pub use rs_gpio_bluepill::{
-                lnDigitalRead, lnDigitalToggle, lnDigitalWrite, lnGetGpioDirectionRegister,
-                lnGetGpioOffRegister, lnGetGpioOnRegister, lnGetGpioToggleRegister,
-                lnGetGpioValueRegister, lnGpioMode, lnOpenDrainClose, lnPinMode_c, lnReadPort,
-            };
-        }
-    }
-
-    // ---- FreeRTOS core types ----
-    pub use crate::rn_freertos_c::{
-        BaseType_t, QueueHandle_t, SemaphoreHandle_t, TaskHandle_t, TickType_t,
-    };
-
-    // ---- Peripherals ----
-    pub use crate::rn_exti_c::lnEdge;
-    pub use crate::rn_fast_event_c::lnfast_event_group_c;
-    pub use crate::rn_i2c_c::ln_i2c_c;
-    pub use crate::rn_multi_pulse_c::ln_multi_pulse_c;
-    pub use crate::rn_serial_c::{ln_serial_event_cb, ln_serial_rx_c, ln_serial_tx_c};
-    pub use crate::rn_spi_c::{
-        ln_spi_c, lnSPISettings, lnSpiCallback, spiBitOrder, spiBitOrder_SPI_LSBFIRST,
-        spiBitOrder_SPI_MSBFIRST, spiDataMode, spiDataMode_SPI_MODE0, spiDataMode_SPI_MODE1,
-        spiDataMode_SPI_MODE2, spiDataMode_SPI_MODE3,
-    };
-    pub use crate::rn_timer_c::ln_timer_c;
-    pub use crate::rn_timing_adc_c::ln_timing_adc_c;
-    #[cfg(feature = "cdc")]
-    pub use rs_tinyusb::raw::*;
-}
 
 // ---------------------------------------------------------------------------
 //  Public API — flat, idiomatic re-exports at the crate root
 // ---------------------------------------------------------------------------
-pub use adc::{AdcBuffer, AdcTiming};
-pub use cpu_id::{CpuId, Mcu, Vendor};
 pub use event::EventGroup;
-pub use exti::{
-    Edge, PinCallback, attach_interrupt, detach_interrupt, disable_interrupt, enable_interrupt,
-};
-pub use gpio::{GpioMode, GpioPin, Pin};
+pub use gpio::{Gpio, Pin, PinMode};
+/// The ADC contracts (`Adc` single shot, `ScanAdc` scan/DMA) and their config,
+/// handler and buffer types — all of them from `rs_mcu_traits::adc`.
+pub use rs_mcu_traits::adc::{Adc, AdcBuffer, AdcConfig, AdcHandler, ScanAdc, ScanConfig};
+/// Route pads to the SPI peripheral of the current target (the family decides
+/// which instance a pad reaches, so the pin contract has no "SPI mode").
+pub use gpio::set_spi_pins;
+/// Pin **interrupt** contract: the external-interrupt controller arms an edge on a
+/// pin number and owns the handler (`rs_mcu_traits::exti`). `Exti` is the trait;
+/// the family type that implements it is [`ExtiDriver`].
+pub use rs_mcu_traits::exti::{Edge, Exti, ExtiHandler};
+/// The SPI driver of the current target — the family crate that implements
+/// `rs_mcu_traits::spi::Spi` (`rs_spi_rp2xxx`, `rs_spi_bluepill`, …).
+///
+/// A driver that owns a bus takes this type, muxes its pads with
+/// [`gpio::set_spi_pins`] and programs the port through the trait, so the same
+/// code runs on every family.
+#[cfg(feature = "rp2040")]
+pub use rs_spi_rp2xxx::Spi as SpiDriver;
+#[cfg(all(
+    not(feature = "rp2040"),
+    not(any(feature = "esp32", feature = "wrapped"))
+))]
+pub use rs_spi_bluepill::Spi as SpiDriver;
+#[cfg(any(feature = "esp32", feature = "wrapped"))]
+pub use rs_spi_wrapped::SpiWrapped as SpiDriver;
+/// The single-shot ADC driver of the current target — the family type that
+/// implements [`Adc`] (`rs_adc_rp2xxx::SimpleAdc`, `rs_adc_bluepill::SimpleAdc`,
+/// `rs_adc_wrapped::SimpleAdcWrapped`).
+pub use adc_driver::AdcDriver;
+/// The scan (DMA / multi-sample) ADC driver of the current target — the family
+/// type that implements [`ScanAdc`].
+pub use adc_driver::ScanAdcDriver;
+/// The external-interrupt driver of the current target — the family type that
+/// implements [`Exti`] (`rs_exti_rp2xxx::Exti`, `rs_exti_bluepill::Exti`,
+/// `rs_exti_wrapped::ExtiWrapped`).
+pub use exti_driver::ExtiDriver;
+/// Platform selection of the EXTI driver: the only place a family is named.
+mod exti_driver {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "rp2040")] {
+            /// IO_BANK0: one nibble per pad, one shared `IO_IRQ_BANK0` line.
+            pub use rs_exti_rp2xxx::Exti as ExtiDriver;
+        } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
+            /// The C-ABI backend.
+            pub use rs_exti_wrapped::ExtiWrapped as ExtiDriver;
+        } else {
+            /// The GD32 / CH32 EXTI block.
+            pub use rs_exti_bluepill::Exti as ExtiDriver;
+        }
+    }
+}
+/// The UART driver of the current target — the family type that implements
+/// [`Uart`] (`rs_uart_rp2xxx::Uart`, `rs_uart_bluepill::Uart`,
+/// `rs_uart_wrapped::Uart`).
+///
+/// `UartDriver::with_dma(instance, &config, rx_buffer_size)` opens the port the
+/// way a pass-through bridge needs it: an interrupt-driven receive ring that
+/// reports [`rs_mcu_traits::uart::UartHandler::on_rx_available`], and a
+/// transmitter that [`Uart::try_write`] can fill partially.
+pub use uart_driver::UartDriver;
+/// Platform selection of the UART driver: the only place a family is named.
+mod uart_driver {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "rp2040")] {
+            /// PL011, `UART0`/`UART1`, receive ring + interrupts.
+            pub use rs_uart_rp2xxx::Uart as UartDriver;
+        } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
+            /// The C-ABI backend.
+            pub use rs_uart_wrapped::Uart as UartDriver;
+        } else {
+            /// GD32 / CH32 USART, DMA receive ring + buffered DMA transmitter.
+            pub use rs_uart_bluepill::Uart as UartDriver;
+        }
+    }
+}
+/// Platform selection of the two ADC drivers: the only place a family is named.
+mod adc_driver {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "rp2040")] {
+            /// `rs_adc_rp2xxx` (pure Rust, polled SAR).
+            pub use rs_adc_rp2xxx::SimpleAdc as AdcDriver;
+            /// `rs_adc_rp2xxx` (DMA + DREQ, `ScanAdc::start_async`).
+            pub use rs_adc_rp2xxx::TimingAdc as ScanAdcDriver;
+        } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
+            /// The C-ABI backend (no Rust driver for that family).
+            pub use rs_adc_wrapped::{SimpleAdcWrapped as AdcDriver, TimingAdcWrapped as ScanAdcDriver};
+        } else {
+            /// `rs_adc_bluepill` (pure Rust, polled SAR).
+            pub use rs_adc_bluepill::SimpleAdc as AdcDriver;
+            /// `rs_adc_bluepill` (timer-triggered scan).
+            pub use rs_adc_bluepill::TimingAdc as ScanAdcDriver;
+        }
+    }
+}
+pub use logger::LoggerWriter;
+pub use queue::Queue;
 /// The RP2040 / RP2350 pins (`rs_gpio_rp2xxx`): [`Pin`] above, on that platform,
 /// *is* that crate's `Pin`, and this module is where the pin type, its mode
-/// mapping and the `GpioPin` implementation all live.
+/// mapping and the `Gpio` implementation all live.
 #[cfg(feature = "rp2040")]
 pub use rs_gpio_rp2xxx as gpio_rp2xxx;
-#[cfg(feature = "embedded-hal")]
-pub use hal::Delay;
-pub use i2c::I2c;
-pub use logger::LoggerWriter;
-pub use multi_pulse::MultiPulse;
-pub use queue::Queue;
+/// The RP2040 / RP2350 UART driver (`rs_uart_rp2xxx`), the `Uart` implementation
+/// of that platform.
+#[cfg(feature = "rp2040")]
+pub use rs_uart_rp2xxx as uart_rp2xxx;
 #[cfg(feature = "cdc")]
 #[allow(deprecated)]
 pub use rs_tinyusb::{
     Cdc, CdcAcm, CdcEvent, CdcEventHandler, CdcPort, LineState, Usb, UsbBus, UsbError, UsbEvent,
     UsbEventHandler,
 };
-pub use serial::{Serial, SerialEvent, SerialEventHandler, SerialTx};
-pub use spi::{BitOrder, Spi, SpiMode};
 pub use sync::{
     Arc, BinarySemaphore, CountingSemaphore, LazyLock, Mutex, MutexGuard, OnceLock, RecursiveMutex,
     RecursiveMutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard, SemaphoreGuard,
@@ -319,7 +312,6 @@ pub use task::{
     Duration, Instant, TaskEntry, TaskHandle, current, delay_ms, delay_us, sleep, sleep_ms, spawn,
     spawn_raw, tick_count, time_ms, time_us, time_us64, yield_now,
 };
-pub use timer::{DelayTimer, Timer};
 
 // ---------------------------------------------------------------------------
 //  Hardware-specific backend re-exports
@@ -376,34 +368,9 @@ pub use {
 //  code should use the idiomatic names.
 // ---------------------------------------------------------------------------
 
-// Legacy pin-enum name (`rust_esprit::pin::GPIO10`, `const P: pin = pin::PB6`).
-#[allow(deprecated)]
-pub use gpio::pin;
-// Legacy GPIO free functions.
-#[allow(deprecated)]
-pub use gpio::{digital_read, digital_toggle, digital_write, pin_mode, pin_mode_speed};
-// Legacy pin-conversion helper.
-#[allow(deprecated)]
-pub use gpio::pin_to_lnpin;
-// Legacy external-interrupt function names.
-#[allow(deprecated)]
-pub use exti::{
-    exti_attach_interrupt, exti_attach_interrupt_typed, exti_detach_interrupt,
-    exti_enable_interrupt,
-};
-// Legacy edge name.
-#[allow(deprecated)]
-pub use exti::pin_edge;
 // Legacy time functions.
 #[allow(deprecated)]
 pub use task::{get_time_ms, get_time_us};
-// Legacy bus names.
-#[allow(deprecated)]
-pub use i2c::I2cBus;
-#[allow(deprecated)]
-pub use serial::{SerialRxTx, SerialTxOnly};
-#[allow(deprecated)]
-pub use spi::SpiBus;
 
 // ---------------------------------------------------------------------------
 //  Interrupt control
@@ -456,7 +423,7 @@ cfg_if! {
         static GLOBAL: FreeRtosAllocator = FreeRtosAllocator;
 
         unsafe extern "C" {
-            pub(crate) fn pvPortMalloc(xSize: crate::raw::size_t) -> *mut cty::c_void;
+            pub(crate) fn pvPortMalloc(xSize: cty::c_uint) -> *mut cty::c_void;
             pub(crate) fn vPortFree(pv: *mut cty::c_void);
         }
 
@@ -645,17 +612,15 @@ pub mod std_shim {
 #[cfg(feature = "fake_std")]
 pub use std_shim as std;
 
-pub mod hw_stopwatch;
-pub mod simple_adc;
-
-pub use rs_esprit as hal;
-pub use rs_esprit::{
-    adc::{AdcHandler, SimpleAdc as HalSimpleAdc, TimingAdc as HalTimingAdc},
-    gpio::{EdgeTrigger, GpioInterruptHandler, GpioPin as HalGpioPin},
+pub use rs_mcu_traits as hal;
+pub use rs_mcu_traits::{
+    adc::{Adc as HalAdc, AdcBuffer as HalAdcBuffer, ScanAdc as HalScanAdc},
+    gpio::{Gpio as HalGpio},
+    exti::{Exti as HalExti},
     i2c::{I2c as HalI2c, I2cConfig, I2cHandler},
-    spi::{
-        Spi as HalSpi, SpiBitOrder, SpiConfig, SpiMode as HalSpiMode, SpiRxHandler, SpiTxHandler,
-    },
-    timer::{Timer as HalTimer, TimerHandler},
-    uart::{UartConfig, UartRx as HalUartRx, UartRxHandler, UartTx as HalUartTx, UartTxHandler},
+    pwm::{Pwm as HalPwm, PwmConfig, PwmHandler},
+    dma::{Dma as HalDma, DmaHandler},
+    spi::{BitOrder as HalSpiBitOrder, Spi as HalSpi, SpiConfig, SpiHandler, SpiMode as HalSpiMode},
+    timer::{DelayTimer as HalDelayTimer, Timer as HalTimer, TimerHandler},
+    uart::{Uart as HalUart, UartConfig, UartHandler},
 };

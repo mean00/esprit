@@ -1,19 +1,19 @@
-//! High-level trait API periodic timer example.
+//! Periodic timer through the MCU-agnostic super trait.
 //!
-//! Follows Esprit Rust Rule 1 (No Magic Numbers), Rule 2 (Two-Tier Architecture),
-//! Rule 4 (Mandatory Examples), and Rule 6 (Idiomatic Rust).
-//!
-//! Demonstrates configuring a hardware timer using the high-level `rs_esprit::Timer` trait.
+//! `rs_mcu_traits::timer::Timer` — `start_periodic(hz)` returns the frequency the
+//! hardware actually reaches, the handler is per channel and `on_tick` runs in the
+//! timer interrupt.
 
 #![no_std]
 #![no_main]
 
 use core::panic::PanicInfo;
 use core::sync::atomic::{AtomicU32, Ordering};
-use rs_esprit::timer::{Timer as _, TimerHandler};
+use rs_mcu_traits::timer::{self, Timer as TimerTrait, TimerHandler};
 use rs_timer_bluepill::Timer;
 
 struct DummyAlloc;
+
 unsafe impl core::alloc::GlobalAlloc for DummyAlloc {
     unsafe fn alloc(&self, _layout: core::alloc::Layout) -> *mut u8 {
         core::ptr::null_mut()
@@ -30,7 +30,7 @@ struct AppTimerHandler {
 }
 
 impl TimerHandler for AppTimerHandler {
-    fn on_timer_tick(&self) {
+    fn on_tick(&self) {
         self.tick_count.fetch_add(1, Ordering::Relaxed);
     }
 }
@@ -45,10 +45,9 @@ const TICK_FREQUENCY_HZ: u32 = 1_000; // 1 kHz (1 ms period)
 #[unsafe(no_mangle)]
 pub extern "C" fn main() -> ! {
     if let Ok(mut timer) = Timer::new(TIMER_INDEX) {
-        // Use the high-level `rs_esprit::Timer` trait API:
-        let _ = timer.set_frequency(TICK_FREQUENCY_HZ);
-        timer.set_handler(Some(&TIMER_HANDLER));
-        timer.enable();
+        // `start_periodic` returns the rounded frequency the counter reaches.
+        let _reached_hz = TimerTrait::start_periodic(&mut timer, TICK_FREQUENCY_HZ);
+        TimerTrait::set_handler(&mut timer, Some(&TIMER_HANDLER));
     }
 
     loop {
@@ -60,3 +59,4 @@ pub extern "C" fn main() -> ! {
 fn panic(_info: &PanicInfo) -> ! {
     loop {}
 }
+

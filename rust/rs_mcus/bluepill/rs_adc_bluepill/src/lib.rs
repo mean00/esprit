@@ -8,10 +8,19 @@ pub mod registers;
 use registers::*;
 use rs_gpio_bluepill::Pin;
 use rs_dma_bluepill::DmaChannel;
-use rs_rcu_bluepill::{Peripheral, enable};
-use rs_esprit::BinarySemaphore;
+use rs_rcu_bluepill::{Peripheral, enable, get_clock};
+use rs_rtos::BinarySemaphore;
+use rs_mcu_traits::adc;
+use rs_mcu_traits::handler::HandlerTable;
+use rs_mcu_traits::{Error, Result};
 use core::ptr::{read_volatile, write_volatile};
 use core::ffi::c_void;
+
+/// Channels a scan sequence can hold (the GD32 sequence registers take 16).
+const MAX_SCAN_SOURCES: usize = 16;
+/// Upper bound for [`adc::AdcConfig::averaging`]: a probe sense line needs a few
+/// reads, not thousands (each read powers the SAR up and down).
+const MAX_AVERAGING: u8 = 64;
 
 pub fn pin_to_adc_channel(pin: u32) -> u32 {
     let p = pin;
@@ -153,12 +162,25 @@ impl TimingAdc {
         }
         true
     }
+
+    /// Split a buffer length into whole scan passes: `(samples per channel,
+    /// total samples)`.
+    fn split_len(&self, capacity: usize) -> Result<(u32, usize)> {
+        let per_scan = self.configured_pins_count().max(1) as usize;
+        let count = capacity - capacity % per_scan;
+        if count == 0 {
+            return Err(Error::BufferTooSmall);
+        }
+        Ok(((count / per_scan) as u32, count))
+    }
 }
 
 /// Idiomatic struct representing a single-pin simple ADC converter.
 pub struct SimpleAdc {
     instance: u32,
     pin: u32,
+    /// Conversions averaged into one [`adc::Adc::read`].
+    averaging: u8,
 }
 
 impl SimpleAdc {
@@ -168,7 +190,11 @@ impl SimpleAdc {
         } else {
             enable(Peripheral::Adc1);
         }
-        Self { instance, pin }
+        Self {
+            instance,
+            pin,
+            averaging: 1,
+        }
     }
 
     #[inline(always)]
@@ -204,7 +230,12 @@ impl SimpleAdc {
         }
     }
 
-    pub fn read(&self) -> i32 {
+    /// One conversion through the SAR, as the hardware reports it (`0 … 4095`).
+    ///
+    /// The inherent name is `read_raw` because the [`adc::Adc`] impl owns the
+    /// `read()` of the trait, and a method call inside that impl would otherwise
+    /// resolve to the trait method (and recurse).
+    pub fn read_raw(&self) -> i32 {
         let regs = AdcRegisters::ptr(self.instance);
         unsafe {
             let ch = pin_to_adc_channel(self.pin);
@@ -254,61 +285,116 @@ impl SimpleAdc {
 }
 
 const ADC_MAX_INSTANCES: usize = 2;
-static mut SIMPLE_ADC_HANDLERS: [Option<&'static dyn rs_esprit::AdcHandler>; ADC_MAX_INSTANCES] = [None, None];
-static mut TIMING_ADC_HANDLERS: [Option<&'static dyn rs_esprit::AdcHandler>; ADC_MAX_INSTANCES] = [None, None];
 
-impl rs_esprit::SimpleAdc for SimpleAdc {
-    fn read(&self) -> i32 {
-        let val = self.read();
-        unsafe {
-            if (self.instance as usize) < ADC_MAX_INSTANCES {
-                if let Some(handler) = SIMPLE_ADC_HANDLERS[self.instance as usize] {
-                    handler.on_conversion_complete(val as u16);
-                }
-            }
+/// One handler slot per ADC instance: `ADC0`'s end-of-conversion and `ADC1`'s are
+/// independent.
+static HANDLERS: HandlerTable<dyn adc::AdcHandler, ADC_MAX_INSTANCES> = HandlerTable::new();
+
+/// Sample-time codes of the GD32 SAR: 1.5, 7.5, 13.5, 28.5, 41.5, 55.5, 71.5 and
+/// 239.5 `clk_adc` cycles, in `SMPT` order (datasheet §12.4.4).
+const SMPT_WINDOWS_CYCLES: [u32; 8] = [2, 8, 14, 29, 42, 56, 72, 240];
+
+/// The smallest `SMPT` code whose window covers `sample_time_ns`.
+///
+/// Pure so the arithmetic is testable without an ADC; `adc_hz` is the ADC clock
+/// (`APB2 / 2…8`, 72 MHz on the F303 at boot).
+fn smpt_code(sample_time_ns: u32, adc_hz: u32) -> u32 {
+    let cycles = ((sample_time_ns as u64 * adc_hz as u64) + 999_999_999) / 1_000_000_000;
+    let mut code = SMPT_WINDOWS_CYCLES.len() as u32 - 1;
+    for (index, window) in SMPT_WINDOWS_CYCLES.iter().enumerate() {
+        if *window as u64 >= cycles {
+            code = index as u32;
+            break;
         }
-        val
+    }
+    code
+}
+
+impl adc::Adc for SimpleAdc {
+    /// `sample_time_ns` is mapped onto the SAR's `SMPT` code (`0` keeps the
+    /// current setting); `averaging` is applied by reading that many times.
+    fn configure(&mut self, config: &adc::AdcConfig) -> Result<()> {
+        if config.averaging > MAX_AVERAGING {
+            return Err(Error::InvalidConfig);
+        }
+        if config.sample_time_ns != 0 {
+            let adc_hz = rs_rcu_bluepill::get_clock(Peripheral::Adc0);
+            self.set_smpt(smpt_code(config.sample_time_ns, adc_hz));
+        }
+        self.averaging = config.averaging.max(1);
+        Ok(())
     }
 
-    fn set_handler(&mut self, handler: Option<&'static dyn rs_esprit::AdcHandler>) {
-        unsafe {
-            if (self.instance as usize) < ADC_MAX_INSTANCES {
-                SIMPLE_ADC_HANDLERS[self.instance as usize] = handler;
-            }
+    fn read(&mut self) -> Result<u16> {
+        let count = self.averaging.max(1) as u32;
+        let mut sum = 0u32;
+        for _ in 0..count {
+            sum += self.read_raw() as u32;
         }
+        let value = (sum / count) as u16;
+        if let Some(handler) = HANDLERS.get(self.instance as usize) {
+            handler.on_conversion(value);
+        }
+        Ok(value)
+    }
+
+    fn set_handler(&mut self, handler: Option<&'static dyn adc::AdcHandler>) {
+        HANDLERS.set(self.instance as usize, handler);
     }
 }
 
-impl rs_esprit::TimingAdc for TimingAdc {
-    fn set_source(&mut self, timer: u32, channel: u32, fq: u32, pins: &[u32]) -> bool {
-        let count = pins.len().min(16);
-        let mut pin_objs = [Pin::PA0; 16];
-        for i in 0..count {
-            pin_objs[i] = Pin::from(pins[i]);
+impl adc::ScanAdc for TimingAdc {
+    /// The GD32 sequence is a list of channels, so `sources` carries the channel
+    /// numbers; `fq_hz` is programmed through the trigger timer.
+    fn configure(&mut self, config: &adc::ScanConfig<'_>) -> Result<()> {
+        if config.sources.is_empty() || config.sources.len() > MAX_SCAN_SOURCES {
+            return Err(Error::InvalidConfig);
         }
-        self.set_source(timer, channel, fq, &pin_objs[..count])
+        let mut pin_objs = [Pin::PA0; MAX_SCAN_SOURCES];
+        for (slot, number) in pin_objs.iter_mut().zip(config.sources) {
+            *slot = Pin::from(*number);
+        }
+        let count = config.sources.len();
+        if self.set_source(0, 0, config.fq_hz, &pin_objs[..count]) {
+            Ok(())
+        } else {
+            Err(Error::InvalidConfig)
+        }
     }
 
-    fn multi_read(&mut self, nb_sample_per_channel: u32, output: &mut [u16]) -> bool {
-        let res = self.multi_read(nb_sample_per_channel, output);
-        if res {
-            unsafe {
-                if (self.instance as usize) < ADC_MAX_INSTANCES {
-                    if let Some(handler) = TIMING_ADC_HANDLERS[self.instance as usize] {
-                        handler.on_sequence_complete(output);
-                    }
-                }
-            }
-        }
-        res
+    fn samples_per_scan(&self) -> usize {
+        self.configured_pins_count() as usize
     }
 
-    fn set_handler(&mut self, handler: Option<&'static dyn rs_esprit::AdcHandler>) {
-        unsafe {
-            if (self.instance as usize) < ADC_MAX_INSTANCES {
-                TIMING_ADC_HANDLERS[self.instance as usize] = handler;
-            }
+    fn read(&mut self, output: &mut [u16]) -> Result<usize> {
+        let (per_channel, count) = self.split_len(output.len())?;
+        if self.multi_read(per_channel, &mut output[..count]) {
+            Ok(count)
+        } else {
+            Err(Error::Busy)
         }
+    }
+
+    /// This backend reads whole blocks (no DMA completion interrupt of its own),
+    /// so the completion runs as soon as the samples are in memory — the same
+    /// contract the trait asks for, only with a shorter latency.
+    fn start_async(&mut self, output: &mut [u16]) -> Result<()> {
+        let (per_channel, count) = self.split_len(output.len())?;
+        if !self.multi_read(per_channel, &mut output[..count]) {
+            return Err(Error::Busy);
+        }
+        if let Some(handler) = HANDLERS.get(self.instance as usize) {
+            handler.on_scan_complete(&output[..count]);
+        }
+        Ok(())
+    }
+
+    fn is_busy(&self) -> bool {
+        false
+    }
+
+    fn set_handler(&mut self, handler: Option<&'static dyn adc::AdcHandler>) {
+        HANDLERS.set(self.instance as usize, handler);
     }
 }
 

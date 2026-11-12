@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use rs_bluepill::{ADC1_BASE, ADC2_BASE, ADC3_BASE};
+use rs_bluepill::adc_base;
 
 #[repr(C)]
 pub struct AdcRegisters {
@@ -31,13 +31,16 @@ pub struct AdcRegisters {
 }
 
 impl AdcRegisters {
+    /// Register block of ADC `instance` (`0` = ADC1, `1` = ADC2, `2` = ADC3).
+    ///
+    /// The third ADC exists on the ARM side only (STM32F1 high-density /
+    /// GD32F30x); CH32V3 has two, so its map answers `None` and this panics with
+    /// the same message as an out-of-range instance would.
     #[inline(always)]
     pub fn ptr(instance: u32) -> *mut Self {
-        match instance {
-            0 => ADC1_BASE as *mut Self, // ADC0 (ADC1 in STM32 terminology)
-            1 => ADC2_BASE as *mut Self, // ADC1
-            2 => ADC3_BASE as *mut Self, // ADC2
-            _ => panic!("Invalid ADC instance"),
+        match adc_base(instance) {
+            Some(base) => base as *mut Self,
+            None => panic!("Invalid ADC instance"),
         }
     }
 }

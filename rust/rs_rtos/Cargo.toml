@@ -6,6 +6,9 @@ edition = "2024"
 [dependencies]
 cty = "0.2.2"
 cfg-if = "1.0"
+# `sync_cell::SyncCell` runs its short critical section through this crate; the
+# implementation is installed by `rust_esprit` (`set_impl!` over FreeRTOS).
+critical-section = "1.2"
 
 [features]
 default = []

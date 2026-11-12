@@ -3,12 +3,25 @@
 pub mod constants;
 pub mod registers;
 
+// The chip-specific half of the register map: channel count, global block,
+// `CTRL_TRIG` fields and DREQ numbers. This is the **one** place the chip is
+// chosen — `rp2350` wins when both features are set, because `rust_esprit`'s
+// `rp2350` implies its `rp2040`. The `#[path]`s keep the files flat in `src/`.
+#[cfg(feature = "rp2350")]
+#[path = "registers_rp2350.rs"]
+mod registers_chip;
+
+#[cfg(not(feature = "rp2350"))]
+#[path = "registers_rp2040.rs"]
+mod registers_chip;
+
 pub use constants::*;
 pub use registers::*;
+pub use registers_chip::*;
 
 use core::ffi::c_void;
-use portable_atomic::{AtomicBool, AtomicU16, Ordering};
-use rs_esprit::BinarySemaphore;
+use portable_atomic::{AtomicBool, AtomicPtr, AtomicU16, AtomicUsize, Ordering};
+use rs_rtos::BinarySemaphore;
 
 // External C interrupt functions provided by the RP2040 platform SDK / runtime.
 unsafe extern "C" {
@@ -25,26 +38,68 @@ static DMA_CHANNELS_IN_USE: AtomicU16 = AtomicU16::new(0);
 /// Tracks whether the DMA IRQ 1 handler has been installed.
 static IRQ_INSTALLED: AtomicBool = AtomicBool::new(false);
 
-/// Per-channel callback table for DMA completion.
-struct ChannelCallback {
-    cb: Option<unsafe extern "C" fn(cookie: *mut c_void)>,
-    cookie: *mut c_void,
+/// Completion callback of each channel, split into its two words so the DMA ISR
+/// can read it without a lock: `CALLBACKS[i]` is the function's address (`0` =
+/// no callback) and `COOKIES[i]` is the argument it is called with.
+///
+/// Written only through [`publish`] / [`unpublish`] and read only through
+/// [`claimed`], which is what keeps the pair consistent across the GDB task and
+/// the DMA interrupt: the cookie is stored first (`Relaxed`) and the address
+/// that publishes it second (`Release`), the ISR reads the address with
+/// `Acquire` before the cookie. A `static mut` of a `{ cb, cookie }` struct
+/// could not do that — it is two words, so an interrupt taken between the two
+/// stores would hand the new callback the old cookie.
+static CALLBACKS: [AtomicUsize; DMA_MAX_CHANNELS] =
+    [const { AtomicUsize::new(0) }; DMA_MAX_CHANNELS];
+static COOKIES: [AtomicPtr<c_void>; DMA_MAX_CHANNELS] =
+    [const { AtomicPtr::new(core::ptr::null_mut()) }; DMA_MAX_CHANNELS];
+
+/// Arm `channel`'s completion callback and the value it is called with.
+fn publish(channel: usize, cb: unsafe extern "C" fn(cookie: *mut c_void), cookie: *mut c_void) {
+    COOKIES[channel].store(cookie, Ordering::Relaxed);
+    // Release: everything above is visible to whoever sees this address.
+    CALLBACKS[channel].store(cb as usize, Ordering::Release);
 }
 
-static mut CHANNEL_CALLBACKS: [ChannelCallback; DMA_MAX_CHANNELS] = [
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-    ChannelCallback { cb: None, cookie: core::ptr::null_mut() },
-];
+/// Disarm `channel`'s callback. The address goes first, so an interrupt that
+/// lands mid-way already sees "no callback" instead of a stale cookie.
+fn unpublish(channel: usize) {
+    CALLBACKS[channel].store(0, Ordering::Release);
+    COOKIES[channel].store(core::ptr::null_mut(), Ordering::Relaxed);
+}
+
+/// The callback armed on `channel`, with its cookie, or `None`.
+fn claimed(channel: usize) -> Option<(unsafe extern "C" fn(cookie: *mut c_void), *mut c_void)> {
+    // Acquire pairs with the `Release` in `publish`: the cookie stored before the
+    // address is the one this load returns.
+    let address = CALLBACKS[channel].load(Ordering::Acquire);
+    if address == 0 {
+        return None;
+    }
+    // SAFETY: the only writer of this slot is `publish`, which is given a
+    // function pointer of exactly this type (and the cookie that goes with it).
+    let cb = unsafe { core::mem::transmute::<usize, unsafe extern "C" fn(*mut c_void)>(address) };
+    Some((cb, COOKIES[channel].load(Ordering::Relaxed)))
+}
+
+/// Spin until `ready()` says yes, giving up after [`POLL_LIMIT`] iterations.
+///
+/// Every wait in this driver goes through here, so the timeout policy — the
+/// budget, the `spin_loop` hint, and "gave up" meaning `false` — lives in one
+/// place. A channel that never reports done makes the caller return instead of
+/// hanging the probe.
+#[inline]
+fn wait_until(ready: impl Fn() -> bool) -> bool {
+    let mut budget = POLL_LIMIT;
+    while !ready() {
+        if budget == 0 {
+            return false;
+        }
+        budget -= 1;
+        core::hint::spin_loop();
+    }
+    true
+}
 
 /// Unreset the DMA peripheral if held in reset.
 pub fn unreset_dma() {
@@ -55,9 +110,10 @@ pub fn unreset_dma() {
         let current = core::ptr::read_volatile(reset_reg);
         if (current & RESET_BIT_DMA) != 0 {
             core::ptr::write_volatile(reset_reg, current & !RESET_BIT_DMA);
-            while (core::ptr::read_volatile(done_reg) & RESET_BIT_DMA) == 0 {
-                core::hint::spin_loop();
-            }
+            // Deliberately unbounded no more: a DMA that never leaves reset shows
+            // up as a bounded failure in the first channel operation, which beats
+            // hanging the probe here.
+            let _ = wait_until(|| (core::ptr::read_volatile(done_reg) & RESET_BIT_DMA) != 0);
         }
     }
 }
@@ -71,14 +127,14 @@ unsafe extern "C" fn dma_irq1_handler() {
         core::ptr::write_volatile(core::ptr::addr_of_mut!((*dma).ints1), ints1);
     }
 
-    for i in 0..DMA_MAX_CHANNELS {
-        if (ints1 & (1 << i)) != 0 {
-            unsafe {
-                let entry = &CHANNEL_CALLBACKS[i];
-                if let Some(cb) = entry.cb {
-                    cb(entry.cookie);
-                }
-            }
+    for channel in 0..DMA_MAX_CHANNELS {
+        if ints1 & (1 << channel) == 0 {
+            continue;
+        }
+        if let Some((cb, cookie)) = claimed(channel) {
+            // SAFETY: `claimed` only returns a pointer that `publish` stored from
+            // this very signature, and the cookie that was stored with it.
+            unsafe { cb(cookie) }
         }
     }
 }
@@ -148,6 +204,9 @@ impl DmaChannel {
     #[inline(always)]
     pub fn regs(&self) -> *mut DmaChannelRegisters {
         let dma = DMA_BASE as *mut DmaRegisters;
+        // `addr_of_mut!` avoids creating a reference, but the place expression
+        // still projects through the raw pointer, which rustc requires to be
+        // `unsafe`. The pointer is `DMA_BASE` + a claimed channel, so it is live.
         unsafe { core::ptr::addr_of_mut!((*dma).channels[self.channel_idx]) }
     }
 
@@ -160,15 +219,7 @@ impl DmaChannel {
 
     /// Wait until the channel is no longer busy, with timeout budget.
     pub fn wait_busy(&self) -> bool {
-        let mut budget = POLL_LIMIT;
-        while self.is_busy() {
-            if budget == 0 {
-                return false;
-            }
-            budget -= 1;
-            core::hint::spin_loop();
-        }
-        true
+        wait_until(|| !self.is_busy())
     }
 
     /// Abort an ongoing transfer on this channel.
@@ -177,9 +228,10 @@ impl DmaChannel {
             let dma = DMA_BASE as *mut DmaRegisters;
             let mask = 1u32 << self.channel_idx;
             core::ptr::write_volatile(core::ptr::addr_of_mut!((*dma).chan_abort), mask);
-            while (core::ptr::read_volatile(core::ptr::addr_of!((*dma).chan_abort)) & mask) != 0 {
-                core::hint::spin_loop();
-            }
+            // Bounded: `wait_busy` right after reports whether it stopped.
+            let _ = wait_until(|| {
+                (core::ptr::read_volatile(core::ptr::addr_of!((*dma).chan_abort)) & mask) == 0
+            });
         }
         self.wait_busy();
     }
@@ -203,13 +255,11 @@ impl DmaChannel {
     }
 
     /// Attach a completion callback.
+    ///
+    /// The slot is published before the interrupt is enabled, so an interrupt
+    /// that fires early sees the callback (or none), never half of it.
     pub fn attach_callback(&mut self, cb: unsafe extern "C" fn(cookie: *mut c_void), cookie: *mut c_void) {
-        unsafe {
-            CHANNEL_CALLBACKS[self.channel_idx] = ChannelCallback {
-                cb: Some(cb),
-                cookie,
-            };
-        }
+        publish(self.channel_idx, cb, cookie);
         self.enable_interrupt();
     }
 
@@ -221,31 +271,17 @@ impl DmaChannel {
     /// Detach any attached callback and disable channel interrupts.
     pub fn detach_callback(&mut self) {
         self.disable_interrupt();
-        unsafe {
-            CHANNEL_CALLBACKS[self.channel_idx] = ChannelCallback {
-                cb: None,
-                cookie: core::ptr::null_mut(),
-            };
-        }
+        unpublish(self.channel_idx);
     }
 
     /// Configure a memory-to-peripheral (TX) transfer.
-    pub fn configure_tx(
-        &mut self,
-        src: *const u8,
-        dst_addr: u32,
-        count: u32,
-        width: DmaTransferWidth,
-        treq: u32,
-        incr_read: bool,
-        trigger: bool,
-    ) {
+    pub fn configure_tx(&mut self, src: *const u8, dst_addr: u32, count: u32, cfg: DmaTransferConfig) {
         let mut ctrl: u32 = DMA_CTRL_EN
-            | ((width as u32) << DMA_CTRL_DATA_SIZE_SHIFT)
-            | (treq << DMA_CTRL_TREQ_SHIFT)
+            | ((cfg.width as u32) << DMA_CTRL_DATA_SIZE_SHIFT)
+            | (cfg.treq << DMA_CTRL_TREQ_SHIFT)
             | ((self.channel_idx as u32) << DMA_CTRL_CHAIN_TO_SHIFT); // chain to self = no chaining
 
-        if incr_read {
+        if cfg.increment {
             ctrl |= DMA_CTRL_INCR_READ;
         }
 
@@ -254,7 +290,7 @@ impl DmaChannel {
             core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).read_addr), src as u32);
             core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).write_addr), dst_addr);
             core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).trans_count), count);
-            if trigger {
+            if cfg.trigger {
                 core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).ctrl_trig), ctrl);
             } else {
                 core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).al1_ctrl), ctrl);
@@ -263,22 +299,13 @@ impl DmaChannel {
     }
 
     /// Configure a peripheral-to-memory (RX) transfer.
-    pub fn configure_rx(
-        &mut self,
-        src_addr: u32,
-        dst: *mut u8,
-        count: u32,
-        width: DmaTransferWidth,
-        treq: u32,
-        incr_write: bool,
-        trigger: bool,
-    ) {
+    pub fn configure_rx(&mut self, src_addr: u32, dst: *mut u8, count: u32, cfg: DmaTransferConfig) {
         let mut ctrl: u32 = DMA_CTRL_EN
-            | ((width as u32) << DMA_CTRL_DATA_SIZE_SHIFT)
-            | (treq << DMA_CTRL_TREQ_SHIFT)
+            | ((cfg.width as u32) << DMA_CTRL_DATA_SIZE_SHIFT)
+            | (cfg.treq << DMA_CTRL_TREQ_SHIFT)
             | ((self.channel_idx as u32) << DMA_CTRL_CHAIN_TO_SHIFT);
 
-        if incr_write {
+        if cfg.increment {
             ctrl |= DMA_CTRL_INCR_WRITE;
         }
 
@@ -287,7 +314,7 @@ impl DmaChannel {
             core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).read_addr), src_addr);
             core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).write_addr), dst as u32);
             core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).trans_count), count);
-            if trigger {
+            if cfg.trigger {
                 core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).ctrl_trig), ctrl);
             } else {
                 core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).al1_ctrl), ctrl);
@@ -460,3 +487,206 @@ impl Drop for DmaChannel {
         DMA_CHANNELS_IN_USE.fetch_and(!mask, Ordering::SeqCst);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CHANNEL: usize = 5;
+
+    unsafe extern "C" fn handler(cookie: *mut c_void) {
+        // Never called from a host test; `publish`/`claimed` only pass the
+        // address around.
+        let _ = cookie;
+    }
+
+    /// A published slot comes back with the callback *and* the cookie that was
+    /// published with it.
+    #[test]
+    fn publish_and_claim_carry_the_cookie_with_the_callback() {
+        let cookie = 0x1234_5678 as *mut c_void;
+        publish(CHANNEL, handler, cookie);
+
+        let (cb, claimed_cookie) = claimed(CHANNEL).expect("published slot");
+        let expected = handler as unsafe extern "C" fn(cookie: *mut c_void) as usize;
+        assert_eq!(cb as usize, expected);
+        assert_eq!(claimed_cookie, cookie);
+    }
+
+    /// An untouched channel has no callback, so the ISR calls nothing.
+    #[test]
+    fn an_unpublished_channel_claims_nothing() {
+        assert!(claimed(CHANNEL + 1).is_none());
+    }
+
+    /// Detaching clears the address first: a later claim — the ISR running after
+    /// `detach_callback` — sees "none", never a stale cookie.
+    #[test]
+    fn unpublish_clears_the_slot() {
+        publish(CHANNEL, handler, 0x42 as *mut c_void);
+        unpublish(CHANNEL);
+
+        assert!(claimed(CHANNEL).is_none());
+        assert_eq!(CALLBACKS[CHANNEL].load(Ordering::Acquire), 0);
+        assert!(COOKIES[CHANNEL].load(Ordering::Acquire).is_null());
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  The MCU-agnostic DMA contract
+// ---------------------------------------------------------------------------
+
+use rs_mcu_traits::dma as hal;
+use rs_mcu_traits::handler::HandlerTable;
+
+/// One handler slot per channel.
+static HANDLERS: HandlerTable<dyn hal::DmaHandler, DMA_MAX_CHANNELS> = HandlerTable::new();
+
+/// Second step of the completion hand-off: the channel callback is a raw `extern
+/// "C"` function, so the typed handler is looked up by channel index (the cookie).
+unsafe extern "C" fn completion_trampoline(cookie: *mut c_void) {
+    // SAFETY: the handler was installed before the transfer was started, and the
+    // interrupt is the only reader.
+    if let Some(handler) = unsafe { HANDLERS.isr_get(cookie as usize) } {
+        handler.on_complete();
+    }
+}
+
+/// The RP2xxx DMA controller: it owns the channels and hands out indices.
+///
+/// A driver keeps its index for its whole life, so the channel is claimed once and
+/// only released when the driver goes away.
+pub struct Controller {
+    channels: [Option<DmaChannel>; DMA_MAX_CHANNELS],
+    /// Completion semaphores, one per channel: `wait` takes the one of its
+    /// channel, the interrupt gives it.
+    done: [BinarySemaphore; DMA_MAX_CHANNELS],
+}
+
+impl Controller {
+    /// An empty controller, usable in a `static`.
+    pub const fn new() -> Self {
+        Self {
+            channels: [const { None }; DMA_MAX_CHANNELS],
+            done: [const { BinarySemaphore::new() }; DMA_MAX_CHANNELS],
+        }
+    }
+}
+
+impl Default for Controller {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// `hal` width → the driver's `CTRL.DATA_SIZE`.
+const fn dma_width(width: hal::TransferWidth) -> DmaTransferWidth {
+    match width {
+        hal::TransferWidth::Byte => DmaTransferWidth::Byte,
+        hal::TransferWidth::HalfWord => DmaTransferWidth::HalfWord,
+        hal::TransferWidth::Word => DmaTransferWidth::Word,
+    }
+}
+
+impl hal::Dma for Controller {
+    type Channel = u8;
+
+    fn claim(&mut self) -> rs_mcu_traits::Result<u8> {
+        for (index, slot) in self.channels.iter_mut().enumerate() {
+            if slot.is_none()
+                && let Some(channel) = DmaChannel::claim()
+            {
+                *slot = Some(channel);
+                return Ok(index as u8);
+            }
+        }
+        Err(rs_mcu_traits::Error::Busy)
+    }
+
+    fn release(&mut self, channel: u8) {
+        if let Some(slot) = self.channels.get_mut(channel as usize) {
+            *slot = None; // `Drop` aborts the transfer and frees the channel.
+        }
+    }
+
+    fn start_write(
+        &mut self,
+        channel: u8,
+        buffer: &[u8],
+        peripheral_address: u32,
+        width: hal::TransferWidth,
+        request: Option<u32>,
+    ) -> rs_mcu_traits::Result<()> {
+        let index = channel as usize;
+        let (channels, done) = (&mut self.channels, &self.done);
+        let Some(dma) = channels.get_mut(index).and_then(Option::as_mut) else {
+            return Err(rs_mcu_traits::Error::InvalidConfig);
+        };
+        let count = hal::elements(buffer, width) as u32;
+        if count == 0 {
+            return Err(rs_mcu_traits::Error::BufferTooSmall);
+        }
+        done[index].try_take();
+        dma.detach_callback();
+        dma.attach_completion_semaphore(&done[index]);
+        dma.configure_tx(
+            buffer.as_ptr(),
+            peripheral_address,
+            count,
+            DmaTransferConfig::new(dma_width(width), request.unwrap_or(DREQ_PERMANENT)),
+        );
+        Ok(())
+    }
+
+    fn start_read(
+        &mut self,
+        channel: u8,
+        buffer: &mut [u8],
+        peripheral_address: u32,
+        width: hal::TransferWidth,
+        request: Option<u32>,
+    ) -> rs_mcu_traits::Result<()> {
+        let index = channel as usize;
+        let count = hal::elements(buffer, width) as u32;
+        if count == 0 {
+            return Err(rs_mcu_traits::Error::BufferTooSmall);
+        }
+        let (channels, done) = (&mut self.channels, &self.done);
+        let Some(dma) = channels.get_mut(index).and_then(Option::as_mut) else {
+            return Err(rs_mcu_traits::Error::InvalidConfig);
+        };
+        done[index].try_take();
+        dma.detach_callback();
+        dma.attach_completion_semaphore(&done[index]);
+        dma.configure_rx(
+            peripheral_address,
+            buffer.as_mut_ptr(),
+            count,
+            DmaTransferConfig::new(dma_width(width), request.unwrap_or(DREQ_PERMANENT)),
+        );
+        Ok(())
+    }
+
+    fn wait(&mut self, channel: u8, timeout_ms: u32) -> rs_mcu_traits::Result<()> {
+        match self.done.get(channel as usize) {
+            Some(semaphore) if semaphore.take_timeout(timeout_ms) => Ok(()),
+            Some(_) => Err(rs_mcu_traits::Error::Timeout),
+            None => Err(rs_mcu_traits::Error::InvalidConfig),
+        }
+    }
+
+    /// The completion runs in the DMA interrupt: the channel's callback is the
+    /// trampoline, and the index it is handed is the cookie.
+    fn set_handler(&mut self, channel: u8, handler: Option<&'static dyn hal::DmaHandler>) {
+        let index = channel as usize;
+        HANDLERS.set(index, handler);
+        let Some(dma) = self.channels.get_mut(index).and_then(Option::as_mut) else {
+            return;
+        };
+        match handler {
+            Some(_) => dma.attach_callback(completion_trampoline, index as *mut c_void),
+            None => dma.detach_callback(),
+        }
+    }
+}
+

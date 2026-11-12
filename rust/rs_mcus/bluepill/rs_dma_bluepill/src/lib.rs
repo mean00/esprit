@@ -9,7 +9,7 @@ pub use shim::*;
 
 use registers::*;
 use rs_rcu_bluepill::{Peripheral, enable};
-use rs_esprit::BinarySemaphore;
+use rs_rtos::BinarySemaphore;
 use core::ptr::{read_volatile, write_volatile};
 use core::sync::atomic::{AtomicU8, Ordering};
 
@@ -401,6 +401,181 @@ impl DmaChannel {
     pub fn remaining_transfers(&self) -> u32 {
         let regs = self.regs();
         unsafe {
+
+// ---------------------------------------------------------------------------
+//  The MCU-agnostic DMA contract
+// ---------------------------------------------------------------------------
+
+use rs_mcu_traits::dma as hal;
+use rs_mcu_traits::handler::HandlerTable;
+
+use core::ffi::c_void;
+
+/// DMA0 has 7 channels, DMA1 has 5: 12 handles in total, numbered
+/// `engine * 7 + channel`.
+const DMA0_CHANNELS: usize = 7;
+const DMA1_CHANNELS: usize = 5;
+const CONTROLLER_CHANNELS: usize = DMA0_CHANNELS + DMA1_CHANNELS;
+
+/// One handler slot per handle.
+static HANDLERS: HandlerTable<dyn hal::DmaHandler, CONTROLLER_CHANNELS> = HandlerTable::new();
+
+/// Second step of the completion hand-off: the channel callback is a raw `extern
+/// "C"` function, so the typed handler is looked up by handle (the cookie). The
+/// `half` flag is the GD32 half-transfer flag, which this contract does not use.
+unsafe extern "C" fn completion_trampoline(_half: bool, cookie: *mut c_void) {
+    // SAFETY: the handler was installed before the transfer was started, and the
+    // interrupt is the only reader.
+    if let Some(handler) = unsafe { HANDLERS.isr_get(cookie as usize) } {
+        handler.on_complete();
+    }
+}
+
+/// The GD32 DMA controller: it owns the channels it hands out.
+pub struct Controller {
+    channels: [Option<DmaChannel>; CONTROLLER_CHANNELS],
+    /// Completion semaphores, one per handle.
+    done: [BinarySemaphore; CONTROLLER_CHANNELS],
+}
+
+impl Controller {
+    /// An empty controller, usable in a `static`.
+    pub const fn new() -> Self {
+        Self {
+            channels: [const { None }; CONTROLLER_CHANNELS],
+            done: [const { BinarySemaphore::new() }; CONTROLLER_CHANNELS],
+        }
+    }
+
+    /// The `(engine, index)` of a handle, or `None` when it names no channel.
+    fn split(handle: u8) -> Option<(DmaEngine, usize)> {
+        let handle = handle as usize;
+        let (engine, index) = (handle / DMA0_CHANNELS, handle % DMA0_CHANNELS);
+        match engine {
+            0 if index < DMA0_CHANNELS => Some((DmaEngine::Dma0, index)),
+            1 if index < DMA1_CHANNELS => Some((DmaEngine::Dma1, index)),
+            _ => None,
+        }
+    }
+}
+
+impl Default for Controller {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl hal::Dma for Controller {
+    type Channel = u8;
+
+    fn claim(&mut self) -> rs_mcu_traits::Result<u8> {
+        for (handle, slot) in self.channels.iter_mut().enumerate() {
+            if slot.is_some() {
+                continue;
+            }
+            let Some((engine, index)) = Self::split(handle as u8) else {
+                continue;
+            };
+            if DmaChannel::is_channel_in_use(engine, index) {
+                continue;
+            }
+            *slot = Some(DmaChannel::new(engine, index));
+            return Ok(handle as u8);
+        }
+        Err(rs_mcu_traits::Error::Busy)
+    }
+
+    fn release(&mut self, channel: u8) {
+        if let Some(slot) = self.channels.get_mut(channel as usize) {
+            if let Some(dma) = slot.as_mut() {
+                dma.end_transfer();
+                dma.detach_callback();
+            }
+            *slot = None;
+        }
+    }
+
+    fn start_write(
+        &mut self,
+        channel: u8,
+        buffer: &[u8],
+        peripheral_address: u32,
+        width: hal::TransferWidth,
+        _request: Option<u32>,
+    ) -> rs_mcu_traits::Result<()> {
+        let count = hal::elements(buffer, width) as u32;
+        if count == 0 {
+            return Err(rs_mcu_traits::Error::BufferTooSmall);
+        }
+        let index = channel as usize;
+        let (channels, done) = (&mut self.channels, &self.done);
+        let Some(dma) = channels.get_mut(index).and_then(Option::as_mut) else {
+            return Err(rs_mcu_traits::Error::InvalidConfig);
+        };
+        done[index].try_take();
+        dma.attach_completion_semaphore(&done[index]);
+        // The GD32 channel is paced by its peripheral (no DREQ selection): the
+        // request number of the trait is a no-op here.
+        dma.begin_tx_transfer(
+            peripheral_address,
+            buffer.as_ptr() as u32,
+            count,
+            width == hal::TransferWidth::HalfWord,
+            width == hal::TransferWidth::HalfWord,
+        );
+        Ok(())
+    }
+
+    fn start_read(
+        &mut self,
+        channel: u8,
+        buffer: &mut [u8],
+        peripheral_address: u32,
+        width: hal::TransferWidth,
+        _request: Option<u32>,
+    ) -> rs_mcu_traits::Result<()> {
+        let count = hal::elements(buffer, width) as u32;
+        if count == 0 {
+            return Err(rs_mcu_traits::Error::BufferTooSmall);
+        }
+        let index = channel as usize;
+        let (channels, done) = (&mut self.channels, &self.done);
+        let Some(dma) = channels.get_mut(index).and_then(Option::as_mut) else {
+            return Err(rs_mcu_traits::Error::InvalidConfig);
+        };
+        done[index].try_take();
+        dma.attach_completion_semaphore(&done[index]);
+        dma.begin_rx_transfer(
+            peripheral_address,
+            buffer.as_mut_ptr() as u32,
+            count,
+            width == hal::TransferWidth::HalfWord,
+            width == hal::TransferWidth::HalfWord,
+        );
+        Ok(())
+    }
+
+    fn wait(&mut self, channel: u8, timeout_ms: u32) -> rs_mcu_traits::Result<()> {
+        match self.done.get(channel as usize) {
+            Some(semaphore) if semaphore.take_timeout(timeout_ms) => Ok(()),
+            Some(_) => Err(rs_mcu_traits::Error::Timeout),
+            None => Err(rs_mcu_traits::Error::InvalidConfig),
+        }
+    }
+
+    fn set_handler(&mut self, channel: u8, handler: Option<&'static dyn hal::DmaHandler>) {
+        let index = channel as usize;
+        HANDLERS.set(index, handler);
+        let Some(dma) = self.channels.get_mut(index).and_then(Option::as_mut) else {
+            return;
+        };
+        match handler {
+            Some(_) => dma.attach_callback(completion_trampoline, index as *mut c_void),
+            None => dma.detach_callback(),
+        }
+    }
+}
+
             let ch_regs = &(*regs).channels[self.channel_idx];
             read_volatile(&ch_regs.cndtr)
         }

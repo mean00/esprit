@@ -33,14 +33,15 @@ use core::ptr::{read_volatile, write_volatile};
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use rs_dma_bluepill::{DmaChannel, DmaEngine};
-use rs_esprit::BinarySemaphore;
 use rs_gpio_bluepill::{Mode, Pin};
-use rs_rcu_bluepill::{enable, Peripheral};
+use rs_rcu_bluepill::{Peripheral, enable};
+use rs_rtos::BinarySemaphore;
 use rs_rtos::with_critical;
 
 use crate::registers::{
-    UartRegisters, USART_CTL0_TEN, USART_CTL0_UEN, USART_CTL2_DMAT, USART_STAT_TC, USART_STAT_TBE,
-    UART_INSTANCE_1, UART_INSTANCE_2, UART0_DMA_TX_CHANNEL, UART1_DMA_TX_CHANNEL, UART2_DMA_TX_CHANNEL,
+    UART_INSTANCE_1, UART_INSTANCE_2, UART0_DMA_TX_CHANNEL, UART1_DMA_TX_CHANNEL,
+    UART2_DMA_TX_CHANNEL, USART_CTL0_TEN, USART_CTL0_UEN, USART_CTL2_DMAT, USART_STAT_TBE,
+    USART_STAT_TC, UartRegisters,
 };
 
 /// Ring size in bytes: `createLnSerialTxOnly(instance, true, true)` asks the
@@ -173,7 +174,11 @@ impl BufferedTx {
     fn count(&self) -> usize {
         let head = self.head.load(Ordering::Acquire);
         let tail = self.tail.load(Ordering::Acquire);
-        if head >= tail { head - tail } else { RING_SIZE - tail + head }
+        if head >= tail {
+            head - tail
+        } else {
+            RING_SIZE - tail + head
+        }
     }
 
     /// Bytes a writer may still push (`lnRingBuffer::free()`).
@@ -215,7 +220,11 @@ impl BufferedTx {
     fn read_ptr(&self) -> (*const u8, usize) {
         let head = self.head.load(Ordering::Acquire);
         let tail = self.tail.load(Ordering::Acquire);
-        let n = if head < tail { RING_SIZE - tail } else { head - tail };
+        let n = if head < tail {
+            RING_SIZE - tail
+        } else {
+            head - tail
+        };
         let base = unsafe { (*self.ring.get()).as_ptr() };
         // SAFETY: `tail < RING_SIZE` by construction (masked on every update).
         (unsafe { base.add(tail) }, n)
@@ -250,6 +259,27 @@ impl BufferedTx {
                 // that is the whole point of releasing the critical section.
                 self.room.take();
             }
+        }
+    }
+
+    /// Bytes queued but not sent yet (`0` = the ring and the DMA are idle).
+    pub fn pending(&self) -> usize {
+        let head = self.head.load(Ordering::Acquire);
+        let tail = self.tail.load(Ordering::Acquire);
+        if head >= tail {
+            head - tail
+        } else {
+            RING_SIZE - tail + head
+        }
+    }
+
+    /// Block until everything queued has left the shift register.
+    ///
+    /// The completion interrupt gives `room` after each chunk, so the loop
+    /// cannot spin: while `pending() > 0` at least one transfer is armed.
+    pub fn flush(&self) {
+        while self.pending() > 0 {
+            self.room.take();
         }
     }
 
@@ -371,4 +401,3 @@ impl BufferedTx {
 }
 
 // EOF
-

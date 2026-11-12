@@ -1,6 +1,6 @@
 #![no_std]
 
-//! Pure-Rust GPIO for the RP2040 and the RP2350: the `rs_esprit::gpio::GpioPin`
+//! Pure-Rust GPIO for the RP2040 and the RP2350: the `rs_mcu_traits::gpio::Gpio`
 //! super trait implemented straight on SIO / IO_BANK0 / PADS_BANK0
 //! (`registers.rs`, numbers from `rp2040.md`; the RP2350 has the same layout for
 //! every field used here). The RP2xxx sibling of
@@ -22,7 +22,8 @@
 pub mod registers;
 
 use registers::*;
-use rs_esprit::gpio::{EdgeTrigger, GpioInterruptHandler, GpioMode, GpioPin};
+use rs_mcu_traits::gpio::{self, PinMode};
+use rs_mcu_traits::Result;
 
 /// The bit of `pin` inside the SIO masks.
 fn bit(pin: u32) -> u32 {
@@ -125,16 +126,6 @@ pub enum Pin {
     NoPin = -1,
 }
 
-impl From<u32> for Pin {
-    /// Mirror of the C `(lnPin)number` cast, used where a pin arrives as a plain
-    /// number (the probe board table). Only the declared values are valid.
-    fn from(value: u32) -> Self {
-        // SAFETY: `Pin` is a `repr(i32)` enum; callers pass a board-table entry
-        // that was range-checked at build time.
-        unsafe { core::mem::transmute::<u32, Pin>(value) }
-    }
-}
-
 /// Pad bits for a pin that drives: 12 mA, fast slew, Schmitt on, input readable.
 /// (The C++ sets 12 mA + fast slew and leaves the input disabled; the input is
 /// enabled here so `read()` on an output pin reports the real level.)
@@ -142,72 +133,104 @@ const PAD_OUTPUT: u32 = (PAD_DRIVE_12MA << PAD_DRIVE_LSB) | PAD_SLEWFAST | PAD_S
 /// Pad bits for a pin whose driver must be off (input, or open drain released).
 const PAD_HIGH_Z: u32 = PAD_OD | PAD_SLEWFAST | PAD_SCHMITT;
 
-/// Emulated open drain, the same sequence as esprit's C++ `lnOpenDrainClose`:
-/// the latch is pulled to 0 and the *driver* is what opens or closes, so the pin
-/// is either driven low (`close`) or released to its pull-up.
-
-/// Configure the pad for `mode` (the hardware half of [`GpioPin::set_mode`]).
+/// Configure the pad for `mode` (the hardware half of [`gpio::Gpio::set_mode`]).
 ///
 ///   * `Output`            → FUNCSEL = SIO, output enable forced on, 12 mA
 ///   * `OutputOpenDrain`   → FUNCSEL = SIO, latch 0, pad output disabled (Hi-Z);
-///     [`GpioPin::open_drain_close`]`(true)` then enables the driver (line low)
+///     [`gpio::Gpio::open_drain`]`(true)` then enables the driver (line low)
 ///     and `(false)` disables it again (the external pull-up wins)
-///   * `InputFloating` / `InputPullUp` / `InputPullDown` → SIO, input enabled,
-///     driver disabled, pull as asked
-///   * `Floating`          → everything off (pad high impedance)
-///   * `Adc` / `Dac`       → FUNCSEL = NULL, input disabled (the RP2040 has no
-///     DAC; `Dac` is mapped like `Adc` so it cannot silently drive a pad)
-///   * `Uart` / `Spi` / `Pwm` → peripheral instance 0 (F2 / F1 / F4), which is
-///     what esprit's C++ `lnPinMode` hardcodes
-fn apply_mode(pin: u32, mode: GpioMode) {
+///   * `Input` / `InputPullUp` / `InputPullDown` → SIO, input enabled, driver
+///     disabled, pull as asked
+///   * `Analog`            → FUNCSEL = NULL, input disabled (the RP2040 has no
+///     DAC): the pad must not drive the analog input it shares
+///   * `AlternatePushPull` / `AlternateOpenDrain` → FUNCSEL = NULL, output
+///     enable follows the peripheral. The RP2xxx has no open-drain alternate
+///     function, and which peripheral is on the pad is a *family* decision, so
+///     the driver muxes it explicitly with [`Pin::set_function`] (F1 SPI, F2
+///     UART, F4 PWM…).
+fn apply_mode(pin: u32, mode: PinMode) {
     match mode {
-        GpioMode::Floating => {
-            write_pad(pin, PAD_HIGH_Z);
-            write_ctrl(pin, FUNCSEL_SIO, GPIO_CTRL_OE_DISABLE);
-        }
-        GpioMode::InputFloating => {
+        PinMode::Input => {
             write_pad(pin, PAD_HIGH_Z | PAD_IE);
             write_ctrl(pin, FUNCSEL_SIO, GPIO_CTRL_OE_DISABLE);
         }
-        GpioMode::InputPullUp => {
+        PinMode::InputPullUp => {
             write_pad(pin, PAD_HIGH_Z | PAD_IE | PAD_PUE);
             write_ctrl(pin, FUNCSEL_SIO, GPIO_CTRL_OE_DISABLE);
         }
-        GpioMode::InputPullDown => {
+        PinMode::InputPullDown => {
             write_pad(pin, PAD_HIGH_Z | PAD_IE | PAD_PDE);
             write_ctrl(pin, FUNCSEL_SIO, GPIO_CTRL_OE_DISABLE);
         }
-        GpioMode::Output => {
+        PinMode::Output => {
             write_pad(pin, PAD_OUTPUT);
             write_ctrl(pin, FUNCSEL_SIO, GPIO_CTRL_OE_ENABLE);
         }
-        // Start released; `open_drain_close` closes or opens the drain.
-        GpioMode::OutputOpenDrain => open_drain_close(pin, false),
-        GpioMode::Adc | GpioMode::Dac => {
+        // Start released; `open_drain` closes or opens the drain.
+        PinMode::OutputOpenDrain => open_drain_close(pin, false),
+        PinMode::Analog => {
             write_pad(pin, PAD_OD | PAD_SLEWFAST | PAD_SCHMITT);
             write_ctrl(pin, FUNCSEL_NULL, GPIO_CTRL_OE_DISABLE);
         }
-        GpioMode::Spi => {
-            write_pad(pin, PAD_OUTPUT);
-            write_ctrl(pin, FUNCSEL_SPI0, GPIO_CTRL_OE_NORMAL);
-        }
-        GpioMode::Uart | GpioMode::UartAlt => {
-            write_pad(pin, PAD_OUTPUT);
-            write_ctrl(pin, FUNCSEL_UART0, GPIO_CTRL_OE_NORMAL);
-        }
-        GpioMode::Pwm => {
-            write_pad(pin, PAD_OUTPUT);
-            write_ctrl(pin, FUNCSEL_PWM0, GPIO_CTRL_OE_NORMAL);
-        }
-        // RP2xxx has no open-drain alternate function (a peripheral's pad driver is
-        // push-pull): leave the pin unmuxed, mux it explicitly with `set_function`.
-        GpioMode::AlternatePushPull | GpioMode::AlternateOpenDrain => {
+        PinMode::AlternatePushPull | PinMode::AlternateOpenDrain => {
             write_ctrl(pin, FUNCSEL_NULL, GPIO_CTRL_OE_NORMAL)
         }
     }
 }
 
 impl Pin {
+    /// The pad with GPIO number `number` (`0` … `29`), or `None` for anything
+    /// else — including the two sentinels [`Pin::GPIO99`] and [`Pin::NoPin`],
+    /// which name no pad.
+    ///
+    /// This is the checked replacement for the `(lnPin)number` cast: a
+    /// `#[repr(i32)]` enum built from an out-of-range integer is undefined
+    /// behaviour, and a board table or a C caller can always hand one over. It is
+    /// a `const fn`, so a board table can turn its pin *number* into a [`Pin`] at
+    /// compile time and let a bad entry fail the build:
+    ///
+    /// ```ignore
+    /// const NRST: Pin = match Pin::from_number(BOARD.dev[DEV_NRST] as u32) {
+    ///     Some(pin) => pin,
+    ///     None => panic!("BOARD.dev[DEV_NRST] is not a real RP2xxx pad"),
+    /// };
+    /// ```
+    pub const fn from_number(number: u32) -> Option<Self> {
+        match number {
+            0 => Some(Self::GPIO0),
+            1 => Some(Self::GPIO1),
+            2 => Some(Self::GPIO2),
+            3 => Some(Self::GPIO3),
+            4 => Some(Self::GPIO4),
+            5 => Some(Self::GPIO5),
+            6 => Some(Self::GPIO6),
+            7 => Some(Self::GPIO7),
+            8 => Some(Self::GPIO8),
+            9 => Some(Self::GPIO9),
+            10 => Some(Self::GPIO10),
+            11 => Some(Self::GPIO11),
+            12 => Some(Self::GPIO12),
+            13 => Some(Self::GPIO13),
+            14 => Some(Self::GPIO14),
+            15 => Some(Self::GPIO15),
+            16 => Some(Self::GPIO16),
+            17 => Some(Self::GPIO17),
+            18 => Some(Self::GPIO18),
+            19 => Some(Self::GPIO19),
+            20 => Some(Self::GPIO20),
+            21 => Some(Self::GPIO21),
+            22 => Some(Self::GPIO22),
+            23 => Some(Self::GPIO23),
+            24 => Some(Self::GPIO24),
+            25 => Some(Self::GPIO25),
+            26 => Some(Self::GPIO26),
+            27 => Some(Self::GPIO27),
+            28 => Some(Self::GPIO28),
+            29 => Some(Self::GPIO29),
+            _ => None,
+        }
+    }
+
     /// This pin's number, `0` … `29`.
     pub fn number(self) -> u32 {
         self as u32
@@ -220,9 +243,14 @@ impl Pin {
     }
 }
 
-impl GpioPin for Pin {
-    fn write(&mut self, value: bool) {
-        drive(self.number(), value);
+/// One handler slot per pad (the RP2xxx IO_BANK0 interrupt is per pin).
+impl gpio::Gpio for Pin {
+    fn pin_number(&self) -> u32 {
+        self.number()
+    }
+
+    fn write(&mut self, high: bool) {
+        drive(self.number(), high);
     }
 
     fn read(&self) -> bool {
@@ -233,30 +261,28 @@ impl GpioPin for Pin {
         flip(self.number());
     }
 
-    fn set_mode(&mut self, mode: GpioMode) {
+    fn set_mode(&mut self, mode: PinMode) -> Result<()> {
         apply_mode(self.number(), mode);
+        Ok(())
     }
 
     /// RP2xxx pads have no per-pin clock speed: the electrical knob is the drive
-    /// strength, already set to 12 mA by [`GpioPin::set_mode`]. The speed is
-    /// therefore ignored, exactly like esprit's C++ `lnPinMode` ignores it.
-    fn set_mode_speed(&mut self, mode: GpioMode, _speed_mhz: u32) {
+    /// strength, already set to 12 mA by [`gpio::Gpio::set_mode`]. The speed is
+    /// therefore ignored.
+    fn set_mode_speed(&mut self, mode: PinMode, _speed_mhz: u32) -> Result<()> {
         apply_mode(self.number(), mode);
+        Ok(())
     }
 
-    fn open_drain_close(&mut self, close: bool) {
-        open_drain_close(self.number(), close);
+    fn open_drain(&mut self, drive_low: bool) -> Result<()> {
+        open_drain_close(self.number(), drive_low);
+        Ok(())
     }
-
-    /// GPIO interrupts are not routed yet: that needs IO_BANK0 `CPU0_INTE` plus a
-    /// handler table, and no caller of this driver needs them today.
-    fn enable_interrupt(&mut self, _trigger: EdgeTrigger) -> bool {
-        false
-    }
-
-    fn set_handler(&mut self, _handler: Option<&'static dyn GpioInterruptHandler>) {}
 }
 
+/// Emulated open drain, the same sequence as esprit's C++ `lnOpenDrainClose`:
+/// the latch is pulled to 0 and the *driver* is what opens or closes, so the pin
+/// is either driven low (`close`) or released to its pull-up.
 fn open_drain_close(pin: u32, close: bool) {
     drive(pin, false); // the drain can only pull down
     if close {
@@ -267,3 +293,29 @@ fn open_drain_close(pin: u32, close: bool) {
         write_ctrl(pin, FUNCSEL_SIO, GPIO_CTRL_OE_DISABLE);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every real pad survives the round trip `number` -> `Pin` -> `number`.
+    #[test]
+    fn from_number_accepts_every_real_pad() {
+        for number in 0u32..=29 {
+            let pin = Pin::from_number(number).expect("GPIO0..GPIO29 are real pads");
+            assert_eq!(pin.number(), number);
+        }
+    }
+
+    /// Everything else is refused instead of becoming an invalid enum value:
+    /// 30..=98, the `GPIO99` sentinel, and the huge `u32` a negative board-table
+    /// entry turns into (`-1` is the C `NoPin` sentinel).
+    #[test]
+    fn from_number_rejects_anything_that_is_not_a_pad() {
+        for number in [30u32, 98, Pin::GPIO99 as u32, u32::MAX] {
+            assert!(Pin::from_number(number).is_none(), "{number} is not a pad");
+        }
+        assert!(Pin::from_number(Pin::NoPin as i32 as u32).is_none());
+    }
+}
+

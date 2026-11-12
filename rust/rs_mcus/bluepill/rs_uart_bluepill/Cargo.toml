@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rs_esprit = { path = "../../../rs_esprit" }
 # The RX poll timer and the critical sections.  Direct dependency rather than a
-# re-export: `rs_esprit::timer` is the hardware-timer API, not this one.
+# re-export: `rs_timer_bluepill` is the *hardware* timer API, a different thing from a FreeRTOS software timer.
 rs_rtos = { path = "../../../rs_rtos" }
 rs_bluepill = { path = "../rs_bluepill" }
 rs_rcu_bluepill = { path = "../rs_rcu_bluepill" }
 rs_gpio_bluepill = { path = "../rs_gpio_bluepill" }
 rs_dma_bluepill = { path = "../rs_dma_bluepill" }
+rs_mcu_traits = { path = "../../traits" }

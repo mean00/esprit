@@ -131,5 +131,5 @@ pub extern "C" fn ln_simple_adc_read(adc: *mut c_void) -> i32 {
     let instance = packed & 0xFFFF;
     let pin = (packed >> 16) & 0xFFFF;
     let a = SimpleAdc::new(instance, pin);
-    a.read()
+    a.read_raw()
 }

@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 rs_bluepill = { path = "../rs_bluepill" }
 rs_rcu_bluepill = { path = "../rs_rcu_bluepill" }
-rs_esprit = { path = "../../../rs_esprit" }
+rs_mcu_traits = { path = "../../traits" }
+rs_rtos = { path = "../../../rs_rtos" }

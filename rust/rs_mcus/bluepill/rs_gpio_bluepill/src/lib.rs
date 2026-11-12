@@ -12,6 +12,8 @@ use rs_bluepill::{
     GPIOG_BASE,
 };
 use core::ptr::{read_volatile, write_volatile};
+use rs_mcu_traits::gpio::{self, PinMode};
+use rs_mcu_traits::Result;
 
 // --- Idiomatic Rust Core ---
 
@@ -227,13 +229,39 @@ pub fn set_mode(pin: Pin, mode: Mode, speed_in_mhz: u32) {
     }
 }
 
-const GPIO_MAX_PINS: usize = 112;
-static mut GPIO_HANDLERS: [Option<&'static dyn rs_esprit::GpioInterruptHandler>; GPIO_MAX_PINS] = [const { None }; GPIO_MAX_PINS];
+// ---------------------------------------------------------------------------
+//  The MCU-agnostic GPIO contract
+//
+//  The pad only: mode, level, direction. A pin *interrupt* is the external
+//  interrupt controller's job (`rs_mcu_traits::exti`), implemented for this
+//  family in `rs_exti_bluepill`.
+// ---------------------------------------------------------------------------
 
-impl rs_esprit::GpioPin for Pin {
+impl Pin {
+    /// `PinMode` → the GD32 `Mode` of this crate.
+    fn mode_of(mode: PinMode) -> Mode {
+        match mode {
+            PinMode::Input => Mode::InputFloating,
+            PinMode::InputPullUp => Mode::InputPullup,
+            PinMode::InputPullDown => Mode::InputPulldown,
+            PinMode::Output => Mode::Output,
+            PinMode::OutputOpenDrain => Mode::OutputOpenDrain,
+            PinMode::AlternatePushPull => Mode::AlternatePushPull,
+            PinMode::AlternateOpenDrain => Mode::AlternateOpenDrain,
+            PinMode::Analog => Mode::AdcMode,
+        }
+    }
+}
+
+impl gpio::Gpio for Pin {
     #[inline]
-    fn write(&mut self, value: bool) {
-        Pin::write(*self, value);
+    fn pin_number(&self) -> u32 {
+        *self as u32
+    }
+
+    #[inline]
+    fn write(&mut self, high: bool) {
+        Pin::write(*self, high);
     }
 
     #[inline]
@@ -246,61 +274,19 @@ impl rs_esprit::GpioPin for Pin {
         Pin::toggle(*self);
     }
 
-    fn set_mode(&mut self, mode: rs_esprit::GpioMode) {
-        let m = match mode {
-            rs_esprit::GpioMode::Floating => Mode::Floating,
-            rs_esprit::GpioMode::InputFloating => Mode::InputFloating,
-            rs_esprit::GpioMode::InputPullUp => Mode::InputPullup,
-            rs_esprit::GpioMode::InputPullDown => Mode::InputPulldown,
-            rs_esprit::GpioMode::Output => Mode::Output,
-            rs_esprit::GpioMode::OutputOpenDrain => Mode::OutputOpenDrain,
-            rs_esprit::GpioMode::AlternatePushPull => Mode::AlternatePushPull,
-            rs_esprit::GpioMode::AlternateOpenDrain => Mode::AlternateOpenDrain,
-            rs_esprit::GpioMode::Pwm => Mode::Pwm,
-            rs_esprit::GpioMode::Adc => Mode::AdcMode,
-            rs_esprit::GpioMode::Dac => Mode::DacMode,
-            rs_esprit::GpioMode::Uart => Mode::Uart,
-            rs_esprit::GpioMode::Spi => Mode::SpiMode,
-            rs_esprit::GpioMode::UartAlt => Mode::UartAlt,
-        };
-        Pin::set_mode(*self, m, 0);
+    fn set_mode(&mut self, mode: PinMode) -> Result<()> {
+        Pin::set_mode(*self, Self::mode_of(mode), 0);
+        Ok(())
     }
 
-    fn set_mode_speed(&mut self, mode: rs_esprit::GpioMode, speed_mhz: u32) {
-        let m = match mode {
-            rs_esprit::GpioMode::Floating => Mode::Floating,
-            rs_esprit::GpioMode::InputFloating => Mode::InputFloating,
-            rs_esprit::GpioMode::InputPullUp => Mode::InputPullup,
-            rs_esprit::GpioMode::InputPullDown => Mode::InputPulldown,
-            rs_esprit::GpioMode::Output => Mode::Output,
-            rs_esprit::GpioMode::OutputOpenDrain => Mode::OutputOpenDrain,
-            rs_esprit::GpioMode::AlternatePushPull => Mode::AlternatePushPull,
-            rs_esprit::GpioMode::AlternateOpenDrain => Mode::AlternateOpenDrain,
-            rs_esprit::GpioMode::Pwm => Mode::Pwm,
-            rs_esprit::GpioMode::Adc => Mode::AdcMode,
-            rs_esprit::GpioMode::Dac => Mode::DacMode,
-            rs_esprit::GpioMode::Uart => Mode::Uart,
-            rs_esprit::GpioMode::Spi => Mode::SpiMode,
-            rs_esprit::GpioMode::UartAlt => Mode::UartAlt,
-        };
-        Pin::set_mode(*self, m, speed_mhz);
+    fn set_mode_speed(&mut self, mode: PinMode, speed_mhz: u32) -> Result<()> {
+        Pin::set_mode(*self, Self::mode_of(mode), speed_mhz);
+        Ok(())
     }
 
-    fn open_drain_close(&mut self, close: bool) {
-        open_drain_close(*self, close);
-    }
-
-    fn enable_interrupt(&mut self, _trigger: rs_esprit::EdgeTrigger) -> bool {
-        true
-    }
-
-    fn set_handler(&mut self, handler: Option<&'static dyn rs_esprit::GpioInterruptHandler>) {
-        let idx = *self as usize;
-        unsafe {
-            if idx < GPIO_MAX_PINS {
-                GPIO_HANDLERS[idx] = handler;
-            }
-        }
+    fn open_drain(&mut self, drive_low: bool) -> Result<()> {
+        open_drain_close(*self, drive_low);
+        Ok(())
     }
 }
 

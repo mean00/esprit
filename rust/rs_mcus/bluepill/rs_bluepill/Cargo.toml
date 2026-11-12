@@ -3,4 +3,13 @@ name = "rs_bluepill"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+# Family selector. The bluepill family shares almost the whole map (see the two C
+# headers `esprit/private_include/lnPeripheral_priv_{stm32,ch32v3x}.h`); the
+# addresses that only one side has live in `peripherals_stm32.rs` /
+# `peripherals_ch32v3x.rs`. No feature = the ARM (STM32F1 / GD32F30x) map;
+# `ch32v3x` picks the CH32V3 one and wins if both are somehow enabled.
+stm32 = []
+ch32v3x = []
+
 [dependencies]

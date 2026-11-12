@@ -65,9 +65,14 @@ pub const RCU_APB2_SPI0: u32 = 1 << 12;
 pub const RCU_APB2_USART0: u32 = 1 << 14;
 
 // --- AHB Peripheral Enable / Reset Masks ---
+//
+// Only the blocks both families have. The CH32V3-only ones (USBHS / USB-FS-OTG /
+// RNG / SDIO) are in `registers_ch32v3x.rs`; the ARM side answers `None` for them
+// in `registers_stm32.rs`.
+
 pub const RCU_AHB_DMA0: u32 = 1 << 0;
 pub const RCU_AHB_DMA1: u32 = 1 << 1;
-pub const RCU_AHB_USBHS_CH32V3X: u32 = 1 << 11;
-pub const RCU_AHB_USBFS_OTG_CH32V3X: u32 = 1 << 12;
+/// USB full-speed, the bit both families decode (CH32V3 calls it USBFSOG).
+pub const RCU_AHB_USBFS: u32 = 1 << 12;
 pub const RCU_AHB_ETHMAC: u32 = 7 << 14;
 pub const RCU_AHBRST_ETHMAC: u32 = 1 << 14;

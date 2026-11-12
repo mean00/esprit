@@ -4,7 +4,21 @@
 pub mod ffi;
 pub use ffi::*;
 
-use rs_esprit::timer::{Timer as TimerTrait, TimerHandler, DelayTimer as DelayTimerTrait};
+use rs_mcu_traits::handler::HandlerTable;
+use rs_mcu_traits::timer;
+use rs_mcu_traits::Result as HalResult;
+
+/// One handler slot: the wrapped C ABI exposes one timer channel per handle.
+static HANDLERS: HandlerTable<dyn timer::TimerHandler, 1> = HandlerTable::new();
+static HANDLERS_DELAY: HandlerTable<dyn timer::DelayHandler, 1> = HandlerTable::new();
+
+/// Adapter from the C-style delay callback to the typed handler of the trait.
+unsafe extern "C" fn delay_trampoline(_cookie: *mut core::ffi::c_void) {
+    // SAFETY: the handler was installed before the interrupt was enabled.
+    if let Some(handler) = unsafe { HANDLERS_DELAY.isr_get(0) } {
+        handler.on_elapsed();
+    }
+}
 
 pub struct TimerWrapped {
     raw: *mut ln_timer_c,
@@ -38,21 +52,26 @@ impl Drop for TimerWrapped {
     }
 }
 
-impl TimerTrait for TimerWrapped {
-    fn set_frequency(&mut self, _frequency_hz: u32) -> Result<u32, &'static str> {
-        Ok(0)
+impl timer::Timer for TimerWrapped {
+    /// The wrapped C timer has no frequency query: it accepts the request.
+    fn start_periodic(&mut self, hz: u32) -> HalResult<u32> {
+        let _ = hz;
+        Ok(hz)
     }
 
-    fn enable(&mut self) {}
-
-    fn disable(&mut self) {}
-
-    fn set_handler(&mut self, _handler: Option<&'static dyn TimerHandler>) {}
-
-    fn single_shot(&mut self, duration_ms: u32, up: bool) {
+    /// The C ABI takes milliseconds; the trait takes microseconds.
+    fn start_single_shot(&mut self, duration_us: u32, active_high: bool) -> HalResult<()> {
+        let ms = duration_us.div_ceil(1_000).max(1);
         unsafe {
-            ln_timer_single_shot(self.raw, duration_ms as cty::c_uint, up);
+            ln_timer_single_shot(self.raw, ms as cty::c_uint, active_high);
         }
+        Ok(())
+    }
+
+    fn stop(&mut self) {}
+
+    fn set_handler(&mut self, handler: Option<&'static dyn timer::TimerHandler>) {
+        HANDLERS.set(0, handler);
     }
 }
 
@@ -94,20 +113,25 @@ impl Drop for DelayTimerWrapped {
     }
 }
 
-impl DelayTimerTrait for DelayTimerWrapped {
-    fn arm(&mut self, duration_us: u32) {
+impl timer::DelayTimer for DelayTimerWrapped {
+    fn arm_us(&mut self, duration_us: u32) -> HalResult<()> {
         unsafe {
             ln_delay_timer_arm(self.raw, duration_us as cty::c_int);
         }
+        Ok(())
     }
 
-    fn set_interrupt(
-        &mut self,
-        handler: Option<unsafe extern "C" fn(cookie: *mut core::ffi::c_void)>,
-        cookie: *mut core::ffi::c_void,
-    ) {
-        unsafe {
-            ln_delay_timer_set_interrupt(self.raw, handler, cookie);
+    /// The wrapped C ABI takes its own callback; the trampoline below looks the
+    /// typed handler up in the table.
+    fn set_handler(&mut self, handler: Option<&'static dyn timer::DelayHandler>) {
+        HANDLERS_DELAY.set(0, handler);
+        match handler {
+            Some(_) => unsafe {
+                ln_delay_timer_set_interrupt(self.raw, Some(delay_trampoline), core::ptr::null_mut());
+            },
+            None => unsafe {
+                ln_delay_timer_set_interrupt(self.raw, None, core::ptr::null_mut());
+            },
         }
     }
 

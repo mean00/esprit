@@ -6,7 +6,7 @@
 // once emitted here was the bluepill PAx/PBx/PEx one (stale generation); on
 // RP2040/RP2350 a pin is the `GPIO0`…`GPIO29` of lnGPIO_pins.h, which is exactly
 // `rs_gpio_rp2xxx::Pin` — the same type as `rust_esprit::Pin`, so the whole stack
-// (board table, C bindings, GpioPin impl) shares one pin type.
+// (board table, C bindings, `Gpio` impl) shares one pin type.
 pub use rs_gpio_rp2xxx::Pin as lnPin;
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]

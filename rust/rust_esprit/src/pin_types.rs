@@ -8,7 +8,7 @@
 //! This module re‑exports the one true `lnPin` for the current target so
 //! that all consumers use the same type.  On RP2040/RP2350 that type is not a
 //! binding at all: it is `rs_gpio_rp2xxx::Pin`, which is also `rust_esprit::Pin`
-//! and the type the `GpioPin` implementation is written for
+//! and the type the `Gpio` contract is implemented for
 //! (`rn_gpio_rp2040_c` re-exports it), so a pin has exactly one type in the whole
 //! stack.
 
