@@ -121,10 +121,10 @@ pub fn unreset_dma() {
 /// Global DMA interrupt handler for DMA_IRQ_1.
 unsafe extern "C" fn dma_irq1_handler() {
     let dma = DMA_BASE as *mut DmaRegisters;
-    let ints1 = unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*dma).ints1)) };
+    let ints1 = unsafe { rs_mcu_traits::reg_read!(dma, ints1) };
     // Clear pending interrupts by writing back the set flags
     unsafe {
-        core::ptr::write_volatile(core::ptr::addr_of_mut!((*dma).ints1), ints1);
+        rs_mcu_traits::reg_write!(dma, ints1, ints1);
     }
 
     for channel in 0..DMA_MAX_CHANNELS {
@@ -227,10 +227,10 @@ impl DmaChannel {
         unsafe {
             let dma = DMA_BASE as *mut DmaRegisters;
             let mask = 1u32 << self.channel_idx;
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*dma).chan_abort), mask);
+            rs_mcu_traits::reg_write!(dma, chan_abort, mask);
             // Bounded: `wait_busy` right after reports whether it stopped.
             let _ = wait_until(|| {
-                (core::ptr::read_volatile(core::ptr::addr_of!((*dma).chan_abort)) & mask) == 0
+                (rs_mcu_traits::reg_read!(dma, chan_abort) & mask) == 0
             });
         }
         self.wait_busy();
@@ -240,8 +240,8 @@ impl DmaChannel {
     pub fn enable_interrupt(&mut self) {
         unsafe {
             let dma = DMA_BASE as *mut DmaRegisters;
-            let val = core::ptr::read_volatile(core::ptr::addr_of!((*dma).inte1));
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*dma).inte1), val | (1 << self.channel_idx));
+            let val = rs_mcu_traits::reg_read!(dma, inte1);
+            rs_mcu_traits::reg_write!(dma, inte1, val | (1 << self.channel_idx));
         }
     }
 
@@ -249,8 +249,8 @@ impl DmaChannel {
     pub fn disable_interrupt(&mut self) {
         unsafe {
             let dma = DMA_BASE as *mut DmaRegisters;
-            let val = core::ptr::read_volatile(core::ptr::addr_of!((*dma).inte1));
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*dma).inte1), val & !(1 << self.channel_idx));
+            let val = rs_mcu_traits::reg_read!(dma, inte1);
+            rs_mcu_traits::reg_write!(dma, inte1, val & !(1 << self.channel_idx));
         }
     }
 
@@ -287,13 +287,13 @@ impl DmaChannel {
 
         unsafe {
             let r = self.regs();
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).read_addr), src as u32);
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).write_addr), dst_addr);
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).trans_count), count);
+            rs_mcu_traits::reg_write!(r, read_addr, src as u32);
+            rs_mcu_traits::reg_write!(r, write_addr, dst_addr);
+            rs_mcu_traits::reg_write!(r, trans_count, count);
             if cfg.trigger {
-                core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).ctrl_trig), ctrl);
+                rs_mcu_traits::reg_write!(r, ctrl_trig, ctrl);
             } else {
-                core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).al1_ctrl), ctrl);
+                rs_mcu_traits::reg_write!(r, al1_ctrl, ctrl);
             }
         }
     }
@@ -311,13 +311,13 @@ impl DmaChannel {
 
         unsafe {
             let r = self.regs();
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).read_addr), src_addr);
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).write_addr), dst as u32);
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).trans_count), count);
+            rs_mcu_traits::reg_write!(r, read_addr, src_addr);
+            rs_mcu_traits::reg_write!(r, write_addr, dst as u32);
+            rs_mcu_traits::reg_write!(r, trans_count, count);
             if cfg.trigger {
-                core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).ctrl_trig), ctrl);
+                rs_mcu_traits::reg_write!(r, ctrl_trig, ctrl);
             } else {
-                core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).al1_ctrl), ctrl);
+                rs_mcu_traits::reg_write!(r, al1_ctrl, ctrl);
             }
         }
     }
@@ -326,8 +326,8 @@ impl DmaChannel {
     pub fn start(&mut self) {
         unsafe {
             let r = self.regs();
-            let ctrl = core::ptr::read_volatile(core::ptr::addr_of!((*r).ctrl_trig));
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).ctrl_trig), ctrl | DMA_CTRL_EN);
+            let ctrl = rs_mcu_traits::reg_read!(r, ctrl_trig);
+            rs_mcu_traits::reg_write!(r, ctrl_trig, ctrl | DMA_CTRL_EN);
         }
     }
 
@@ -336,8 +336,8 @@ impl DmaChannel {
         self.disable_interrupt();
         unsafe {
             let r = self.regs();
-            let ctrl = core::ptr::read_volatile(core::ptr::addr_of!((*r).ctrl_trig));
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*r).al1_ctrl), ctrl & !DMA_CTRL_EN);
+            let ctrl = rs_mcu_traits::reg_read!(r, ctrl_trig);
+            rs_mcu_traits::reg_write!(r, al1_ctrl, ctrl & !DMA_CTRL_EN);
         }
         self.wait_busy();
     }
@@ -371,9 +371,9 @@ impl DmaChannel {
 
         unsafe {
             let data_r = self.regs();
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*data_r).write_addr), dst_fifo_addr);
+            rs_mcu_traits::reg_write!(data_r, write_addr, dst_fifo_addr);
             // Write control configuration without triggering
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*data_r).al1_ctrl), data_ctrl);
+            rs_mcu_traits::reg_write!(data_r, al1_ctrl, data_ctrl);
         }
 
         // 2. Configure the control channel:
@@ -399,14 +399,14 @@ impl DmaChannel {
                 core::ptr::addr_of_mut!((*ctrl_r).read_addr),
                 blocks.as_ptr() as u32,
             );
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*ctrl_r).write_addr), target_addr);
+            rs_mcu_traits::reg_write!(ctrl_r, write_addr, target_addr);
             // Total transfers is 2 32-bit words per block
             core::ptr::write_volatile(
                 core::ptr::addr_of_mut!((*ctrl_r).trans_count),
                 (blocks.len() * 2) as u32,
             );
             // Configure control channel without triggering yet
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*ctrl_r).al1_ctrl), ctrl_config);
+            rs_mcu_traits::reg_write!(ctrl_r, al1_ctrl, ctrl_config);
         }
     }
 
@@ -437,8 +437,8 @@ impl DmaChannel {
 
         unsafe {
             let data_r = self.regs();
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*data_r).read_addr), src_fifo_addr);
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*data_r).al1_ctrl), data_ctrl);
+            rs_mcu_traits::reg_write!(data_r, read_addr, src_fifo_addr);
+            rs_mcu_traits::reg_write!(data_r, al1_ctrl, data_ctrl);
         }
 
         // 2. Configure the control channel:
@@ -464,12 +464,12 @@ impl DmaChannel {
                 core::ptr::addr_of_mut!((*ctrl_r).read_addr),
                 blocks.as_ptr() as u32,
             );
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*ctrl_r).write_addr), target_addr);
+            rs_mcu_traits::reg_write!(ctrl_r, write_addr, target_addr);
             core::ptr::write_volatile(
                 core::ptr::addr_of_mut!((*ctrl_r).trans_count),
                 (blocks.len() * 2) as u32,
             );
-            core::ptr::write_volatile(core::ptr::addr_of_mut!((*ctrl_r).al1_ctrl), ctrl_config);
+            rs_mcu_traits::reg_write!(ctrl_r, al1_ctrl, ctrl_config);
         }
     }
 

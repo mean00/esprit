@@ -6,6 +6,8 @@ mod registers;
 use core::cell::UnsafeCell;
 use core::ptr::{read_volatile, write_volatile};
 use registers::ExtiRegisters;
+
+rs_mcu_traits::define_mmio_accessors!(ExtiRegisters::ptr());
 use rs_gpio_bluepill::Pin;
 use rs_mcu_traits::Result;
 use rs_mcu_traits::exti::{self, Edge as ExtiEdge, ExtiHandler};
@@ -51,23 +53,26 @@ unsafe extern "C" fn exti_trampoline(pin: Pin, _cookie: *mut core::ffi::c_void) 
     }
 }
 
-/// Dispatch pending EXTI line to installed callback and trait handler.
+/// Dispatch pending EXTI line to installed callback or trait handler.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_exti_irq_handler(line: usize) {
+    exti_irq_handler(line);
+}
+
+/// Dispatch pending EXTI line to installed callback or trait handler.
 pub fn exti_irq_handler(line: usize) {
     if line < 16 {
-        let exti = ExtiRegisters::ptr();
         unsafe {
-            let pd_addr = core::ptr::addr_of_mut!((*exti).pd);
-            let pd = read_volatile(pd_addr);
+            let pd = read_reg!(pd);
             if (pd & (1 << line)) != 0 {
-                write_volatile(pd_addr, 1 << line);
+                write_reg!(pd, 1 << line);
                 let slot = EXTI_SLOTS[line].get();
                 let (cb, cookie, pin_num) = ((*slot).cb, (*slot).cookie, (*slot).pin);
                 if let Some(cb) = cb {
                     if let Some(pin) = Pin::from_number(pin_num) {
                         cb(pin, cookie);
                     }
-                }
-                if let Some(handler) = EXTI_HANDLERS.isr_get(pin_num as usize) {
+                } else if let Some(handler) = EXTI_HANDLERS.isr_get(pin_num as usize) {
                     handler.on_exti(pin_num);
                 }
             }
@@ -94,12 +99,12 @@ pub fn attach_interrupt(pin: Pin, edge: Edge, cb: Callback, cookie: *mut core::f
     let source = (pin as u32) & 0xF;
 
     if (source as usize) < 16 {
-        unsafe {
+        critical_section::with(|_| unsafe {
             let slot = EXTI_SLOTS[source as usize].get();
             (*slot).pin = pin as u32;
             (*slot).cb = cb;
             (*slot).cookie = cookie;
-        }
+        });
     }
 
     // 1. Select source via AFIO
@@ -109,24 +114,17 @@ pub fn attach_interrupt(pin: Pin, edge: Edge, cb: Callback, cookie: *mut core::f
     const EDGE_RISING_BIT: u32 = 1;
     const EDGE_FALLING_BIT: u32 = 2;
 
-    let exti = ExtiRegisters::ptr();
     unsafe {
-        let rten_addr = core::ptr::addr_of_mut!((*exti).rten);
         if (edge as u32) & EDGE_RISING_BIT != 0 {
-            let val = read_volatile(rten_addr) | (1 << source);
-            write_volatile(rten_addr, val);
+            modify_reg!(rten, |v| v | (1 << source));
         } else {
-            let val = read_volatile(rten_addr) & !(1 << source);
-            write_volatile(rten_addr, val);
+            modify_reg!(rten, |v| v & !(1 << source));
         }
 
-        let ften_addr = core::ptr::addr_of_mut!((*exti).ften);
         if (edge as u32) & EDGE_FALLING_BIT != 0 {
-            let val = read_volatile(ften_addr) | (1 << source);
-            write_volatile(ften_addr, val);
+            modify_reg!(ften, |v| v | (1 << source));
         } else {
-            let val = read_volatile(ften_addr) & !(1 << source);
-            write_volatile(ften_addr, val);
+            modify_reg!(ften, |v| v & !(1 << source));
         }
     }
 }
@@ -134,51 +132,36 @@ pub fn attach_interrupt(pin: Pin, edge: Edge, cb: Callback, cookie: *mut core::f
 pub fn detach_interrupt(pin: Pin) {
     let source = (pin as u32) & 0xF;
     if (source as usize) < 16 {
-        unsafe {
+        critical_section::with(|_| unsafe {
             let slot = EXTI_SLOTS[source as usize].get();
             (*slot).cb = None;
             (*slot).cookie = core::ptr::null_mut();
-        }
+        });
     }
-    let exti = ExtiRegisters::ptr();
     unsafe {
-        let inten_addr = core::ptr::addr_of_mut!((*exti).inten);
-        let inten = read_volatile(inten_addr) & !(1 << source);
-        write_volatile(inten_addr, inten);
-
-        let rten_addr = core::ptr::addr_of_mut!((*exti).rten);
-        let rten = read_volatile(rten_addr) & !(1 << source);
-        write_volatile(rten_addr, rten);
-
-        let ften_addr = core::ptr::addr_of_mut!((*exti).ften);
-        let ften = read_volatile(ften_addr) & !(1 << source);
-        write_volatile(ften_addr, ften);
+        modify_reg!(inten, |v| v & !(1 << source));
+        modify_reg!(rten, |v| v & !(1 << source));
+        modify_reg!(ften, |v| v & !(1 << source));
     }
 }
 
 pub fn enable_interrupt(pin: Pin) {
     let source = (pin as u32) & 0xF;
-    let exti = ExtiRegisters::ptr();
     unsafe {
-        let inten_addr = core::ptr::addr_of_mut!((*exti).inten);
-        let inten = read_volatile(inten_addr) | (1 << source);
-        write_volatile(inten_addr, inten);
+        modify_reg!(inten, |v| v | (1 << source));
 
         core::arch::asm!("nop", "nop", "nop");
-        write_volatile(core::ptr::addr_of_mut!((*exti).pd), 1 << source);
+        write_reg!(pd, 1 << source);
     }
 }
 
 pub fn disable_interrupt(pin: Pin) {
     let source = (pin as u32) & 0xF;
-    let exti = ExtiRegisters::ptr();
     unsafe {
-        let inten_addr = core::ptr::addr_of_mut!((*exti).inten);
-        let inten = read_volatile(inten_addr) & !(1 << source);
-        write_volatile(inten_addr, inten);
+        modify_reg!(inten, |v| v & !(1 << source));
 
         core::arch::asm!("nop", "nop", "nop");
-        write_volatile(core::ptr::addr_of_mut!((*exti).pd), 1 << source);
+        write_reg!(pd, 1 << source);
     }
 }
 
@@ -228,7 +211,7 @@ impl exti::Exti for Exti {
         edge: ExtiEdge,
         handler: Option<&'static dyn ExtiHandler>,
     ) -> Result<()> {
-        let p = Pin::from(pin);
+        let p = Pin::from_number(pin).ok_or(rs_mcu_traits::Error::InvalidConfig)?;
         let e = match edge {
             ExtiEdge::Rising => Edge::Rising,
             ExtiEdge::Falling => Edge::Falling,
@@ -251,12 +234,14 @@ impl exti::Exti for Exti {
     }
 
     fn enable(&mut self, pin: u32) -> Result<()> {
-        enable_interrupt(Pin::from(pin));
+        let p = Pin::from_number(pin).ok_or(rs_mcu_traits::Error::InvalidConfig)?;
+        enable_interrupt(p);
         Ok(())
     }
 
     fn disable(&mut self, pin: u32) -> Result<()> {
-        disable_interrupt(Pin::from(pin));
+        let p = Pin::from_number(pin).ok_or(rs_mcu_traits::Error::InvalidConfig)?;
+        disable_interrupt(p);
         Ok(())
     }
 

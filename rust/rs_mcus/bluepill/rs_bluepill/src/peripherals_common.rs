@@ -75,7 +75,6 @@ pub const USART1_BASE: u32 = 0x4001_3800; // USART0
 pub const USART2_BASE: u32 = 0x4000_4400; // USART1
 pub const USART3_BASE: u32 = 0x4000_4800; // USART2
 pub const USART4_BASE: u32 = 0x4000_4C00; // USART3
-pub const USART5_BASE: u32 = 0x4000_5000; // USART4
 
 // --- USB device (full-speed, the one swindle uses) -----------------------------
 

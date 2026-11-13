@@ -156,9 +156,9 @@ pub fn write(pin: Pin, value: bool) {
     // SAFETY: the port base is a valid MMIO address for GPIO registers.
     unsafe {
         if value {
-            write_volatile(core::ptr::addr_of_mut!((*port).bop), 1 << bit);
+            rs_mcu_traits::reg_write!(port, bop, 1 << bit);
         } else {
-            write_volatile(core::ptr::addr_of_mut!((*port).bc), 1 << bit);
+            rs_mcu_traits::reg_write!(port, bc, 1 << bit);
         }
     }
 }
@@ -169,7 +169,7 @@ pub fn read(pin: Pin) -> bool {
     let bit = get_bit(pin);
     // SAFETY: reading istat register.
     unsafe {
-        (read_volatile(core::ptr::addr_of!((*port).istat)) & (1 << bit)) != 0
+        (rs_mcu_traits::reg_read!(port, istat) & (1 << bit)) != 0
     }
 }
 
@@ -195,7 +195,7 @@ pub fn read_port(port: u32) -> u32 {
     let port_ptr = get_port_ptr(port);
     // SAFETY: reading istat register.
     unsafe {
-        read_volatile(core::ptr::addr_of!((*port_ptr).istat))
+        rs_mcu_traits::reg_read!(port_ptr, istat)
     }
 }
 
@@ -216,11 +216,11 @@ pub fn set_mode(pin: Pin, mode: Mode, speed_in_mhz: u32) {
         Mode::AdcMode | Mode::DacMode => gpio_set(CTL_MD_INPUT, CTL_INPUT_ANALOG),
         Mode::Floating | Mode::InputFloating => gpio_set(CTL_MD_INPUT, CTL_INPUT_FLOATING),
         Mode::InputPullup => {
-            unsafe { write_volatile(core::ptr::addr_of_mut!((*port).bop), 1 << bit) };
+            unsafe { rs_mcu_traits::reg_write!(port, bop, 1 << bit) };
             gpio_set(CTL_MD_INPUT, CTL_INPUT_PULLUP_PULLDOWN)
         }
         Mode::InputPulldown => {
-            unsafe { write_volatile(core::ptr::addr_of_mut!((*port).bc), 1 << bit) };
+            unsafe { rs_mcu_traits::reg_write!(port, bc, 1 << bit) };
             gpio_set(CTL_MD_INPUT, CTL_INPUT_PULLUP_PULLDOWN)
         }
         Mode::Output => gpio_set(speed, CTL_OUTPUT_PP),

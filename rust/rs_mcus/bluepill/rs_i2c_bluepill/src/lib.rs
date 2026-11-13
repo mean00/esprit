@@ -31,9 +31,9 @@ impl I2c {
 
         let regs = I2cRegisters::ptr(instance);
         unsafe {
-            let mut cr1 = read_volatile(&mut (*regs).cr1);
+            let mut cr1 = rs_mcu_traits::reg_read!(regs, cr1);
             cr1 |= I2C_CR1_PE;
-            write_volatile(&mut (*regs).cr1, cr1);
+            rs_mcu_traits::reg_write!(regs, cr1, cr1);
         }
 
         i2c
@@ -81,9 +81,7 @@ impl I2c {
     }
 
     pub fn set_dma_mode(&mut self, enable: bool) {
-        unsafe {
-            I2C_USE_DMA[self.instance as usize] = enable;
-        }
+        I2C_USE_DMA[self.instance as usize].store(enable, core::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -102,8 +100,10 @@ struct I2cSession {
     done: bool,
 }
 
-static mut I2C_SESSIONS: [Option<I2cSession>; I2C_MAX_INSTANCES] = [None; I2C_MAX_INSTANCES];
-static mut I2C_USE_DMA: [bool; I2C_MAX_INSTANCES] = [false; I2C_MAX_INSTANCES];
+static I2C_SESSIONS: rs_mcu_traits::SyncCell<[Option<I2cSession>; I2C_MAX_INSTANCES]> =
+    rs_mcu_traits::SyncCell::new([None; I2C_MAX_INSTANCES]);
+static I2C_USE_DMA: [core::sync::atomic::AtomicBool; I2C_MAX_INSTANCES] =
+    [const { core::sync::atomic::AtomicBool::new(false) }; I2C_MAX_INSTANCES];
 
 #[unsafe(no_mangle)]
 pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
@@ -112,7 +112,7 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
     }
 
     unsafe {
-        let session = match &mut I2C_SESSIONS[instance as usize] {
+        let session = match &mut (*I2C_SESSIONS.as_ptr())[instance as usize] {
             Some(s) => s,
             None => return, // Spurious interrupt
         };
@@ -125,35 +125,35 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
             session.done = true;
 
             // Clear error flags
-            let mut sr1 = read_volatile(&mut (*regs).sr1);
+            let mut sr1 = rs_mcu_traits::reg_read!(regs, sr1);
             sr1 &= !I2C_SR1_ERROR_MASK;
-            write_volatile(&mut (*regs).sr1, sr1);
+            rs_mcu_traits::reg_write!(regs, sr1, sr1);
 
             // Send STOP condition
-            let mut cr1 = read_volatile(&mut (*regs).cr1);
+            let mut cr1 = rs_mcu_traits::reg_read!(regs, cr1);
             cr1 |= I2C_CR1_STOP;
-            write_volatile(&mut (*regs).cr1, cr1);
+            rs_mcu_traits::reg_write!(regs, cr1, cr1);
             return;
         }
 
         // --- Event State Machine ---
-        let sr1 = read_volatile(&mut (*regs).sr1);
+        let sr1 = rs_mcu_traits::reg_read!(regs, sr1);
 
         // EV5: SB (Start Bit) sent
         if (sr1 & I2C_SR1_SB) != 0 {
             // Send 7-bit Address
             let addr = (session.target & I2C_ADDRESS_7BIT_MASK) << I2C_ADDRESS_7BIT_SHIFT;
-            write_volatile(&mut (*regs).dr, addr);
+            rs_mcu_traits::reg_write!(regs, dr, addr);
         }
         // EV6: ADDR (Address sent)
         else if (sr1 & I2C_SR1_ADDR) != 0 {
             // Clear ADDR by reading SR1 (done) and SR2
-            let _sr2 = read_volatile(&mut (*regs).sr2);
+            let _sr2 = rs_mcu_traits::reg_read!(regs, sr2);
 
             // Enable event interrupt
-            let mut cr2 = read_volatile(&mut (*regs).cr2);
+            let mut cr2 = rs_mcu_traits::reg_read!(regs, cr2);
             cr2 |= I2C_CR2_ITEVTEN;
-            write_volatile(&mut (*regs).cr2, cr2);
+            rs_mcu_traits::reg_write!(regs, cr2, cr2);
         }
         // EV8: TXE (Data register empty)
         else if (sr1 & I2C_SR1_TXE) != 0 {
@@ -164,7 +164,7 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
                 if session.cur_pos < seq_len {
                     // Send next byte
                     let byte = *seq_data.add(session.cur_pos as usize);
-                    write_volatile(&mut (*regs).dr, byte as u32);
+                    rs_mcu_traits::reg_write!(regs, dr, byte as u32);
                     session.cur_pos += 1;
                 } else {
                     // Sequence done, move to next
@@ -173,14 +173,14 @@ pub extern "C" fn i2cIrqHandler(instance: i32, error: bool) {
 
                     if session.cur_seq == session.nb_seqn {
                         // All sequences done, send STOP
-                        let mut cr1 = read_volatile(&mut (*regs).cr1);
+                        let mut cr1 = rs_mcu_traits::reg_read!(regs, cr1);
                         cr1 |= I2C_CR1_STOP;
-                        write_volatile(&mut (*regs).cr1, cr1);
+                        rs_mcu_traits::reg_write!(regs, cr1, cr1);
 
                         // Disable interrupts
-                        let mut cr2 = read_volatile(&mut (*regs).cr2);
+                        let mut cr2 = rs_mcu_traits::reg_read!(regs, cr2);
                         cr2 &= !(I2C_CR2_ITEVTEN | I2C_CR2_ITERREN);
-                        write_volatile(&mut (*regs).cr2, cr2);
+                        rs_mcu_traits::reg_write!(regs, cr2, cr2);
 
                         session.done = true;
                     }
@@ -195,12 +195,6 @@ const I2C_MAX_INSTANCES: usize = 2;
 
 /// One handler slot per I²C instance.
 static HANDLERS: HandlerTable<dyn i2c::I2cHandler, I2C_MAX_INSTANCES> = HandlerTable::new();
-
-/// Chunks one asynchronous transaction can carry (the sequence registers hold a
-/// handful, and the driver's own API takes up to three).
-const MAX_SCAN_CHUNKS: usize = 3;
-/// Bounded poll budget for [`i2c::I2c::wait_idle`] on this block.
-const BUSY_POLL_LIMIT: u32 = 1_000_000;
 
 impl i2c::I2c for I2c {
     fn configure(&mut self, config: &i2c::I2cConfig) -> Result<()> {

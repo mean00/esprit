@@ -27,3 +27,7 @@ pub const SYS_TIMER_BASE: u32 = 0xD100_0000;
 
 /// ARM System Control Block (VTOR, NVIC, …). CH32V3 has `PFIC`/`STK` instead.
 pub const ARM_SCB_BASE: u32 = 0xE000_ED00;
+
+/// Fifth USART (UART4 in GD32 naming). CH32V3 puts UART5 at `0x4000_1800`
+/// (`peripherals_ch32v3x::USART5_BASE`).
+pub const USART5_BASE: u32 = 0x4000_5000;

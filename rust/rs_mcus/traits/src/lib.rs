@@ -27,6 +27,7 @@
 
 pub mod error;
 pub mod handler;
+pub mod mmio;
 
 pub mod adc;
 pub mod dma;
@@ -40,3 +41,4 @@ pub mod timer;
 pub mod uart;
 
 pub use error::{Error, Result};
+pub use handler::SyncCell;

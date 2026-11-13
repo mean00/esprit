@@ -21,6 +21,8 @@ pub use rs_mcu_traits::rcu::Rcu as RcuTrait;
 use registers::*;
 use registers_chip::*;
 
+rs_mcu_traits::define_mmio_accessors!(RcuRegisters::ptr());
+
 struct PeripheralInfo {
     bus: u8,
     mask: u32,
@@ -75,24 +77,11 @@ fn get_periph_info(periph: Peripheral) -> Option<PeripheralInfo> {
 #[inline(always)]
 pub fn enable(periph: Peripheral) {
     if let Some(info) = get_periph_info(periph) {
-        let rcu = registers::RcuRegisters::ptr();
         unsafe {
             match info.bus {
-                BUS_APB1 => {
-                    let mut val = core::ptr::read_volatile(&mut (*rcu).apb1en);
-                    val |= info.mask;
-                    core::ptr::write_volatile(&mut (*rcu).apb1en, val);
-                },
-                BUS_APB2 => {
-                    let mut val = core::ptr::read_volatile(&mut (*rcu).apb2en);
-                    val |= info.mask;
-                    core::ptr::write_volatile(&mut (*rcu).apb2en, val);
-                },
-                BUS_AHB => {
-                    let mut val = core::ptr::read_volatile(&mut (*rcu).ahben);
-                    val |= info.mask;
-                    core::ptr::write_volatile(&mut (*rcu).ahben, val);
-                },
+                BUS_APB1 => modify_reg!(apb1en, |v| v | info.mask),
+                BUS_APB2 => modify_reg!(apb2en, |v| v | info.mask),
+                BUS_AHB => modify_reg!(ahben, |v| v | info.mask),
                 _ => {}
             }
         }
@@ -102,24 +91,11 @@ pub fn enable(periph: Peripheral) {
 #[inline(always)]
 pub fn disable(periph: Peripheral) {
     if let Some(info) = get_periph_info(periph) {
-        let rcu = registers::RcuRegisters::ptr();
         unsafe {
             match info.bus {
-                BUS_APB1 => {
-                    let mut val = core::ptr::read_volatile(&mut (*rcu).apb1en);
-                    val &= !info.mask;
-                    core::ptr::write_volatile(&mut (*rcu).apb1en, val);
-                },
-                BUS_APB2 => {
-                    let mut val = core::ptr::read_volatile(&mut (*rcu).apb2en);
-                    val &= !info.mask;
-                    core::ptr::write_volatile(&mut (*rcu).apb2en, val);
-                },
-                BUS_AHB => {
-                    let mut val = core::ptr::read_volatile(&mut (*rcu).ahben);
-                    val &= !info.mask;
-                    core::ptr::write_volatile(&mut (*rcu).ahben, val);
-                },
+                BUS_APB1 => modify_reg!(apb1en, |v| v & !info.mask),
+                BUS_APB2 => modify_reg!(apb2en, |v| v & !info.mask),
+                BUS_AHB => modify_reg!(ahben, |v| v & !info.mask),
                 _ => {}
             }
         }
@@ -129,32 +105,22 @@ pub fn disable(periph: Peripheral) {
 #[inline(always)]
 pub fn reset(periph: Peripheral) {
     if let Some(info) = get_periph_info(periph) {
-        let rcu = registers::RcuRegisters::ptr();
         unsafe {
             match info.bus {
                 BUS_APB1 => {
-                    let mut val = core::ptr::read_volatile(&mut (*rcu).apb1rst);
-                    val |= info.mask;
-                    core::ptr::write_volatile(&mut (*rcu).apb1rst, val);
-                    val &= !info.mask;
-                    core::ptr::write_volatile(&mut (*rcu).apb1rst, val);
-                },
+                    modify_reg!(apb1rst, |v| v | info.mask);
+                    modify_reg!(apb1rst, |v| v & !info.mask);
+                }
                 BUS_APB2 => {
-                    let mut val = core::ptr::read_volatile(&mut (*rcu).apb2rst);
-                    val |= info.mask;
-                    core::ptr::write_volatile(&mut (*rcu).apb2rst, val);
-                    val &= !info.mask;
-                    core::ptr::write_volatile(&mut (*rcu).apb2rst, val);
-                },
+                    modify_reg!(apb2rst, |v| v | info.mask);
+                    modify_reg!(apb2rst, |v| v & !info.mask);
+                }
                 BUS_AHB => {
                     if periph == Peripheral::Ethernet {
-                        let mut val = core::ptr::read_volatile(&mut (*rcu).ahbrst);
-                        val |= RCU_AHBRST_ETHMAC;
-                        core::ptr::write_volatile(&mut (*rcu).ahbrst, val);
-                        val &= !RCU_AHBRST_ETHMAC;
-                        core::ptr::write_volatile(&mut (*rcu).ahbrst, val);
+                        modify_reg!(ahbrst, |v| v | RCU_AHBRST_ETHMAC);
+                        modify_reg!(ahbrst, |v| v & !RCU_AHBRST_ETHMAC);
                     }
-                },
+                }
                 _ => {}
             }
         }

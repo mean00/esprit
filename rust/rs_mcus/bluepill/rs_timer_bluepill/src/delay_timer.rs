@@ -48,12 +48,15 @@ struct RawCallbackEntry {
     cookie: *mut c_void,
 }
 
-static mut RAW_CALLBACKS: [RawCallbackEntry; TIMER_MAX_INSTANCES] = [const {
-    RawCallbackEntry {
-        handler: None,
-        cookie: core::ptr::null_mut(),
-    }
-}; TIMER_MAX_INSTANCES];
+static RAW_CALLBACKS: rs_mcu_traits::SyncCell<[RawCallbackEntry; TIMER_MAX_INSTANCES]> =
+    rs_mcu_traits::SyncCell::new(
+        [const {
+            RawCallbackEntry {
+                handler: None,
+                cookie: core::ptr::null_mut(),
+            }
+        }; TIMER_MAX_INSTANCES],
+    );
 
 /// Hardware microsecond delay alarm timer with update interrupt callback.
 pub struct DelayTimer {
@@ -101,7 +104,7 @@ impl DelayTimer {
         self.handler = handler;
         self.cookie = cookie;
         critical_section::with(|_| unsafe {
-            RAW_CALLBACKS[self.timer_idx as usize] = RawCallbackEntry { handler, cookie };
+            (*RAW_CALLBACKS.as_ptr())[self.timer_idx as usize] = RawCallbackEntry { handler, cookie };
         });
     }
 
@@ -153,13 +156,13 @@ impl DelayTimer {
 
         let regs = TimerRegisters::ptr(self.timer_idx);
         unsafe {
-            write_volatile(core::ptr::addr_of_mut!((*regs).ctl0), TIMER_CTL0_SPM | TIMER_CTL0_UPS);
-            write_volatile(core::ptr::addr_of_mut!((*regs).ctl1), 0);
-            write_volatile(core::ptr::addr_of_mut!((*regs).dien), 0);
-            write_volatile(core::ptr::addr_of_mut!((*regs).intf), 0);
-            write_volatile(core::ptr::addr_of_mut!((*regs).psc), psc);
-            write_volatile(core::ptr::addr_of_mut!((*regs).car), car);
-            write_volatile(core::ptr::addr_of_mut!((*regs).cnt), 0);
+            rs_mcu_traits::reg_write!(regs, ctl0, TIMER_CTL0_SPM | TIMER_CTL0_UPS);
+            rs_mcu_traits::reg_write!(regs, ctl1, 0);
+            rs_mcu_traits::reg_write!(regs, dien, 0);
+            rs_mcu_traits::reg_write!(regs, intf, 0);
+            rs_mcu_traits::reg_write!(regs, psc, psc);
+            rs_mcu_traits::reg_write!(regs, car, car);
+            rs_mcu_traits::reg_write!(regs, cnt, 0);
         }
 
         self.enable_interrupt();
@@ -221,7 +224,7 @@ impl Drop for DelayTimer {
         self.timer.disable();
         self.disable_interrupt();
         critical_section::with(|_| unsafe {
-            RAW_CALLBACKS[self.timer_idx as usize] = RawCallbackEntry {
+            (*RAW_CALLBACKS.as_ptr())[self.timer_idx as usize] = RawCallbackEntry {
                 handler: None,
                 cookie: core::ptr::null_mut(),
             };
@@ -255,7 +258,7 @@ pub fn delay_timer_interrupt_handler(timer_id: usize) {
     }
 
     let (cb, cookie) = critical_section::with(|_| unsafe {
-        let entry = &RAW_CALLBACKS[timer_id];
+        let entry = &(*RAW_CALLBACKS.as_ptr())[timer_id];
         (entry.handler, entry.cookie)
     });
     if let Some(handler) = cb {

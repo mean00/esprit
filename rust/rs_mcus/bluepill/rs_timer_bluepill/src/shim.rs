@@ -46,16 +46,16 @@ pub fn ln_timer_single_shot(handle: *mut ln_timer_c, duration_ms: u32, _up: bool
     let regs = TimerRegisters::ptr(timer_idx);
 
     unsafe {
-        let mut ctl0 = read_volatile(&mut (*regs).ctl0);
+        let mut ctl0 = rs_mcu_traits::reg_read!(regs, ctl0);
         ctl0 &= !TIMER_CTL0_CEN;
-        write_volatile(&mut (*regs).ctl0, ctl0);
+        rs_mcu_traits::reg_write!(regs, ctl0, ctl0);
 
-        write_volatile(&mut (*regs).psc, TIMER_PRESCALER_1MS_72MHZ);
-        write_volatile(&mut (*regs).car, duration_ms);
+        rs_mcu_traits::reg_write!(regs, psc, TIMER_PRESCALER_1MS_72MHZ);
+        rs_mcu_traits::reg_write!(regs, car, duration_ms);
 
         ctl0 |= TIMER_CTL0_OPM;
         ctl0 |= TIMER_CTL0_CEN;
-        write_volatile(&mut (*regs).ctl0, ctl0);
+        rs_mcu_traits::reg_write!(regs, ctl0, ctl0);
     }
 }
 
@@ -63,13 +63,14 @@ pub fn ln_timer_delete(handle: *mut ln_timer_c) {
     let (timer_idx, _channel) = unpack_handle(handle);
     let regs = TimerRegisters::ptr(timer_idx);
     unsafe {
-        let mut ctl0 = read_volatile(&mut (*regs).ctl0);
+        let mut ctl0 = rs_mcu_traits::reg_read!(regs, ctl0);
         ctl0 &= !TIMER_CTL0_CEN;
-        write_volatile(&mut (*regs).ctl0, ctl0);
+        rs_mcu_traits::reg_write!(regs, ctl0, ctl0);
     }
 }
 
-static mut START_TICKS: [u16; STOPWATCH_MAX_INSTANCES] = [0; STOPWATCH_MAX_INSTANCES];
+static START_TICKS: [core::sync::atomic::AtomicU16; STOPWATCH_MAX_INSTANCES] =
+    [const { core::sync::atomic::AtomicU16::new(0) }; STOPWATCH_MAX_INSTANCES];
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ln_hw_stopwatch_create(timer_index: u32) -> *mut c_void {
@@ -97,11 +98,11 @@ pub extern "C" fn ln_hw_stopwatch_setup(sw: *mut c_void) {
 
     let regs = TimerRegisters::ptr(timer_index);
     unsafe {
-        write_volatile(&mut (*regs).ctl0, 0);
-        write_volatile(&mut (*regs).psc, 0);
-        write_volatile(&mut (*regs).car, STOPWATCH_COUNTER_MAX);
-        write_volatile(&mut (*regs).cnt, 0);
-        write_volatile(&mut (*regs).ctl0, TIMER_CTL0_CEN);
+        rs_mcu_traits::reg_write!(regs, ctl0, 0);
+        rs_mcu_traits::reg_write!(regs, psc, 0);
+        rs_mcu_traits::reg_write!(regs, car, STOPWATCH_COUNTER_MAX);
+        rs_mcu_traits::reg_write!(regs, cnt, 0);
+        rs_mcu_traits::reg_write!(regs, ctl0, TIMER_CTL0_CEN);
     }
 }
 
@@ -109,18 +110,20 @@ pub extern "C" fn ln_hw_stopwatch_setup(sw: *mut c_void) {
 pub extern "C" fn ln_hw_stopwatch_start(sw: *mut c_void) {
     let timer_index = sw as usize as u32;
     let regs = TimerRegisters::ptr(timer_index);
-    let cnt = unsafe { read_volatile(&mut (*regs).cnt) as u16 };
-    unsafe { START_TICKS[timer_index as usize % STOPWATCH_MAX_INSTANCES] = cnt; }
+    let cnt = unsafe { rs_mcu_traits::reg_read!(regs, cnt) as u16 };
+    START_TICKS[timer_index as usize % STOPWATCH_MAX_INSTANCES]
+        .store(cnt, core::sync::atomic::Ordering::Relaxed);
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ln_hw_stopwatch_wait(sw: *mut c_void, ticks: u16) {
     let timer_index = sw as usize as u32;
-    let start_tick = unsafe { START_TICKS[timer_index as usize % STOPWATCH_MAX_INSTANCES] };
+    let start_tick = START_TICKS[timer_index as usize % STOPWATCH_MAX_INSTANCES]
+        .load(core::sync::atomic::Ordering::Relaxed);
 
     let regs = TimerRegisters::ptr(timer_index);
     unsafe {
-        while ((read_volatile(&mut (*regs).cnt) as u16).wrapping_sub(start_tick)) < ticks {
+        while ((rs_mcu_traits::reg_read!(regs, cnt) as u16).wrapping_sub(start_tick)) < ticks {
             core::arch::asm!("nop");
         }
     }
@@ -134,7 +137,8 @@ pub struct ln_delay_timer_c {
     pub dummy: *mut c_void,
 }
 
-static mut SHIM_DELAY_TIMERS: [Option<DelayTimer>; TIMER_MAX_INSTANCES] = [None, None, None, None, None];
+static SHIM_DELAY_TIMERS: rs_mcu_traits::SyncCell<[Option<DelayTimer>; TIMER_MAX_INSTANCES]> =
+    rs_mcu_traits::SyncCell::new([None, None, None, None, None]);
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ln_delay_timer_create(timer: i32, _channel: i32) -> *mut ln_delay_timer_c {
@@ -144,8 +148,9 @@ pub extern "C" fn ln_delay_timer_create(timer: i32, _channel: i32) -> *mut ln_de
     }
     match DelayTimer::new(timer as u32) {
         Ok(dt) => unsafe {
-            SHIM_DELAY_TIMERS[idx] = Some(dt);
-            SHIM_DELAY_TIMERS[idx].as_mut().unwrap() as *mut DelayTimer as *mut ln_delay_timer_c
+            let slot = &mut (*SHIM_DELAY_TIMERS.as_ptr())[idx];
+            *slot = Some(dt);
+            slot.as_mut().unwrap() as *mut DelayTimer as *mut ln_delay_timer_c
         },
         Err(_) => core::ptr::null_mut(),
     }
@@ -158,7 +163,7 @@ pub extern "C" fn ln_delay_timer_delete(timer: *mut ln_delay_timer_c) {
         let idx = dt.timer_idx() as usize;
         if idx < TIMER_MAX_INSTANCES {
             unsafe {
-                SHIM_DELAY_TIMERS[idx] = None;
+                (*SHIM_DELAY_TIMERS.as_ptr())[idx] = None;
             }
         }
     }

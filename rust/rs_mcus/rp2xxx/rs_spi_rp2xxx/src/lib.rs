@@ -595,7 +595,9 @@ impl Spi {
         self.cs_on();
         self.enable_dma_tx(true);
 
-        let tx = self.tx_dma.as_mut().unwrap();
+        let Some(tx) = self.tx_dma.as_mut() else {
+            return false;
+        };
         tx.attach_completion_semaphore(&self.done_sem);
         tx.configure_tx(src, dr_addr, count, DmaTransferConfig::new(width, dreq));
 
@@ -647,11 +649,15 @@ impl Spi {
         self.enable_dma_rx(true);
         self.enable_dma_tx(true);
 
-        let rx_ch = self.rx_dma.as_mut().unwrap();
+        let Some(rx_ch) = self.rx_dma.as_mut() else {
+            return false;
+        };
         rx_ch.attach_completion_semaphore(&self.done_sem);
         rx_ch.configure_rx(dr_addr, dst, count, DmaTransferConfig::new(width, rx_dreq));
 
-        let tx = self.tx_dma.as_mut().unwrap();
+        let Some(tx) = self.tx_dma.as_mut() else {
+            return false;
+        };
         tx.configure_tx(dummy_ptr, dr_addr, count, DmaTransferConfig::new(width, tx_dreq).increment(false));
 
         let ok = self.done_sem.take_timeout(DMA_TIMEOUT_MS);
@@ -712,11 +718,15 @@ impl Spi {
         self.enable_dma_rx(true);
         self.enable_dma_tx(true);
 
-        let rx_ch = self.rx_dma.as_mut().unwrap();
+        let Some(rx_ch) = self.rx_dma.as_mut() else {
+            return false;
+        };
         rx_ch.attach_completion_semaphore(&self.done_sem);
         rx_ch.configure_rx(dr_addr, dst, count, DmaTransferConfig::new(width, rx_dreq));
 
-        let tx = self.tx_dma.as_mut().unwrap();
+        let Some(tx) = self.tx_dma.as_mut() else {
+            return false;
+        };
         tx.configure_tx(src, dr_addr, count, DmaTransferConfig::new(width, tx_dreq));
 
         let ok = self.done_sem.take_timeout(DMA_TIMEOUT_MS);
@@ -798,7 +808,9 @@ impl Spi {
         self.cs_on();
         self.enable_dma_tx(true);
 
-        let tx = self.tx_dma.as_mut().unwrap();
+        let Some(tx) = self.tx_dma.as_mut() else {
+            return false;
+        };
         if let Some(cb) = cb {
             tx.attach_callback(cb, cookie);
         } else {
@@ -905,10 +917,14 @@ impl Spi {
         self.cs_on();
         self.enable_dma_tx(true);
 
-        let ctrl = self.ctrl_dma.as_mut().unwrap();
+        let Some(ctrl) = self.ctrl_dma.as_mut() else {
+            return false;
+        };
         ctrl.attach_completion_semaphore(&self.done_sem);
 
-        let tx = self.tx_dma.as_mut().unwrap();
+        let Some(tx) = self.tx_dma.as_mut() else {
+            return false;
+        };
         tx.setup_gather(ctrl, &self.gather_blocks[..block_count], dr_addr, width, dreq);
         tx.trigger_multi_chunk(ctrl);
 
@@ -974,13 +990,19 @@ impl Spi {
         self.enable_dma_rx(true);
         self.enable_dma_tx(true);
 
-        let ctrl = self.ctrl_dma.as_mut().unwrap();
+        let Some(ctrl) = self.ctrl_dma.as_mut() else {
+            return false;
+        };
         ctrl.attach_completion_semaphore(&self.done_sem);
 
-        let rx = self.rx_dma.as_mut().unwrap();
+        let Some(rx) = self.rx_dma.as_mut() else {
+            return false;
+        };
         rx.setup_scatter(ctrl, blocks, dr_addr, width, rx_dreq);
 
-        let tx = self.tx_dma.as_mut().unwrap();
+        let Some(tx) = self.tx_dma.as_mut() else {
+            return false;
+        };
         tx.configure_tx(
             dummy_ptr,
             dr_addr,
@@ -1083,14 +1105,18 @@ impl Spi {
         self.cs_on();
         self.enable_dma_tx(true);
 
-        let ctrl = self.ctrl_dma.as_mut().unwrap();
+        let Some(ctrl) = self.ctrl_dma.as_mut() else {
+            return false;
+        };
         if let Some(cb) = cb {
             ctrl.attach_callback(cb, cookie);
         } else {
             ctrl.attach_completion_semaphore(&self.done_sem);
         }
 
-        let tx = self.tx_dma.as_mut().unwrap();
+        let Some(tx) = self.tx_dma.as_mut() else {
+            return false;
+        };
         tx.setup_gather(ctrl, &self.gather_blocks[..block_count], dr_addr, width, dreq);
         tx.trigger_multi_chunk(ctrl);
         true
@@ -1305,12 +1331,21 @@ impl spi::Spi for Spi {
     }
 
     fn is_busy(&self) -> bool {
-        // The TX DMA channel's busy flag, not a poll: `is_busy` must not block.
-        self.tx_dma.as_ref().is_some_and(DmaChannel::is_busy)
+        // Check both the TX DMA channel and the SSP BSY flag so `is_busy`
+        // remains true while the TX FIFO / shift register is still draining.
+        self.tx_dma.as_ref().is_some_and(DmaChannel::is_busy) || Spi::is_busy(self)
     }
 
     fn wait_idle(&mut self) -> rs_mcu_traits::Result<()> {
-        if self.wait_for_completion() {
+        let dma_ok = wait_until(|| !self.tx_dma.as_ref().is_some_and(DmaChannel::is_busy));
+        let spi_ok = self.wait_for_completion();
+        if let Some(t) = self.tx_dma.as_mut() {
+            t.end_transfer();
+        }
+        self.enable_dma_tx(false);
+        self.clear_stall_rx();
+        self.cs_off();
+        if dma_ok && spi_ok {
             Ok(())
         } else {
             Err(rs_mcu_traits::Error::Timeout)

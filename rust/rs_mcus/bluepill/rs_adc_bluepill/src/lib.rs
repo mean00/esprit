@@ -61,7 +61,7 @@ impl TimingAdc {
 
     pub fn configured_pins_count(&self) -> u32 {
         let regs = AdcRegisters::ptr(self.instance);
-        unsafe { ((read_volatile(&mut (*regs).rsq0) >> ADC_RSQ0_LEN_POS) & 0x0F) + 1 }
+        unsafe { ((rs_mcu_traits::reg_read!(regs, rsq0) >> ADC_RSQ0_LEN_POS) & 0x0F) + 1 }
     }
 
     pub fn set_source(&mut self, _timer: u32, _channel: u32, _fq: u32, pins: &[Pin]) -> bool {
@@ -73,13 +73,13 @@ impl TimingAdc {
 
         unsafe {
             // Setup Scan Mode
-            let mut ctl0 = read_volatile(&mut (*regs).ctl0);
+            let mut ctl0 = rs_mcu_traits::reg_read!(regs, ctl0);
             ctl0 |= ADC_CTL0_SM;
-            write_volatile(&mut (*regs).ctl0, ctl0);
+            rs_mcu_traits::reg_write!(regs, ctl0, ctl0);
 
             // Configure sequencer length
             let rsq0 = (nb_pins.saturating_sub(1) & 0x0F) << ADC_RSQ0_LEN_POS;
-            write_volatile(&mut (*regs).rsq0, rsq0);
+            rs_mcu_traits::reg_write!(regs, rsq0, rsq0);
 
             // Map pins to RSQ2 (first 5 channels)
             let mut rsq2 = 0;
@@ -87,18 +87,18 @@ impl TimingAdc {
                 let ch = pin_to_adc_channel(p as u32);
                 rsq2 |= ch << (5 * i);
             }
-            write_volatile(&mut (*regs).rsq2, rsq2);
+            rs_mcu_traits::reg_write!(regs, rsq2, rsq2);
 
             // Setup External Trigger
-            let mut ctl1 = read_volatile(&mut (*regs).ctl1);
+            let mut ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
             ctl1 &= !ADC_CTL1_ETSRC_MASK;
             ctl1 |= ADC_CTL1_ETSRC_SWSTART;
             ctl1 |= ADC_CTL1_ETERC;
-            write_volatile(&mut (*regs).ctl1, ctl1);
+            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
 
             // Enable ADC
             ctl1 |= ADC_CTL1_ADCON;
-            write_volatile(&mut (*regs).ctl1, ctl1);
+            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
         }
 
         true
@@ -118,9 +118,9 @@ impl TimingAdc {
             // Clear any stale semaphore token
             self.sem.try_take();
 
-            let mut ctl1 = read_volatile(&mut (*regs).ctl1);
+            let mut ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
             ctl1 |= ADC_CTL1_DMA;
-            write_volatile(&mut (*regs).ctl1, ctl1);
+            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
 
             dma.attach_completion_semaphore(&self.sem);
 
@@ -134,7 +134,7 @@ impl TimingAdc {
             );
 
             ctl1 |= ADC_CTL1_SWRCST;
-            write_volatile(&mut (*regs).ctl1, ctl1);
+            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
 
             // Block until DMA transfer complete interrupt triggers semaphore
             self.sem.take();
@@ -143,7 +143,7 @@ impl TimingAdc {
             dma.detach_callback();
 
             ctl1 &= !ADC_CTL1_DMA;
-            write_volatile(&mut (*regs).ctl1, ctl1);
+            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
         }
 
         true
@@ -218,14 +218,14 @@ impl SimpleAdc {
         unsafe {
             if ch < ADC_SAMPT0_CHANNELS {
                 let shift = ch * ADC_SAMPT_BITS;
-                let mut v = read_volatile(&mut (*regs).sampt0);
+                let mut v = rs_mcu_traits::reg_read!(regs, sampt0);
                 v &= !(ADC_SAMPT_MASK << shift);
-                write_volatile(&mut (*regs).sampt0, v | (smpt << shift));
+                rs_mcu_traits::reg_write!(regs, sampt0, v | (smpt << shift));
             } else {
                 let shift = (ch - ADC_SAMPT0_CHANNELS) * ADC_SAMPT_BITS;
-                let mut v = read_volatile(&mut (*regs).sampt1);
+                let mut v = rs_mcu_traits::reg_read!(regs, sampt1);
                 v &= !(ADC_SAMPT_MASK << shift);
-                write_volatile(&mut (*regs).sampt1, v | (smpt << shift));
+                rs_mcu_traits::reg_write!(regs, sampt1, v | (smpt << shift));
             }
         }
     }
@@ -240,12 +240,12 @@ impl SimpleAdc {
         unsafe {
             let ch = pin_to_adc_channel(self.pin);
 
-            let mut ctl1 = read_volatile(&mut (*regs).ctl1);
+            let mut ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
             ctl1 &= !ADC_CTL1_ETSRC_MASK;
             ctl1 |= ADC_CTL1_ETSRC_SWSTART;
             ctl1 |= ADC_CTL1_ETERC;
             ctl1 |= ADC_CTL1_ADCON;
-            write_volatile(&mut (*regs).ctl1, ctl1);
+            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
 
             let mut nop_ctr = 0;
             while nop_ctr < 1000 {
@@ -253,32 +253,32 @@ impl SimpleAdc {
                 nop_ctr += 1;
             }
 
-            ctl1 = read_volatile(&mut (*regs).ctl1);
+            ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
             ctl1 |= ADC_CTL1_RSTCLB;
-            write_volatile(&mut (*regs).ctl1, ctl1);
-            while (read_volatile(&mut (*regs).ctl1) & ADC_CTL1_RSTCLB) != 0 {
+            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
+            while (rs_mcu_traits::reg_read!(regs, ctl1) & ADC_CTL1_RSTCLB) != 0 {
                 core::arch::asm!("nop");
             }
 
-            ctl1 = read_volatile(&mut (*regs).ctl1);
+            ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
             ctl1 |= ADC_CTL1_CLB;
-            write_volatile(&mut (*regs).ctl1, ctl1);
-            while (read_volatile(&mut (*regs).ctl1) & ADC_CTL1_CLB) != 0 {
+            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
+            while (rs_mcu_traits::reg_read!(regs, ctl1) & ADC_CTL1_CLB) != 0 {
                 core::arch::asm!("nop");
             }
 
-            write_volatile(&mut (*regs).rsq0, 0);
-            write_volatile(&mut (*regs).rsq2, ch);
+            rs_mcu_traits::reg_write!(regs, rsq0, 0);
+            rs_mcu_traits::reg_write!(regs, rsq2, ch);
 
-            ctl1 = read_volatile(&mut (*regs).ctl1);
+            ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
             ctl1 |= ADC_CTL1_SWRCST;
-            write_volatile(&mut (*regs).ctl1, ctl1);
+            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
 
-            while (read_volatile(&mut (*regs).stat) & ADC_STAT_EOC) == 0 {
+            while (rs_mcu_traits::reg_read!(regs, stat) & ADC_STAT_EOC) == 0 {
                 core::arch::asm!("nop");
             }
 
-            let data = read_volatile(&mut (*regs).rdata) & ADC_RDATA_DATA_MASK;
+            let data = rs_mcu_traits::reg_read!(regs, rdata) & ADC_RDATA_DATA_MASK;
             data as i32
         }
     }

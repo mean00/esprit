@@ -36,7 +36,7 @@ pub(crate) fn uart_set_baudrate(instance: u32, speed: u32) -> bool {
     let pclk = rs_rcu_bluepill::get_clock(periph);
     let usartdiv = (pclk + (speed / 2)) / speed;
     unsafe {
-        write_volatile(&mut (*regs).baud, usartdiv);
+        rs_mcu_traits::reg_write!(regs, baud, usartdiv);
     }
     true
 }
@@ -93,9 +93,9 @@ impl UartTx {
 
         let regs = UartRegisters::ptr(self.instance);
         unsafe {
-            let mut ctl0 = read_volatile(&mut (*regs).ctl0);
+            let mut ctl0 = rs_mcu_traits::reg_read!(regs, ctl0);
             ctl0 |= USART_CTL0_UEN | USART_CTL0_TEN;
-            write_volatile(&mut (*regs).ctl0, ctl0);
+            rs_mcu_traits::reg_write!(regs, ctl0, ctl0);
         }
         true
     }
@@ -116,9 +116,9 @@ impl UartTx {
                 if let Some(ref mut dma) = self.dma {
                     self.sem.try_take();
 
-                    let mut ctl2 = read_volatile(&mut (*regs).ctl2);
+                    let mut ctl2 = rs_mcu_traits::reg_read!(regs, ctl2);
                     ctl2 |= USART_CTL2_DMAT;
-                    write_volatile(&mut (*regs).ctl2, ctl2);
+                    rs_mcu_traits::reg_write!(regs, ctl2, ctl2);
 
                     dma.attach_completion_semaphore(&self.sem);
 
@@ -135,16 +135,16 @@ impl UartTx {
                     dma.end_transfer();
                     dma.detach_callback();
 
-                    while (read_volatile(&mut (*regs).stat) & USART_STAT_TC) == 0 {
+                    while (rs_mcu_traits::reg_read!(regs, stat) & USART_STAT_TC) == 0 {
                         core::hint::spin_loop();
                     }
                 }
             } else {
                 for &byte in buffer {
-                    while (read_volatile(&mut (*regs).stat) & USART_STAT_TBE) == 0 {}
-                    write_volatile(&mut (*regs).data, byte as u32);
+                    while (rs_mcu_traits::reg_read!(regs, stat) & USART_STAT_TBE) == 0 {}
+                    rs_mcu_traits::reg_write!(regs, data, byte as u32);
                 }
-                while (read_volatile(&mut (*regs).stat) & USART_STAT_TC) == 0 {}
+                while (rs_mcu_traits::reg_read!(regs, stat) & USART_STAT_TC) == 0 {}
             }
         }
         true
@@ -155,7 +155,7 @@ unsafe extern "C" fn uart_rx_dma_callback(_is_half: bool, cookie: *mut c_void) {
     let instance = cookie as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            if let Some(ref mut rx) = RX_INSTANCES[instance] {
+            if let Some(ref mut rx) = (*RX_INSTANCES.as_ptr())[instance] {
                 rx.check_for_new_data();
             }
         }
@@ -171,7 +171,7 @@ fn uart_rx_timer_cb(instance: &u32) {
     let instance = *instance as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            if let Some(ref mut rx) = RX_INSTANCES[instance] {
+            if let Some(ref mut rx) = (*RX_INSTANCES.as_ptr())[instance] {
                 rx.check_for_new_data();
             }
         }
@@ -183,7 +183,7 @@ pub struct UartRx {
     pub(crate) instance: u32,
     pub(crate) use_dma: bool,
     /// Ring buffer, held inline so that it lives in `.bss` with the rest of the
-    /// receiver (`RX_INSTANCES[]` is a static): no heap allocation at init
+    /// receiver (`(*RX_INSTANCES.as_ptr())[]` is a static): no heap allocation at init
     /// (malloc_used.md §0.7, C11).
     pub(crate) rx_buffer: [u8; RX_BUFFER_SIZE_MAX],
     pub(crate) rx_buffer_size: usize,
@@ -235,7 +235,7 @@ impl UartRx {
 
         // The RX poll timer.  `PeriodicTimer` keeps the kernel control block in
         // an inline `.bss` slot that is filled on first use, so the timer
-        // survives the move into `RX_INSTANCES[]` and the driver needs no timer
+        // survives the move into `(*RX_INSTANCES.as_ptr())[]` and the driver needs no timer
         // storage of its own (malloc_used.md §8.1 S3b).
         assert!(
             (instance as usize) < UART_MAX_INSTANCES,
@@ -275,9 +275,9 @@ impl UartRx {
 
         let regs = UartRegisters::ptr(self.instance);
         unsafe {
-            let mut ctl0 = read_volatile(&mut (*regs).ctl0);
+            let mut ctl0 = rs_mcu_traits::reg_read!(regs, ctl0);
             ctl0 |= USART_CTL0_UEN | USART_CTL0_REN;
-            write_volatile(&mut (*regs).ctl0, ctl0);
+            rs_mcu_traits::reg_write!(regs, ctl0, ctl0);
         }
         true
     }
@@ -302,18 +302,18 @@ impl UartRx {
                 self.rx_tail = 0;
 
                 unsafe {
-                    while (read_volatile(&mut (*regs).stat) & USART_STAT_RBNE) != 0 {
-                        let _ = read_volatile(&mut (*regs).data);
+                    while (rs_mcu_traits::reg_read!(regs, stat) & USART_STAT_RBNE) != 0 {
+                        let _ = rs_mcu_traits::reg_read!(regs, data);
                     }
 
-                    let mut ctl0 = read_volatile(&mut (*regs).ctl0);
+                    let mut ctl0 = rs_mcu_traits::reg_read!(regs, ctl0);
                     ctl0 |= USART_CTL0_UEN | USART_CTL0_REN;
-                    write_volatile(&mut (*regs).ctl0, ctl0);
+                    rs_mcu_traits::reg_write!(regs, ctl0, ctl0);
 
                     if self.use_dma {
-                        let mut ctl2 = read_volatile(&mut (*regs).ctl2);
+                        let mut ctl2 = rs_mcu_traits::reg_read!(regs, ctl2);
                         ctl2 |= USART_CTL2_DMAR;
-                        write_volatile(&mut (*regs).ctl2, ctl2);
+                        rs_mcu_traits::reg_write!(regs, ctl2, ctl2);
 
                         if let Some(ref mut dma) = self.dma {
                             dma.attach_callback(
@@ -336,13 +336,13 @@ impl UartRx {
                         if let Some(ref mut dma) = self.dma {
                             dma.end_transfer();
                         }
-                        let mut ctl2 = read_volatile(&mut (*regs).ctl2);
+                        let mut ctl2 = rs_mcu_traits::reg_read!(regs, ctl2);
                         ctl2 &= !USART_CTL2_DMAR;
-                        write_volatile(&mut (*regs).ctl2, ctl2);
+                        rs_mcu_traits::reg_write!(regs, ctl2, ctl2);
                     }
-                    let mut ctl0 = read_volatile(&mut (*regs).ctl0);
+                    let mut ctl0 = rs_mcu_traits::reg_read!(regs, ctl0);
                     ctl0 &= !USART_CTL0_REN;
-                    write_volatile(&mut (*regs).ctl0, ctl0);
+                    rs_mcu_traits::reg_write!(regs, ctl0, ctl0);
                 }
             }
         });
@@ -478,9 +478,9 @@ impl Drop for UartRx {
         // timer.  The timer's control block is not deleted (see `rs_rtos::timer`:
         // a delete command is processed by the daemon *after* the call returns,
         // so it would write into a structure that is already gone).  Here that
-        // is harmless: `RX_INSTANCES[]` is a `.bss` array, so the memory the
+        // is harmless: `(*RX_INSTANCES.as_ptr())[]` is a `.bss` array, so the memory the
         // kernel still knows about stays valid, and a late expiry finds
-        // `RX_INSTANCES[instance] == None` and does nothing.
+        // `(*RX_INSTANCES.as_ptr())[instance] == None` and does nothing.
         self.enable_rx(false);
     }
 }

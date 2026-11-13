@@ -19,14 +19,15 @@ fn unpack_timing_handle(handle: *mut ln_timing_adc_c) -> u32 {
     handle as usize as u32
 }
 
-static mut TIMING_ADC_INSTANCES: [Option<TimingAdc>; 2] = [None, None];
+static TIMING_ADC_INSTANCES: rs_mcu_traits::SyncCell<[Option<TimingAdc>; 2]> =
+    rs_mcu_traits::SyncCell::new([None, None]);
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ln_timing_adc_create(instance: i32) -> *mut ln_timing_adc_c {
     let inst_idx = instance as usize;
     if inst_idx < 2 {
         unsafe {
-            TIMING_ADC_INSTANCES[inst_idx] = Some(TimingAdc::new(instance as u32));
+            (*TIMING_ADC_INSTANCES.as_ptr())[inst_idx] = Some(TimingAdc::new(instance as u32));
         }
     }
     pack_timing_handle(instance as u32)
@@ -37,7 +38,7 @@ pub extern "C" fn ln_timing_adc_delete(handle: *mut ln_timing_adc_c) -> bool {
     let inst_idx = unpack_timing_handle(handle) as usize;
     if inst_idx < 2 {
         unsafe {
-            TIMING_ADC_INSTANCES[inst_idx] = None;
+            (*TIMING_ADC_INSTANCES.as_ptr())[inst_idx] = None;
         }
     }
     true
@@ -55,7 +56,7 @@ pub extern "C" fn ln_timing_adc_set_source(
     let instance = unpack_timing_handle(handle) as usize;
     if instance < 2 {
         unsafe {
-            if let Some(ref mut adc) = TIMING_ADC_INSTANCES[instance] {
+            if let Some(ref mut adc) = (*TIMING_ADC_INSTANCES.as_ptr())[instance] {
                 let pins = core::slice::from_raw_parts(pin, nb_pins as usize);
                 return adc.set_source(timer, channel, fq, pins);
             }
@@ -73,7 +74,7 @@ pub extern "C" fn ln_timing_adc_multi_read(
     let instance = unpack_timing_handle(handle) as usize;
     if instance < 2 {
         unsafe {
-            if let Some(ref mut adc) = TIMING_ADC_INSTANCES[instance] {
+            if let Some(ref mut adc) = (*TIMING_ADC_INSTANCES.as_ptr())[instance] {
                 let nb_pins = adc.configured_pins_count();
                 let total_samples = (nb_sample_per_channel * nb_pins) as usize;
                 let out_slice = core::slice::from_raw_parts_mut(output, total_samples);
@@ -95,7 +96,7 @@ pub extern "C" fn ln_timing_adc_async_read(
     let instance = unpack_timing_handle(handle) as usize;
     if instance < 2 {
         unsafe {
-            if let Some(ref mut adc) = TIMING_ADC_INSTANCES[instance] {
+            if let Some(ref mut adc) = (*TIMING_ADC_INSTANCES.as_ptr())[instance] {
                 let nb_pins = adc.configured_pins_count();
                 let total_samples = (nb_sample_per_channel * nb_pins) as usize;
                 let out_slice = core::slice::from_raw_parts_mut(output, total_samples);

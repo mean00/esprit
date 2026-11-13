@@ -32,8 +32,10 @@ pub fn unpack_rx_handle(handle: *mut ln_serial_rx_c) -> u32 {
     handle as usize as u32
 }
 
-pub(crate) static mut TX_INSTANCES: [Option<UartTx>; UART_MAX_INSTANCES] = [None, None, None];
-pub(crate) static mut RX_INSTANCES: [Option<UartRx>; UART_MAX_INSTANCES] = [None, None, None];
+pub(crate) static TX_INSTANCES: rs_mcu_traits::SyncCell<[Option<UartTx>; UART_MAX_INSTANCES]> =
+    rs_mcu_traits::SyncCell::new([None, None, None]);
+pub(crate) static RX_INSTANCES: rs_mcu_traits::SyncCell<[Option<UartRx>; UART_MAX_INSTANCES]> =
+    rs_mcu_traits::SyncCell::new([None, None, None]);
 
 #[unsafe(no_mangle)]
 pub extern "C" fn lnserial_tx_create(
@@ -43,7 +45,7 @@ pub extern "C" fn lnserial_tx_create(
 ) -> *mut ln_serial_tx_c {
     if (instance as usize) < UART_MAX_INSTANCES {
         unsafe {
-            TX_INSTANCES[instance as usize] = Some(UartTx::new(instance, dma));
+            (*TX_INSTANCES.as_ptr())[instance as usize] = Some(UartTx::new(instance, dma));
         }
     }
     pack_tx_handle(instance)
@@ -54,7 +56,7 @@ pub extern "C" fn lnserial_tx_delete(s: *mut ln_serial_tx_c) {
     let instance = unpack_tx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            TX_INSTANCES[instance] = None;
+            (*TX_INSTANCES.as_ptr())[instance] = None;
         }
     }
 }
@@ -64,7 +66,7 @@ pub extern "C" fn lnserial_tx_init(s: *mut ln_serial_tx_c) -> bool {
     let instance = unpack_tx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            if let Some(ref mut tx) = TX_INSTANCES[instance] {
+            if let Some(ref mut tx) = (*TX_INSTANCES.as_ptr())[instance] {
                 return tx.init();
             }
         }
@@ -77,7 +79,7 @@ pub extern "C" fn lnserial_tx_set_speed(s: *mut ln_serial_tx_c, speed: u32) -> b
     let instance = unpack_tx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            if let Some(ref mut tx) = TX_INSTANCES[instance] {
+            if let Some(ref mut tx) = (*TX_INSTANCES.as_ptr())[instance] {
                 return tx.set_speed(speed);
             }
         }
@@ -94,7 +96,7 @@ pub extern "C" fn lnserial_tx_transmit(
     let instance = unpack_tx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES && !buffer.is_null() {
         unsafe {
-            if let Some(ref mut tx) = TX_INSTANCES[instance] {
+            if let Some(ref mut tx) = (*TX_INSTANCES.as_ptr())[instance] {
                 let slice = core::slice::from_raw_parts(buffer, size as usize);
                 return tx.transmit(slice);
             }
@@ -120,10 +122,10 @@ pub extern "C" fn lnserial_rx_create(
 ) -> *mut ln_serial_rx_c {
     if (instance as usize) < UART_MAX_INSTANCES {
         unsafe {
-            if TX_INSTANCES[instance as usize].is_none() {
-                TX_INSTANCES[instance as usize] = Some(UartTx::new(instance, dma));
+            if (*TX_INSTANCES.as_ptr())[instance as usize].is_none() {
+                (*TX_INSTANCES.as_ptr())[instance as usize] = Some(UartTx::new(instance, dma));
             }
-            RX_INSTANCES[instance as usize] = Some(UartRx::new(instance, rx_buffer_size, dma));
+            (*RX_INSTANCES.as_ptr())[instance as usize] = Some(UartRx::new(instance, rx_buffer_size, dma));
         }
     }
     pack_rx_handle(instance)
@@ -134,10 +136,10 @@ pub extern "C" fn lnserial_rx_delete(s: *mut ln_serial_rx_c) {
     let instance = unpack_rx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            if let Some(ref mut rx) = RX_INSTANCES[instance] {
+            if let Some(ref mut rx) = (*RX_INSTANCES.as_ptr())[instance] {
                 rx.enable_rx(false);
             }
-            RX_INSTANCES[instance] = None;
+            (*RX_INSTANCES.as_ptr())[instance] = None;
         }
     }
 }
@@ -147,12 +149,12 @@ pub extern "C" fn lnserial_rx_init(s: *mut ln_serial_rx_c) -> bool {
     let instance = unpack_rx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            let tx_ok = if let Some(ref mut tx) = TX_INSTANCES[instance] {
+            let tx_ok = if let Some(ref mut tx) = (*TX_INSTANCES.as_ptr())[instance] {
                 tx.init()
             } else {
                 false
             };
-            let rx_ok = if let Some(ref mut rx) = RX_INSTANCES[instance] {
+            let rx_ok = if let Some(ref mut rx) = (*RX_INSTANCES.as_ptr())[instance] {
                 rx.init()
             } else {
                 false
@@ -191,11 +193,11 @@ pub extern "C" fn lnserial_rx_transmit_no_block(
     let instance = unpack_rx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES && !buffer.is_null() {
         unsafe {
-            if let Some(ref mut tx) = TX_INSTANCES[instance] {
+            if let Some(ref mut tx) = (*TX_INSTANCES.as_ptr())[instance] {
                 let slice = core::slice::from_raw_parts(buffer, size as usize);
                 let res = tx.transmit(slice);
                 if res {
-                    if let Some(ref mut rx) = RX_INSTANCES[instance] {
+                    if let Some(ref mut rx) = (*RX_INSTANCES.as_ptr())[instance] {
                         if let Some(cb) = rx.callback {
                             cb(rx.callback_cookie, 1); // 1 = SerialEvent::TxDone
                         }
@@ -213,7 +215,7 @@ pub extern "C" fn lnserial_rx_enable_rx(s: *mut ln_serial_rx_c, enabled: bool) -
     let instance = unpack_rx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            if let Some(ref mut rx) = RX_INSTANCES[instance] {
+            if let Some(ref mut rx) = (*RX_INSTANCES.as_ptr())[instance] {
                 return rx.enable_rx(enabled);
             }
         }
@@ -226,7 +228,7 @@ pub extern "C" fn lnserial_rx_purge_rx(s: *mut ln_serial_rx_c) {
     let instance = unpack_rx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            if let Some(ref mut rx) = RX_INSTANCES[instance] {
+            if let Some(ref mut rx) = (*RX_INSTANCES.as_ptr())[instance] {
                 rx.purge_rx();
             }
         }
@@ -238,7 +240,7 @@ pub extern "C" fn lnserial_rx_read(s: *mut ln_serial_rx_c, max: u32, to: *mut u8
     let instance = unpack_rx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES && max > 0 && !to.is_null() {
         unsafe {
-            if let Some(ref mut rx) = RX_INSTANCES[instance] {
+            if let Some(ref mut rx) = (*RX_INSTANCES.as_ptr())[instance] {
                 let (nb, ptr) = rx.get_read_pointer();
                 if nb > 0 && !ptr.is_null() {
                     let to_copy = core::cmp::min(nb as u32, max) as usize;
@@ -261,7 +263,7 @@ pub extern "C" fn lnserial_rx_set_callback(
     let instance = unpack_rx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            if let Some(ref mut rx) = RX_INSTANCES[instance] {
+            if let Some(ref mut rx) = (*RX_INSTANCES.as_ptr())[instance] {
                 rx.callback = cb;
                 rx.callback_cookie = cookie;
             }
@@ -274,7 +276,7 @@ pub extern "C" fn lnserial_rx_get_read_pointer(s: *mut ln_serial_rx_c, to: *mut 
     let instance = unpack_rx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            if let Some(ref mut rx) = RX_INSTANCES[instance] {
+            if let Some(ref mut rx) = (*RX_INSTANCES.as_ptr())[instance] {
                 let (nb, ptr) = rx.get_read_pointer();
                 if !to.is_null() {
                     *to = ptr;
@@ -291,7 +293,7 @@ pub extern "C" fn lnserial_rx_consume(s: *mut ln_serial_rx_c, n: u32) {
     let instance = unpack_rx_handle(s) as usize;
     if instance < UART_MAX_INSTANCES {
         unsafe {
-            if let Some(ref mut rx) = RX_INSTANCES[instance] {
+            if let Some(ref mut rx) = (*RX_INSTANCES.as_ptr())[instance] {
                 rx.consume(n);
             }
         }

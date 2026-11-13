@@ -19,6 +19,24 @@
 
 use core::cell::UnsafeCell;
 
+/// Interior-mutable `Sync` cell for static driver/shim state (replaces `static mut`).
+pub struct SyncCell<T>(UnsafeCell<T>);
+
+// SAFETY: Callers uphold single-writer / synchronized access invariants (e.g., via
+// critical sections or task-only ownership) when reading or mutating through `as_ptr`.
+unsafe impl<T> Sync for SyncCell<T> {}
+
+impl<T> SyncCell<T> {
+    pub const fn new(val: T) -> Self {
+        Self(UnsafeCell::new(val))
+    }
+
+    #[inline(always)]
+    pub const fn as_ptr(&self) -> *mut T {
+        self.0.get()
+    }
+}
+
 /// One `Option<&'static T>` that can live in a `static` and be read from an ISR.
 ///
 /// `T` is `?Sized` because the slots hold `&'static dyn XHandler`.

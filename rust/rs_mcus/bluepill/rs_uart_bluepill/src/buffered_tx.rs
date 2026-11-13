@@ -148,9 +148,9 @@ impl BufferedTx {
         // ("default is good enough") before setting the speed.
         unsafe {
             let regs = UartRegisters::ptr(self.instance);
-            write_volatile(&mut (*regs).ctl0, USART_CTL0_UEN | USART_CTL0_TEN);
-            let ctl2 = read_volatile(&mut (*regs).ctl2);
-            write_volatile(&mut (*regs).ctl2, ctl2 | USART_CTL2_DMAT);
+            rs_mcu_traits::reg_write!(regs, ctl0, USART_CTL0_UEN | USART_CTL0_TEN);
+            let ctl2 = rs_mcu_traits::reg_read!(regs, ctl2);
+            rs_mcu_traits::reg_write!(regs, ctl2, ctl2 | USART_CTL2_DMAT);
         }
 
         // SAFETY: `dma` is only written here, before `initialised` lets any
@@ -317,16 +317,16 @@ impl BufferedTx {
         unsafe {
             (*self.dma.get()).assume_init_mut().end_transfer(); // detaches the callback, disables the channel
             let regs = UartRegisters::ptr(self.instance);
-            let ctl2 = read_volatile(&mut (*regs).ctl2);
-            write_volatile(&mut (*regs).ctl2, ctl2 & !USART_CTL2_DMAT);
+            let ctl2 = rs_mcu_traits::reg_read!(regs, ctl2);
+            rs_mcu_traits::reg_write!(regs, ctl2, ctl2 & !USART_CTL2_DMAT);
         }
         self.reset_ring();
 
         let regs = UartRegisters::ptr(self.instance);
         for &byte in data {
             unsafe {
-                while (read_volatile(&mut (*regs).stat) & USART_STAT_TBE) == 0 {}
-                write_volatile(&mut (*regs).data, byte as u32);
+                while (rs_mcu_traits::reg_read!(regs, stat) & USART_STAT_TBE) == 0 {}
+                rs_mcu_traits::reg_write!(regs, data, byte as u32);
             }
         }
     }
@@ -348,12 +348,12 @@ impl BufferedTx {
         // back with the value just read).
         let regs = UartRegisters::ptr(self.instance);
         unsafe {
-            let ctl0 = read_volatile(&mut (*regs).ctl0);
-            write_volatile(&mut (*regs).ctl0, ctl0 | USART_CTL0_TEN);
-            let ctl2 = read_volatile(&mut (*regs).ctl2);
-            write_volatile(&mut (*regs).ctl2, ctl2 | USART_CTL2_DMAT);
-            let stat = read_volatile(&mut (*regs).stat);
-            write_volatile(&mut (*regs).stat, stat & !USART_STAT_TC);
+            let ctl0 = rs_mcu_traits::reg_read!(regs, ctl0);
+            rs_mcu_traits::reg_write!(regs, ctl0, ctl0 | USART_CTL0_TEN);
+            let ctl2 = rs_mcu_traits::reg_read!(regs, ctl2);
+            rs_mcu_traits::reg_write!(regs, ctl2, ctl2 | USART_CTL2_DMAT);
+            let stat = rs_mcu_traits::reg_read!(regs, stat);
+            rs_mcu_traits::reg_write!(regs, stat, stat & !USART_STAT_TC);
         }
         self.start_dma(ptr, len);
     }

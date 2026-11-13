@@ -290,42 +290,42 @@ impl Spi {
 
     #[inline(always)]
     fn cr1(&self) -> u32 {
-        unsafe { read_volatile(&mut (*self.regs()).cr1) }
+        unsafe { read_volatile(core::ptr::addr_of!((*self.regs()).cr1)) }
     }
 
     #[inline(always)]
     fn set_cr1(&self, value: u32) {
-        unsafe { write_volatile(&mut (*self.regs()).cr1, value) }
+        unsafe { write_volatile(core::ptr::addr_of_mut!((*self.regs()).cr1), value) }
     }
 
     #[inline(always)]
     fn cr2(&self) -> u32 {
-        unsafe { read_volatile(&mut (*self.regs()).cr2) }
+        unsafe { read_volatile(core::ptr::addr_of!((*self.regs()).cr2)) }
     }
 
     #[inline(always)]
     fn set_cr2(&self, value: u32) {
-        unsafe { write_volatile(&mut (*self.regs()).cr2, value) }
+        unsafe { write_volatile(core::ptr::addr_of_mut!((*self.regs()).cr2), value) }
     }
 
     #[inline(always)]
     fn status(&self) -> u32 {
-        unsafe { read_volatile(&mut (*self.regs()).sr) }
+        unsafe { read_volatile(core::ptr::addr_of!((*self.regs()).sr)) }
     }
 
     #[inline(always)]
     fn set_status(&self, value: u32) {
-        unsafe { write_volatile(&mut (*self.regs()).sr, value) }
+        unsafe { write_volatile(core::ptr::addr_of_mut!((*self.regs()).sr), value) }
     }
 
     #[inline(always)]
     fn write_data(&self, value: u32) {
-        unsafe { write_volatile(&mut (*self.regs()).dr, value) }
+        unsafe { write_volatile(core::ptr::addr_of_mut!((*self.regs()).dr), value) }
     }
 
     #[inline(always)]
     fn read_data(&self) -> u32 {
-        unsafe { read_volatile(&mut (*self.regs()).dr) }
+        unsafe { read_volatile(core::ptr::addr_of!((*self.regs()).dr)) }
     }
 
     /// Address of the data register, i.e. the peripheral side of the DMA.
@@ -846,6 +846,9 @@ impl Drop for Spi {
 
 impl spi::Spi for Spi {
     fn configure(&mut self, config: &spi::SpiConfig) -> Result<()> {
+        if config.data_size != 8 && config.data_size != 16 {
+            return Err(Error::Unsupported);
+        }
         self.speed_hz = config.speed_hz;
         self.data_mode = match config.mode {
             spi::SpiMode::Mode0 => spiDataMode_SPI_MODE0,

@@ -50,9 +50,9 @@ impl Timer {
     #[inline]
     pub fn enable(&mut self) {
         unsafe {
-            let mut ctl0 = read_volatile(&mut (*self.regs).ctl0);
+            let mut ctl0 = rs_mcu_traits::reg_read!(self.regs, ctl0);
             ctl0 |= TIMER_CTL0_CEN;
-            write_volatile(&mut (*self.regs).ctl0, ctl0);
+            rs_mcu_traits::reg_write!(self.regs, ctl0, ctl0);
         }
     }
 
@@ -60,10 +60,10 @@ impl Timer {
     #[inline]
     pub fn disable(&mut self) {
         unsafe {
-            let mut ctl0 = read_volatile(&mut (*self.regs).ctl0);
+            let mut ctl0 = rs_mcu_traits::reg_read!(self.regs, ctl0);
             ctl0 &= !TIMER_CTL0_CEN;
-            write_volatile(&mut (*self.regs).ctl0, ctl0);
-            write_volatile(&mut (*self.regs).cnt, 0);
+            rs_mcu_traits::reg_write!(self.regs, ctl0, ctl0);
+            rs_mcu_traits::reg_write!(self.regs, cnt, 0);
         }
     }
 
@@ -71,7 +71,7 @@ impl Timer {
     #[inline]
     pub fn reset_counter(&mut self) {
         unsafe {
-            write_volatile(&mut (*self.regs).cnt, 0);
+            rs_mcu_traits::reg_write!(self.regs, cnt, 0);
         }
     }
 
@@ -79,7 +79,7 @@ impl Timer {
     #[inline]
     pub fn set_counter(&mut self, cnt: u32) {
         unsafe {
-            write_volatile(&mut (*self.regs).cnt, cnt);
+            rs_mcu_traits::reg_write!(self.regs, cnt, cnt);
         }
     }
 
@@ -88,7 +88,7 @@ impl Timer {
     #[inline]
     pub fn set_prescaler(&mut self, psc: u16) {
         unsafe {
-            write_volatile(&mut (*self.regs).psc, psc as u32);
+            rs_mcu_traits::reg_write!(self.regs, psc, psc as u32);
         }
     }
 
@@ -96,27 +96,27 @@ impl Timer {
     #[inline]
     pub fn set_auto_reload(&mut self, car: u32) {
         unsafe {
-            write_volatile(&mut (*self.regs).car, car);
+            rs_mcu_traits::reg_write!(self.regs, car, car);
         }
     }
 
     /// Read auto-reload register.
     #[inline]
     pub fn auto_reload(&self) -> u32 {
-        unsafe { read_volatile(&mut (*self.regs).car) }
+        unsafe { rs_mcu_traits::reg_read!(self.regs, car) }
     }
 
     /// Enable or disable auto-reload preload (ARPE).
     #[inline]
     pub fn set_auto_reload_preload(&mut self, enabled: bool) {
         unsafe {
-            let mut ctl0 = read_volatile(&mut (*self.regs).ctl0);
+            let mut ctl0 = rs_mcu_traits::reg_read!(self.regs, ctl0);
             if enabled {
                 ctl0 |= TIMER_CTL0_ARPE;
             } else {
                 ctl0 &= !TIMER_CTL0_ARPE;
             }
-            write_volatile(&mut (*self.regs).ctl0, ctl0);
+            rs_mcu_traits::reg_write!(self.regs, ctl0, ctl0);
         }
     }
 
@@ -163,28 +163,28 @@ impl Timer {
         unsafe {
             match channel {
                 TIMER_CHANNEL_0 => {
-                    let mut reg = read_volatile(&mut (*self.regs).chctlc0);
+                    let mut reg = rs_mcu_traits::reg_read!(self.regs, chctlc0);
                     reg &= !TIMER_CHCTLC_CH_LOW_MASK;
                     reg |= cfg;
-                    write_volatile(&mut (*self.regs).chctlc0, reg);
+                    rs_mcu_traits::reg_write!(self.regs, chctlc0, reg);
                 }
                 TIMER_CHANNEL_1 => {
-                    let mut reg = read_volatile(&mut (*self.regs).chctlc0);
+                    let mut reg = rs_mcu_traits::reg_read!(self.regs, chctlc0);
                     reg &= !TIMER_CHCTLC_CH_HIGH_MASK;
                     reg |= cfg << TIMER_CHCTLC_CH_HIGH_SHIFT;
-                    write_volatile(&mut (*self.regs).chctlc0, reg);
+                    rs_mcu_traits::reg_write!(self.regs, chctlc0, reg);
                 }
                 TIMER_CHANNEL_2 => {
-                    let mut reg = read_volatile(&mut (*self.regs).chctlc1);
+                    let mut reg = rs_mcu_traits::reg_read!(self.regs, chctlc1);
                     reg &= !TIMER_CHCTLC_CH_LOW_MASK;
                     reg |= cfg;
-                    write_volatile(&mut (*self.regs).chctlc1, reg);
+                    rs_mcu_traits::reg_write!(self.regs, chctlc1, reg);
                 }
                 TIMER_CHANNEL_3 => {
-                    let mut reg = read_volatile(&mut (*self.regs).chctlc1);
+                    let mut reg = rs_mcu_traits::reg_read!(self.regs, chctlc1);
                     reg &= !TIMER_CHCTLC_CH_HIGH_MASK;
                     reg |= cfg << TIMER_CHCTLC_CH_HIGH_SHIFT;
-                    write_volatile(&mut (*self.regs).chctlc1, reg);
+                    rs_mcu_traits::reg_write!(self.regs, chctlc1, reg);
                 }
                 _ => {}
             }
@@ -196,10 +196,10 @@ impl Timer {
     pub fn set_channel_compare(&mut self, channel: u32, value: u32) {
         unsafe {
             match channel {
-                TIMER_CHANNEL_0 => write_volatile(&mut (*self.regs).chcv0, value),
-                TIMER_CHANNEL_1 => write_volatile(&mut (*self.regs).chcv1, value),
-                TIMER_CHANNEL_2 => write_volatile(&mut (*self.regs).chcv2, value),
-                TIMER_CHANNEL_3 => write_volatile(&mut (*self.regs).chcv3, value),
+                TIMER_CHANNEL_0 => rs_mcu_traits::reg_write!(self.regs, chcv0, value),
+                TIMER_CHANNEL_1 => rs_mcu_traits::reg_write!(self.regs, chcv1, value),
+                TIMER_CHANNEL_2 => rs_mcu_traits::reg_write!(self.regs, chcv2, value),
+                TIMER_CHANNEL_3 => rs_mcu_traits::reg_write!(self.regs, chcv3, value),
                 _ => {}
             }
         }
@@ -210,13 +210,13 @@ impl Timer {
     pub fn set_channel_output(&mut self, channel: u32, enabled: bool) {
         let bit = TIMER_CHCTL2_CH0EN << (channel * TIMER_CHCTL2_CHANNEL_SHIFT);
         unsafe {
-            let mut chctl2 = read_volatile(&mut (*self.regs).chctl2);
+            let mut chctl2 = rs_mcu_traits::reg_read!(self.regs, chctl2);
             if enabled {
                 chctl2 |= bit;
             } else {
                 chctl2 &= !bit;
             }
-            write_volatile(&mut (*self.regs).chctl2, chctl2);
+            rs_mcu_traits::reg_write!(self.regs, chctl2, chctl2);
         }
     }
 
@@ -225,13 +225,13 @@ impl Timer {
     pub fn enable_channel_dma(&mut self, channel: u32, enabled: bool) {
         let bit = 1 << (TIMER_DIEN_CH_DMA_BASE_BIT + channel);
         unsafe {
-            let mut dien = read_volatile(&mut (*self.regs).dien);
+            let mut dien = rs_mcu_traits::reg_read!(self.regs, dien);
             if enabled {
                 dien |= bit;
             } else {
                 dien &= !bit;
             }
-            write_volatile(&mut (*self.regs).dien, dien);
+            rs_mcu_traits::reg_write!(self.regs, dien, dien);
         }
     }
 
@@ -239,13 +239,13 @@ impl Timer {
     #[inline]
     pub fn set_dma_on_compare_event(&mut self, enabled: bool) {
         unsafe {
-            let mut ctl1 = read_volatile(&mut (*self.regs).ctl1);
+            let mut ctl1 = rs_mcu_traits::reg_read!(self.regs, ctl1);
             if enabled {
                 ctl1 |= TIMER_CTL1_DMAS;
             } else {
                 ctl1 &= !TIMER_CTL1_DMAS;
             }
-            write_volatile(&mut (*self.regs).ctl1, ctl1);
+            rs_mcu_traits::reg_write!(self.regs, ctl1, ctl1);
         }
     }
 
@@ -291,8 +291,8 @@ impl timer::Timer for Timer {
             ctl0 &= !TIMER_CTL0_CEN;
             write_volatile(ctl0_ptr, ctl0);
 
-            write_volatile(core::ptr::addr_of_mut!((*regs).psc), psc);
-            write_volatile(core::ptr::addr_of_mut!((*regs).car), ms);
+            rs_mcu_traits::reg_write!(regs, psc, psc);
+            rs_mcu_traits::reg_write!(regs, car, ms);
 
             // One-pulse mode: the counter stops itself after `car`.
             let _ = active_high;

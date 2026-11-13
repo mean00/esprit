@@ -4,9 +4,10 @@
 #![no_std]
 pub mod registers;
 
-use core::ptr::{read_volatile, write_volatile};
 use registers::*;
 use rs_rcu_bluepill::{Peripheral, enable};
+
+rs_mcu_traits::define_mmio_accessors!(AfioRegisters::ptr());
 
 /// Ensure AFIO clock is enabled.
 pub fn enable_afio() {
@@ -16,41 +17,26 @@ pub fn enable_afio() {
 /// Configure SWJ to SWD enabled and JTAG disabled (freeing PA15, PB3, PB4).
 pub fn release_jtag_pins() {
     enable_afio();
-    let afio = AfioRegisters::ptr();
     critical_section::with(|_| unsafe {
-        let pcf0_ptr = core::ptr::addr_of_mut!((*afio).pcf0);
-        let mut pcf0 = read_volatile(pcf0_ptr);
-        pcf0 &= !AFIO_PCF0_SWJ_CFG_MASK;
-        pcf0 |= AFIO_PCF0_SWJ_CFG_SWD_NO_JTAG;
-        write_volatile(pcf0_ptr, pcf0);
+        modify_reg!(pcf0, |v| (v & !AFIO_PCF0_SWJ_CFG_MASK) | AFIO_PCF0_SWJ_CFG_SWD_NO_JTAG);
     });
 }
 
 /// Apply partial remap to Timer 2 (TIM3): PB4 = CH1, PB5 = CH2.
 pub fn remap_timer2_partial() {
     enable_afio();
-    let afio = AfioRegisters::ptr();
     critical_section::with(|_| unsafe {
-        let pcf0_ptr = core::ptr::addr_of_mut!((*afio).pcf0);
-        let mut pcf0 = read_volatile(pcf0_ptr);
-        pcf0 &= !AFIO_PCF0_TIMER2_REMAP_MASK;
-        pcf0 |= AFIO_PCF0_TIMER2_REMAP_PARTIAL;
-        write_volatile(pcf0_ptr, pcf0);
+        modify_reg!(pcf0, |v| (v & !AFIO_PCF0_TIMER2_REMAP_MASK) | AFIO_PCF0_TIMER2_REMAP_PARTIAL);
     });
 }
 
 /// Select GPIO port as EXTI trigger source for the given pin index (0..15).
 pub fn select_exti_source(port: u32, source: u32) {
     enable_afio();
-    let afio = AfioRegisters::ptr();
     critical_section::with(|_| unsafe {
         let idx = (source >> 2) as usize;
         let shift = 4 * (source & 3);
-        let extiss_ptr = core::ptr::addr_of_mut!((*afio).extiss[idx]);
-        let mut mask = read_volatile(extiss_ptr);
-        mask &= !(0xF << shift);
-        mask |= port << shift;
-        write_volatile(extiss_ptr, mask);
+        modify_reg!(extiss[idx], |v| (v & !(0xF << shift)) | (port << shift));
     });
 }
 
