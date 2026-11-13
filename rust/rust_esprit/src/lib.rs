@@ -268,6 +268,49 @@ mod uart_driver {
         }
     }
 }
+/// The I²C driver of the current target — the family type that implements
+/// [`HalI2c`] (`rs_i2c_rp2xxx::I2c`, `rs_i2c_bluepill::I2c`,
+/// `rs_i2c_wrapped::I2cWrapped`).
+pub use i2c_driver::I2cDriver;
+/// Platform selection of the I²C driver: the only place a family is named.
+mod i2c_driver {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "rp2040")] {
+            /// The RP2xxx I²C block.
+            pub use rs_i2c_rp2xxx::I2c as I2cDriver;
+        } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
+            /// The C-ABI backend.
+            pub use rs_i2c_wrapped::I2cWrapped as I2cDriver;
+        } else {
+            /// The GD32 / CH32 I²C block.
+            pub use rs_i2c_bluepill::I2c as I2cDriver;
+        }
+    }
+}
+/// The timer channel driver of the current target — the family type that
+/// implements [`HalTimer`] (`rs_timer_rp2xxx::Timer`, `rs_timer_bluepill::Timer`,
+/// `rs_timer_wrapped::TimerWrapped`).
+pub use timer_driver::TimerDriver;
+/// The one-shot delay driver of the current target — the family type that
+/// implements [`HalDelayTimer`].
+pub use timer_driver::DelayTimerDriver;
+/// Platform selection of the timer drivers: the only place a family is named.
+mod timer_driver {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "rp2040")] {
+            /// The RP2xxx timer channels.
+            pub use rs_timer_rp2xxx::{DelayTimer as DelayTimerDriver, Timer as TimerDriver};
+        } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
+            /// The C-ABI backend.
+            pub use rs_timer_wrapped::{
+                DelayTimerWrapped as DelayTimerDriver, TimerWrapped as TimerDriver,
+            };
+        } else {
+            /// The GD32 / CH32 timer channels.
+            pub use rs_timer_bluepill::{DelayTimer as DelayTimerDriver, Timer as TimerDriver};
+        }
+    }
+}
 /// Platform selection of the two ADC drivers: the only place a family is named.
 mod adc_driver {
     cfg_if::cfg_if! {
@@ -617,10 +660,10 @@ pub use rs_mcu_traits::{
     adc::{Adc as HalAdc, AdcBuffer as HalAdcBuffer, ScanAdc as HalScanAdc},
     gpio::{Gpio as HalGpio},
     exti::{Exti as HalExti},
-    i2c::{I2c as HalI2c, I2cConfig, I2cHandler},
+    i2c::{I2c as HalI2c, I2cConfig, I2cHandler, Operation},
     pwm::{Pwm as HalPwm, PwmConfig, PwmHandler},
     dma::{Dma as HalDma, DmaHandler},
     spi::{BitOrder as HalSpiBitOrder, Spi as HalSpi, SpiConfig, SpiHandler, SpiMode as HalSpiMode},
-    timer::{DelayTimer as HalDelayTimer, Timer as HalTimer, TimerHandler},
+    timer::{DelayHandler, DelayTimer as HalDelayTimer, Timer as HalTimer, TimerHandler},
     uart::{Uart as HalUart, UartConfig, UartHandler},
 };

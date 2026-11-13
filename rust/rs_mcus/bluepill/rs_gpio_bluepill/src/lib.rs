@@ -55,10 +55,22 @@ pub enum Pin {
     PG8 = 104, PG9 = 105, PG10 = 106, PG11 = 107, PG12 = 108, PG13 = 109, PG14 = 110, PG15 = 111,
 }
 
+impl Pin {
+    /// Safe checked constructor for a Bluepill pin number (0..=111, PA0..PG15).
+    pub const fn from_number(val: u32) -> Option<Self> {
+        if val <= 111 {
+            // SAFETY: 0..=111 are all valid enum discriminants for PA0..PG15.
+            Some(unsafe { core::mem::transmute::<u32, Self>(val) })
+        } else {
+            None
+        }
+    }
+}
+
 impl From<u32> for Pin {
     #[inline]
     fn from(val: u32) -> Self {
-        unsafe { core::mem::transmute(val) }
+        Self::from_number(val).expect("invalid GPIO pin number for Bluepill (expected 0..=111)")
     }
 }
 
@@ -141,11 +153,12 @@ impl Gpio {
 pub fn write(pin: Pin, value: bool) {
     let port = get_ptr(pin);
     let bit = get_bit(pin);
+    // SAFETY: the port base is a valid MMIO address for GPIO registers.
     unsafe {
         if value {
-            write_volatile(&mut (*port).bop, 1 << bit);
+            write_volatile(core::ptr::addr_of_mut!((*port).bop), 1 << bit);
         } else {
-            write_volatile(&mut (*port).bc, 1 << bit);
+            write_volatile(core::ptr::addr_of_mut!((*port).bc), 1 << bit);
         }
     }
 }
@@ -154,8 +167,9 @@ pub fn write(pin: Pin, value: bool) {
 pub fn read(pin: Pin) -> bool {
     let port = get_ptr(pin);
     let bit = get_bit(pin);
+    // SAFETY: reading istat register.
     unsafe {
-        (read_volatile(&mut (*port).istat) & (1 << bit)) != 0
+        (read_volatile(core::ptr::addr_of!((*port).istat)) & (1 << bit)) != 0
     }
 }
 
@@ -163,11 +177,12 @@ pub fn read(pin: Pin) -> bool {
 pub fn toggle(pin: Pin) {
     let port = get_ptr(pin);
     let bit = get_bit(pin);
-    unsafe {
-        let mut val = read_volatile(&mut (*port).octl);
+    critical_section::with(|_| unsafe {
+        let octl = core::ptr::addr_of_mut!((*port).octl);
+        let mut val = read_volatile(octl);
         val ^= 1 << bit;
-        write_volatile(&mut (*port).octl, val);
-    }
+        write_volatile(octl, val);
+    });
 }
 
 #[inline]
@@ -177,8 +192,10 @@ pub fn open_drain_close(pin: Pin, close: bool) {
 
 #[inline]
 pub fn read_port(port: u32) -> u32 {
+    let port_ptr = get_port_ptr(port);
+    // SAFETY: reading istat register.
     unsafe {
-        read_volatile(&mut (*get_port_ptr(port)).istat)
+        read_volatile(core::ptr::addr_of!((*port_ptr).istat))
     }
 }
 
@@ -199,11 +216,11 @@ pub fn set_mode(pin: Pin, mode: Mode, speed_in_mhz: u32) {
         Mode::AdcMode | Mode::DacMode => gpio_set(CTL_MD_INPUT, CTL_INPUT_ANALOG),
         Mode::Floating | Mode::InputFloating => gpio_set(CTL_MD_INPUT, CTL_INPUT_FLOATING),
         Mode::InputPullup => {
-            unsafe { write_volatile(&mut (*port).bop, 1 << bit) };
+            unsafe { write_volatile(core::ptr::addr_of_mut!((*port).bop), 1 << bit) };
             gpio_set(CTL_MD_INPUT, CTL_INPUT_PULLUP_PULLDOWN)
         }
         Mode::InputPulldown => {
-            unsafe { write_volatile(&mut (*port).bc, 1 << bit) };
+            unsafe { write_volatile(core::ptr::addr_of_mut!((*port).bc), 1 << bit) };
             gpio_set(CTL_MD_INPUT, CTL_INPUT_PULLUP_PULLDOWN)
         }
         Mode::Output => gpio_set(speed, CTL_OUTPUT_PP),
@@ -213,20 +230,22 @@ pub fn set_mode(pin: Pin, mode: Mode, speed_in_mhz: u32) {
         _ => gpio_set(CTL_MD_INPUT, CTL_INPUT_FLOATING),
     };
 
-    unsafe {
+    critical_section::with(|_| unsafe {
         if bit > 7 {
             bit &= 7;
-            let mut ref_val = read_volatile(&mut (*port).ctl1);
+            let reg = core::ptr::addr_of_mut!((*port).ctl1);
+            let mut ref_val = read_volatile(reg);
             ref_val &= !(0xF << (bit * 4));
             ref_val |= val << (bit * 4);
-            write_volatile(&mut (*port).ctl1, ref_val);
+            write_volatile(reg, ref_val);
         } else {
-            let mut ref_val = read_volatile(&mut (*port).ctl0);
+            let reg = core::ptr::addr_of_mut!((*port).ctl0);
+            let mut ref_val = read_volatile(reg);
             ref_val &= !(0xF << (bit * 4));
             ref_val |= val << (bit * 4);
-            write_volatile(&mut (*port).ctl0, ref_val);
+            write_volatile(reg, ref_val);
         }
-    }
+    });
 }
 
 // ---------------------------------------------------------------------------

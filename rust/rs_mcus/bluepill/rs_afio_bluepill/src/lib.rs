@@ -17,38 +17,41 @@ pub fn enable_afio() {
 pub fn release_jtag_pins() {
     enable_afio();
     let afio = AfioRegisters::ptr();
-    unsafe {
-        let mut pcf0 = read_volatile(&mut (*afio).pcf0);
+    critical_section::with(|_| unsafe {
+        let pcf0_ptr = core::ptr::addr_of_mut!((*afio).pcf0);
+        let mut pcf0 = read_volatile(pcf0_ptr);
         pcf0 &= !AFIO_PCF0_SWJ_CFG_MASK;
         pcf0 |= AFIO_PCF0_SWJ_CFG_SWD_NO_JTAG;
-        write_volatile(&mut (*afio).pcf0, pcf0);
-    }
+        write_volatile(pcf0_ptr, pcf0);
+    });
 }
 
 /// Apply partial remap to Timer 2 (TIM3): PB4 = CH1, PB5 = CH2.
 pub fn remap_timer2_partial() {
     enable_afio();
     let afio = AfioRegisters::ptr();
-    unsafe {
-        let mut pcf0 = read_volatile(&mut (*afio).pcf0);
+    critical_section::with(|_| unsafe {
+        let pcf0_ptr = core::ptr::addr_of_mut!((*afio).pcf0);
+        let mut pcf0 = read_volatile(pcf0_ptr);
         pcf0 &= !AFIO_PCF0_TIMER2_REMAP_MASK;
         pcf0 |= AFIO_PCF0_TIMER2_REMAP_PARTIAL;
-        write_volatile(&mut (*afio).pcf0, pcf0);
-    }
+        write_volatile(pcf0_ptr, pcf0);
+    });
 }
 
 /// Select GPIO port as EXTI trigger source for the given pin index (0..15).
 pub fn select_exti_source(port: u32, source: u32) {
     enable_afio();
     let afio = AfioRegisters::ptr();
-    unsafe {
+    critical_section::with(|_| unsafe {
         let idx = (source >> 2) as usize;
         let shift = 4 * (source & 3);
-        let mut mask = read_volatile(&mut (*afio).extiss[idx]);
+        let extiss_ptr = core::ptr::addr_of_mut!((*afio).extiss[idx]);
+        let mut mask = read_volatile(extiss_ptr);
         mask &= !(0xF << shift);
         mask |= port << shift;
-        write_volatile(&mut (*afio).extiss[idx], mask);
-    }
+        write_volatile(extiss_ptr, mask);
+    });
 }
 
 /// Idiomatic struct interface for Alternate Function I/O (AFIO).

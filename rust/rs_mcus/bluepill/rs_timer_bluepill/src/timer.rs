@@ -259,7 +259,7 @@ impl Timer {
 }
 
 /// One handler slot per timer channel.
-static TIMER_HANDLERS: HandlerTable<dyn timer::TimerHandler, TIMER_MAX_INSTANCES> =
+pub(crate) static TIMER_HANDLERS: HandlerTable<dyn timer::TimerHandler, TIMER_MAX_INSTANCES> =
     HandlerTable::new();
 
 impl timer::Timer for Timer {
@@ -270,25 +270,35 @@ impl timer::Timer for Timer {
     }
 
     /// One pulse of `duration_us`. The channel's prescaler is programmed for
-    /// millisecond ticks, so the pulse is rounded up to the next millisecond
-    /// (a sub-millisecond pulse needs the microsecond prescaler, tracked in
-    /// `supertraits.md`).
+    /// millisecond ticks, so the pulse is rounded up to the next millisecond.
     fn start_single_shot(&mut self, duration_us: u32, active_high: bool) -> HalResult<()> {
         let ms = duration_us.div_ceil(1_000).max(1);
         let regs = self.regs;
-        unsafe {
-            let mut ctl0 = read_volatile(&mut (*regs).ctl0);
-            ctl0 &= !TIMER_CTL0_CEN;
-            write_volatile(&mut (*regs).ctl0, ctl0);
+        let periph = match self.timer_idx {
+            TIMER_INSTANCE_0 => Peripheral::Timer0,
+            TIMER_INSTANCE_1 => Peripheral::Timer1,
+            TIMER_INSTANCE_2 => Peripheral::Timer2,
+            TIMER_INSTANCE_3 => Peripheral::Timer3,
+            TIMER_INSTANCE_4 => Peripheral::Timer4,
+            _ => Peripheral::Timer1,
+        };
+        let clk = rs_rcu_bluepill::get_clock(periph);
+        let psc = if clk >= 1_000 { (clk / 1_000) - 1 } else { 0 };
 
-            write_volatile(&mut (*regs).psc, TIMER_PRESCALER_1MS_72MHZ);
-            write_volatile(&mut (*regs).car, ms);
+        unsafe {
+            let ctl0_ptr = core::ptr::addr_of_mut!((*regs).ctl0);
+            let mut ctl0 = read_volatile(ctl0_ptr);
+            ctl0 &= !TIMER_CTL0_CEN;
+            write_volatile(ctl0_ptr, ctl0);
+
+            write_volatile(core::ptr::addr_of_mut!((*regs).psc), psc);
+            write_volatile(core::ptr::addr_of_mut!((*regs).car), ms);
 
             // One-pulse mode: the counter stops itself after `car`.
             let _ = active_high;
             ctl0 |= TIMER_CTL0_OPM;
             ctl0 |= TIMER_CTL0_CEN;
-            write_volatile(&mut (*regs).ctl0, ctl0);
+            write_volatile(ctl0_ptr, ctl0);
         }
         Ok(())
     }

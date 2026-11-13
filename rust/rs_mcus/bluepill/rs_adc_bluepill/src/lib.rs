@@ -375,18 +375,9 @@ impl adc::ScanAdc for TimingAdc {
         }
     }
 
-    /// This backend reads whole blocks (no DMA completion interrupt of its own),
-    /// so the completion runs as soon as the samples are in memory — the same
-    /// contract the trait asks for, only with a shorter latency.
-    fn start_async(&mut self, output: &mut [u16]) -> Result<()> {
-        let (per_channel, count) = self.split_len(output.len())?;
-        if !self.multi_read(per_channel, &mut output[..count]) {
-            return Err(Error::Busy);
-        }
-        if let Some(handler) = HANDLERS.get(self.instance as usize) {
-            handler.on_scan_complete(&output[..count]);
-        }
-        Ok(())
+    /// Asynchronous DMA scan is not yet implemented on this family.
+    fn start_async(&mut self, _output: &mut [u16]) -> Result<()> {
+        Err(Error::Unsupported)
     }
 
     fn is_busy(&self) -> bool {

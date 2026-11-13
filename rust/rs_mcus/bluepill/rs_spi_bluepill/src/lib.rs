@@ -24,6 +24,7 @@
 
 pub mod registers;
 
+use core::cell::UnsafeCell;
 use core::ffi::c_void;
 use core::ptr::{read_volatile, write_volatile};
 
@@ -31,6 +32,7 @@ use registers::*;
 use rs_dma_bluepill::{DmaChannel, DmaEngine};
 use rs_rtos::BinarySemaphore;
 use rs_gpio_bluepill::{Mode, Pin};
+use rs_mcu_traits::handler::HandlerCell;
 use rs_mcu_traits::spi::{self, SpiHandler};
 use rs_mcu_traits::{Error, Result};
 use rs_rcu_bluepill::{enable, get_clock, Peripheral};
@@ -156,11 +158,58 @@ fn baud_control_bits(pclk: u32, speed_hz: u32) -> u32 {
     bits
 }
 
+struct SpiAsyncState {
+    done: BinarySemaphore,
+    callback: UnsafeCell<lnSpiCallback>,
+    callback_cookie: UnsafeCell<*mut c_void>,
+    handler: HandlerCell<dyn SpiHandler>,
+}
+
+// SAFETY: All fields are either thread-safe (BinarySemaphore, HandlerCell)
+// or protected by UnsafeCell modified only when the SPI instance is idle before
+// starting a transfer, and read within the DMA completion ISR.
+unsafe impl Sync for SpiAsyncState {}
+
+impl SpiAsyncState {
+    const fn new() -> Self {
+        Self {
+            done: BinarySemaphore::new(),
+            callback: UnsafeCell::new(None),
+            callback_cookie: UnsafeCell::new(core::ptr::null_mut()),
+            handler: HandlerCell::new(),
+        }
+    }
+
+    fn on_done(&self) {
+        self.done.give_from_isr();
+        let (callback, cookie) = unsafe {
+            let cb = (*self.callback.get()).take();
+            let c = *self.callback_cookie.get();
+            *self.callback_cookie.get() = core::ptr::null_mut();
+            (cb, c)
+        };
+        if let Some(callback) = callback {
+            // SAFETY: Registered by caller of async_write.
+            unsafe { callback(cookie) };
+        }
+        if let Some(handler) = unsafe { self.handler.isr_get() } {
+            handler.on_tx_complete();
+        }
+    }
+}
+
+static ASYNC_STATE: [SpiAsyncState; SPI_MAX_INSTANCES] = [
+    SpiAsyncState::new(),
+    SpiAsyncState::new(),
+    SpiAsyncState::new(),
+];
+
 /// DMA completion of an `async_write`: runs in interrupt context.
 unsafe extern "C" fn spi_dma_async_done(_is_half: bool, cookie: *mut c_void) {
-    // SAFETY: the cookie is the `Spi` that armed the channel (see `async_write`).
-    let spi = unsafe { &mut *(cookie as *mut Spi) };
-    spi.async_done();
+    let instance = cookie as usize;
+    if instance < SPI_MAX_INSTANCES {
+        ASYNC_STATE[instance].on_done();
+    }
 }
 
 /// An SPI master on one of the three instances.
@@ -171,8 +220,6 @@ pub struct Spi {
     /// TX channel, claimed for the whole life of the object.  Its interrupt is
     /// the completion signal of the block / async transfers.
     dma: DmaChannel,
-    /// Given by the DMA interrupt, taken by `block_write*` / `wait_async`.
-    done: BinarySemaphore,
     // The settings `setup()` programs.  Kept here (and not only in the
     // registers) so `set_speed()` / `set_data_mode()` can be used between
     // transfers, like `_internalSettings` in the C++ driver.
@@ -182,11 +229,6 @@ pub struct Spi {
     data_size: u32,
     /// `false` makes the block writes poll instead of using the DMA.
     use_dma: bool,
-    /// Completion of an `async_write`, called from the DMA interrupt.
-    callback: lnSpiCallback,
-    callback_cookie: *mut c_void,
-    /// `rs_mcu_traits::spi::Spi` handler (one for both directions).
-    handler: Option<&'static dyn SpiHandler>,
 }
 
 impl Spi {
@@ -218,15 +260,11 @@ impl Spi {
             instance,
             pin_cs,
             dma: DmaChannel::new(desc.dma_engine, desc.dma_tx_channel),
-            done: BinarySemaphore::new(),
             speed_hz: DEFAULT_SPEED_HZ,
             data_mode: spiDataMode_SPI_MODE0,
             bit_order: spiBitOrder_SPI_MSBFIRST,
             data_size: SPI_DATA_SIZE_8,
             use_dma: true,
-            callback: None,
-            callback_cookie: core::ptr::null_mut(),
-            handler: None,
         };
         me.set_ssel(pin_cs); // output, idle high (CS is active low)
         me.set_disabled();
@@ -601,8 +639,9 @@ impl Spi {
         self.update_direction(Direction::TxOnly);
 
         // 1- DMA: memory -> data register.
-        self.done.try_take();
-        self.dma.attach_completion_semaphore(&self.done);
+        let idx = self.instance as usize;
+        ASYNC_STATE[idx].done.try_take();
+        self.dma.attach_completion_semaphore(&ASYNC_STATE[idx].done);
         let wide = frame_bits == SPI_DATA_SIZE_16;
         if repeat {
             self.dma
@@ -624,7 +663,7 @@ impl Spi {
         }
         self.cs_on();
         self.set_enabled();
-        let completed = self.done.take_timeout(DMA_TIMEOUT_MS);
+        let completed = ASYNC_STATE[idx].done.take_timeout(DMA_TIMEOUT_MS);
         if completed {
             self.wait_for_completion();
         }
@@ -737,7 +776,8 @@ impl Spi {
         cookie: *mut c_void,
         repeat: bool,
     ) -> bool {
-        self.done.try_take();
+        let idx = self.instance as usize;
+        ASYNC_STATE[idx].done.try_take();
         if count == 0 {
             return true;
         }
@@ -745,10 +785,12 @@ impl Spi {
 
         // The DMA interrupt is the completion signal: it wakes `wait_async()`
         // and calls `callback`.
-        self.callback = callback;
-        self.callback_cookie = cookie;
-        let cookie = self as *mut Spi as *mut c_void;
-        self.dma.attach_callback(spi_dma_async_done, cookie);
+        unsafe {
+            *ASYNC_STATE[idx].callback.get() = callback;
+            *ASYNC_STATE[idx].callback_cookie.get() = cookie;
+        }
+        let dma_cookie = self.instance as usize as *mut c_void;
+        self.dma.attach_callback(spi_dma_async_done, dma_cookie);
 
         let wide = frame_bits == SPI_DATA_SIZE_16;
         if repeat {
@@ -767,33 +809,19 @@ impl Spi {
         true
     }
 
-    /// DMA side of the async API: wake [`Spi::wait_async`] and hand control to
-    /// the caller's callback (`lnSPI_bp::invokeCallback`).
-    fn async_done(&mut self) {
-        self.done.give_from_isr();
-        let callback = self.callback;
-        let cookie = self.callback_cookie;
-        self.callback = None;
-        self.callback_cookie = core::ptr::null_mut();
-        if let Some(callback) = callback {
-            unsafe { callback(cookie) };
-        }
-        if let Some(handler) = self.handler {
-            handler.on_tx_complete();
-        }
-    }
-
     /// Pretend the pending transfer completed, so a following
     /// [`Spi::wait_async`] returns immediately (`finishAsyncDma`).
     pub fn finish_async_dma(&mut self) -> bool {
-        self.done.give();
+        let idx = self.instance as usize;
+        ASYNC_STATE[idx].done.give();
         true
     }
 
     /// Wait for the pending async transfer, then release CS and the DMA channel
     /// (`waitForAsync`).  Returns `false` if it did not complete in time.
     pub fn wait_async(&mut self) -> bool {
-        let completed = self.done.take_timeout(ASYNC_TIMEOUT_MS);
+        let idx = self.instance as usize;
+        let completed = ASYNC_STATE[idx].done.take_timeout(ASYNC_TIMEOUT_MS);
         if completed {
             self.wait_for_completion();
         }
@@ -841,7 +869,7 @@ impl spi::Spi for Spi {
     /// One byte exchange; the driver's per-instance handler gets the byte back.
     fn transfer(&mut self, byte: u8) -> u8 {
         let rx = Spi::transfer8(self, byte);
-        if let Some(handler) = self.handler {
+        if let Some(handler) = ASYNC_STATE[self.instance as usize].handler.get() {
             handler.on_rx(rx);
         }
         rx
@@ -929,7 +957,7 @@ impl spi::Spi for Spi {
     /// One handler covers both directions: the GD32 port raises a single
     /// interrupt, and the trait's [`spi::SpiHandler`] answers both.
     fn set_handler(&mut self, handler: Option<&'static dyn spi::SpiHandler>) {
-        self.handler = handler;
+        ASYNC_STATE[self.instance as usize].handler.set(handler);
     }
 }
 

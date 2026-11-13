@@ -393,6 +393,9 @@ impl BufferedTx {
         let (ptr, len) = self.read_ptr();
         if len == 0 {
             self.txing.store(false, Ordering::Release);
+            if let Some(handler) = unsafe { crate::HANDLERS.isr_get(self.instance as usize) } {
+                handler.on_tx_complete();
+            }
             return;
         }
         self.in_flight.store(len, Ordering::Relaxed);

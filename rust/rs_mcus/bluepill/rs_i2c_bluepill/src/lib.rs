@@ -51,15 +51,15 @@ impl I2c {
     pub fn set_address(&mut self, _address: u32) {}
 
     pub fn write(&mut self, _n: u32, _data: *const u8) -> bool {
-        true
+        false
     }
 
     pub fn read(&mut self, _n: u32, _data: *mut u8) -> bool {
-        true
+        false
     }
 
     pub fn write_to(&mut self, _target: u32, _n: u32, _data: *const u8) -> bool {
-        true
+        false
     }
 
     pub fn multi_write_to(
@@ -69,15 +69,15 @@ impl I2c {
         _seq_length: *const u32,
         _data: *mut *const u8,
     ) -> bool {
-        true
+        false
     }
 
     pub fn read_from(&mut self, _target: u32, _n: u32, _data: *mut u8) -> bool {
-        true
+        false
     }
 
     pub fn begin(&mut self, _target: u32) -> bool {
-        true
+        false
     }
 
     pub fn set_dma_mode(&mut self, enable: bool) {
@@ -214,59 +214,14 @@ impl i2c::I2c for I2c {
         Ok(())
     }
 
-    /// The GD32 I²C block has no scatter/gather: the transaction is a START, the
-    /// operations in order, a STOP.
-    fn transfer(&mut self, target: u8, operations: &mut [i2c::Operation<'_>]) -> Result<()> {
-        if !I2c::begin(self, target as u32) {
-            return Err(Error::Io);
-        }
-        for operation in operations.iter_mut() {
-            match operation {
-                i2c::Operation::Write(data) => {
-                    if !I2c::write(self, data.len() as u32, data.as_ptr()) {
-                        return Err(Error::Io);
-                    }
-                }
-                i2c::Operation::Read(buffer) => {
-                    if !I2c::read(self, buffer.len() as u32, buffer.as_mut_ptr()) {
-                        return Err(Error::Io);
-                    }
-                    if let Some(handler) = HANDLERS.get(self.instance as usize) {
-                        handler.on_rx_buffer(buffer);
-                    }
-                }
-            }
-        }
-        if let Some(handler) = HANDLERS.get(self.instance as usize) {
-            handler.on_tx_complete();
-        }
-        Ok(())
+    /// The GD32 I²C register transactions are not yet implemented on this family.
+    fn transfer(&mut self, _target: u8, _operations: &mut [i2c::Operation<'_>]) -> Result<()> {
+        Err(Error::Unsupported)
     }
 
-    /// Asynchronous multi-chunk write: the GD32 block chains the chunks with a
-    /// repeated start and finishes with a STOP, all from its event interrupt, so
-    /// `multi_write_to` returns as soon as the sequence is queued.
-    ///
-    /// `wait_idle` keeps the trait's default on this family: the completion is
-    /// reported through `on_tx_complete`, not through a pollable busy flag.
-    fn start_write_chunks(&mut self, target: u8, chunks: &[&[u8]]) -> Result<()> {
-        if chunks.is_empty() || chunks.len() > MAX_SCAN_CHUNKS {
-            return Err(Error::InvalidConfig);
-        }
-        let mut lengths = [0u32; MAX_SCAN_CHUNKS];
-        let mut pointers = [core::ptr::null::<u8>(); MAX_SCAN_CHUNKS];
-        for (index, chunk) in chunks.iter().enumerate() {
-            lengths[index] = chunk.len() as u32;
-            pointers[index] = chunk.as_ptr();
-        }
-        let started = I2c::multi_write_to(
-            self,
-            target as u32,
-            chunks.len() as u32,
-            lengths.as_ptr(),
-            pointers.as_mut_ptr(),
-        );
-        if started { Ok(()) } else { Err(Error::Io) }
+    /// Asynchronous multi-chunk write is not yet implemented on this family.
+    fn start_write_chunks(&mut self, _target: u8, _chunks: &[&[u8]]) -> Result<()> {
+        Err(Error::Unsupported)
     }
 
     fn set_handler(&mut self, handler: Option<&'static dyn i2c::I2cHandler>) {

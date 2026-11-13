@@ -114,6 +114,7 @@ pub struct Spi {
     done_sem: BinarySemaphore,
     async_cb: Option<unsafe extern "C" fn(*mut c_void)>,
     async_cookie: *mut c_void,
+    gather_blocks: [DmaGatherBlock; MAX_CHUNKS],
 }
 
 impl Spi {
@@ -136,6 +137,10 @@ impl Spi {
             done_sem: BinarySemaphore::new(),
             async_cb: None,
             async_cookie: core::ptr::null_mut(),
+            gather_blocks: [DmaGatherBlock {
+                trans_count: 0,
+                read_addr: core::ptr::null(),
+            }; MAX_CHUNKS],
         };
 
         spi.claim_dma_channels();
@@ -883,10 +888,10 @@ impl Spi {
 
     fn write_multi_chunk_internal(
         &mut self,
-        blocks: &[DmaGatherBlock],
+        block_count: usize,
         width: DmaTransferWidth,
     ) -> bool {
-        if blocks.is_empty() {
+        if block_count == 0 {
             return true;
         }
         self.claim_dma_channels();
@@ -904,7 +909,7 @@ impl Spi {
         ctrl.attach_completion_semaphore(&self.done_sem);
 
         let tx = self.tx_dma.as_mut().unwrap();
-        tx.setup_gather(ctrl, blocks, dr_addr, width, dreq);
+        tx.setup_gather(ctrl, &self.gather_blocks[..block_count], dr_addr, width, dreq);
         tx.trigger_multi_chunk(ctrl);
 
         let ok = self.done_sem.take_timeout(DMA_TIMEOUT_MS);
@@ -924,35 +929,25 @@ impl Spi {
     /// Synchronous multi-chunk gather (writes multiple buffer slices in sequence via DMA).
     pub fn write8_multi_chunk(&mut self, chunks: &[&[u8]]) -> bool {
         assert!(chunks.len() <= MAX_CHUNKS, "Too many chunks for static block buffer");
-        let mut blocks = [DmaGatherBlock {
-            trans_count: 0,
-            read_addr: core::ptr::null(),
-        }; MAX_CHUNKS];
-
         for (i, chunk) in chunks.iter().enumerate() {
-            blocks[i] = DmaGatherBlock {
+            self.gather_blocks[i] = DmaGatherBlock {
                 trans_count: chunk.len() as u32,
                 read_addr: chunk.as_ptr(),
             };
         }
-        self.write_multi_chunk_internal(&blocks[..chunks.len()], DmaTransferWidth::Byte)
+        self.write_multi_chunk_internal(chunks.len(), DmaTransferWidth::Byte)
     }
 
     /// Synchronous multi-chunk gather for 16-bit words.
     pub fn write16_multi_chunk(&mut self, chunks: &[&[u16]]) -> bool {
         assert!(chunks.len() <= MAX_CHUNKS, "Too many chunks for static block buffer");
-        let mut blocks = [DmaGatherBlock {
-            trans_count: 0,
-            read_addr: core::ptr::null(),
-        }; MAX_CHUNKS];
-
         for (i, chunk) in chunks.iter().enumerate() {
-            blocks[i] = DmaGatherBlock {
+            self.gather_blocks[i] = DmaGatherBlock {
                 trans_count: chunk.len() as u32,
                 read_addr: chunk.as_ptr() as *const u8,
             };
         }
-        self.write_multi_chunk_internal(&blocks[..chunks.len()], DmaTransferWidth::HalfWord)
+        self.write_multi_chunk_internal(chunks.len(), DmaTransferWidth::HalfWord)
     }
 
     fn read_multi_chunk_internal(
@@ -1066,12 +1061,12 @@ impl Spi {
 
     fn async_write_multi_chunk_internal(
         &mut self,
-        blocks: &[DmaGatherBlock],
+        block_count: usize,
         width: DmaTransferWidth,
         cb: Option<unsafe extern "C" fn(*mut c_void)>,
         cookie: *mut c_void,
     ) -> bool {
-        if blocks.is_empty() {
+        if block_count == 0 {
             return true;
         }
         self.claim_dma_channels();
@@ -1096,7 +1091,7 @@ impl Spi {
         }
 
         let tx = self.tx_dma.as_mut().unwrap();
-        tx.setup_gather(ctrl, blocks, dr_addr, width, dreq);
+        tx.setup_gather(ctrl, &self.gather_blocks[..block_count], dr_addr, width, dreq);
         tx.trigger_multi_chunk(ctrl);
         true
     }
@@ -1109,20 +1104,14 @@ impl Spi {
         cookie: *mut c_void,
     ) -> bool {
         assert!(chunks.len() <= MAX_CHUNKS, "Too many chunks for static block buffer");
-        let mut blocks = [DmaGatherBlock {
-            trans_count: 0,
-            read_addr: core::ptr::null(),
-        }; MAX_CHUNKS];
-
         for (i, chunk) in chunks.iter().enumerate() {
-            blocks[i] = DmaGatherBlock {
+            self.gather_blocks[i] = DmaGatherBlock {
                 trans_count: chunk.len() as u32,
                 read_addr: chunk.as_ptr(),
             };
         }
-
         self.async_write_multi_chunk_internal(
-            &blocks[..chunks.len()],
+            chunks.len(),
             DmaTransferWidth::Byte,
             cb,
             cookie,
@@ -1137,20 +1126,14 @@ impl Spi {
         cookie: *mut c_void,
     ) -> bool {
         assert!(chunks.len() <= MAX_CHUNKS, "Too many chunks for static block buffer");
-        let mut blocks = [DmaGatherBlock {
-            trans_count: 0,
-            read_addr: core::ptr::null(),
-        }; MAX_CHUNKS];
-
         for (i, chunk) in chunks.iter().enumerate() {
-            blocks[i] = DmaGatherBlock {
+            self.gather_blocks[i] = DmaGatherBlock {
                 trans_count: chunk.len() as u32,
                 read_addr: chunk.as_ptr() as *const u8,
             };
         }
-
         self.async_write_multi_chunk_internal(
-            &blocks[..chunks.len()],
+            chunks.len(),
             DmaTransferWidth::HalfWord,
             cb,
             cookie,
@@ -1208,6 +1191,12 @@ static HANDLERS: HandlerTable<dyn spi::SpiHandler, SPI_MAX_INSTANCES> = HandlerT
 
 impl spi::Spi for Spi {
     fn configure(&mut self, config: &spi::SpiConfig) -> rs_mcu_traits::Result<()> {
+        if config.bit_order != spi::BitOrder::MsbFirst {
+            return Err(rs_mcu_traits::Error::Unsupported);
+        }
+        if config.data_size != 8 && config.data_size != 16 {
+            return Err(rs_mcu_traits::Error::Unsupported);
+        }
         self.set_speed(config.speed_hz);
         self.set_data_mode(match config.mode {
             spi::SpiMode::Mode0 => SpiMode::Mode0,
@@ -1215,10 +1204,7 @@ impl spi::Spi for Spi {
             spi::SpiMode::Mode2 => SpiMode::Mode2,
             spi::SpiMode::Mode3 => SpiMode::Mode3,
         });
-        self.set_bit_order(match config.bit_order {
-            spi::BitOrder::MsbFirst => BitOrder::MsbFirst,
-            spi::BitOrder::LsbFirst => BitOrder::LsbFirst,
-        });
+        self.set_bit_order(BitOrder::MsbFirst);
         self.begin(config.data_size as u32);
         Ok(())
     }

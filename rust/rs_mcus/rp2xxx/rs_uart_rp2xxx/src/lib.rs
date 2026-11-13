@@ -206,6 +206,13 @@ fn uart_irq(instance: u32) {
     if status & (registers::UART_INT_RX | registers::UART_INT_RT) != 0 {
         drain_fifo_into_ring(instance);
     }
+    if status & registers::UART_INT_TX != 0 {
+        let imsc = reg_read(instance, reg!(imsc));
+        reg_write(instance, reg!(imsc), imsc & !registers::UART_INT_TX);
+        if let Some(handler) = unsafe { HANDLERS.isr_get(instance as usize) } {
+            handler.on_tx_complete();
+        }
+    }
 }
 
 /// ISR of `UART0`.
@@ -218,8 +225,8 @@ unsafe extern "C" fn uart1_irq() {
     uart_irq(1);
 }
 
-/// Install (once) and unmask the receive interrupt of `instance`.
-fn enable_rx_interrupt(instance: u32) {
+/// Install the NVIC interrupt handler if not yet installed.
+fn install_nvic_interrupt(instance: u32) {
     let index = instance as usize;
     if !IRQ_INSTALLED[index].swap(true, Ordering::SeqCst) {
         let isr = if instance == 0 { uart0_irq } else { uart1_irq };
@@ -230,8 +237,20 @@ fn enable_rx_interrupt(instance: u32) {
             irq_set_enabled(nvic_irq(instance), true);
         }
     }
+}
+
+/// Install (once) and unmask the receive interrupt of `instance`.
+fn enable_rx_interrupt(instance: u32) {
+    install_nvic_interrupt(instance);
     let imsc = reg_read(instance, reg!(imsc));
     reg_write(instance, reg!(imsc), imsc | UART_INT_RX_MASK);
+}
+
+/// Arm the transmit interrupt of `instance` to notify when FIFO drains.
+fn enable_tx_interrupt(instance: u32) {
+    install_nvic_interrupt(instance);
+    let imsc = reg_read(instance, reg!(imsc));
+    reg_write(instance, reg!(imsc), imsc | registers::UART_INT_TX);
 }
 
 /// The RCU entry of an instance.
@@ -353,7 +372,13 @@ impl uart::Uart for Uart {
             }
             self.write_reg(reg!(dr), *byte as u32);
         }
-        self.flush()
+        let res = self.flush();
+        if res.is_ok() {
+            if let Some(handler) = HANDLERS.get(self.instance as usize) {
+                handler.on_tx_complete();
+            }
+        }
+        res
     }
 
     /// Queue as much as the transmit FIFO takes without blocking.
@@ -363,6 +388,7 @@ impl uart::Uart for Uart {
             self.write_reg(reg!(dr), data[sent] as u32);
             sent += 1;
         }
+        enable_tx_interrupt(self.instance);
         Ok(sent)
     }
 

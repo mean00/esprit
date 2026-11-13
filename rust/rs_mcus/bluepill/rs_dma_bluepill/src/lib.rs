@@ -12,6 +12,7 @@ use rs_rcu_bluepill::{Peripheral, enable};
 use rs_rtos::BinarySemaphore;
 use core::ptr::{read_volatile, write_volatile};
 use core::sync::atomic::{AtomicU8, Ordering};
+use rs_mcu_traits::dma as hal;
 
 /// In-use channel bitmasks for DMA engines:
 /// - Index 0: DMA0 (bits 0..6 for channels 0..6)
@@ -158,6 +159,21 @@ impl DmaChannel {
         self.begin_tx(peripheral_addr, memory_addr, length, src_16bit, dst_16bit, true);
     }
 
+    pub fn begin_tx_transfer_width(
+        &mut self,
+        peripheral_addr: u32,
+        memory_addr: u32,
+        length: u32,
+        width: hal::TransferWidth,
+    ) {
+        let (msize, psize) = match width {
+            hal::TransferWidth::Byte => (DMA_CCR_MSIZE_8BIT, DMA_CCR_PSIZE_8BIT),
+            hal::TransferWidth::HalfWord => (DMA_CCR_MSIZE_16BIT, DMA_CCR_PSIZE_16BIT),
+            hal::TransferWidth::Word => (DMA_CCR_MSIZE_32BIT, DMA_CCR_PSIZE_32BIT),
+        };
+        self.begin_tx_full(peripheral_addr, memory_addr, length, msize, psize, true);
+    }
+
     /// Begin a memory-to-peripheral transfer that reads the **same** memory word
     /// `length` times (memory increment off).
     ///
@@ -186,40 +202,65 @@ impl DmaChannel {
         dst_16bit: bool,
         memory_increment: bool,
     ) {
+        let msize = if src_16bit { DMA_CCR_MSIZE_16BIT } else { DMA_CCR_MSIZE_8BIT };
+        let psize = if dst_16bit { DMA_CCR_PSIZE_16BIT } else { DMA_CCR_PSIZE_8BIT };
+        self.begin_tx_full(peripheral_addr, memory_addr, length, msize, psize, memory_increment);
+    }
+
+    fn begin_tx_full(
+        &mut self,
+        peripheral_addr: u32,
+        memory_addr: u32,
+        length: u32,
+        msize: u32,
+        psize: u32,
+        memory_increment: bool,
+    ) {
         let regs = self.regs();
         unsafe {
-            let ch_regs = &mut (*regs).channels[self.channel_idx];
-            
+            let ch_regs = core::ptr::addr_of_mut!((*regs).channels[self.channel_idx]);
+
             // 1. Disable channel before configuring
-            let mut ccr = read_volatile(&mut ch_regs.ccr);
+            let mut ccr = read_volatile(core::ptr::addr_of!((*ch_regs).ccr));
             ccr &= !DMA_CCR_EN;
-            write_volatile(&mut ch_regs.ccr, ccr);
-            
+            write_volatile(core::ptr::addr_of_mut!((*ch_regs).ccr), ccr);
+
             // 2. Clear interrupt flags for this channel in IFCR
             let shift = (self.channel_idx as u32) * DMA_FLAGS_PER_CHANNEL;
-            write_volatile(&mut (*regs).ifcr, DMA_CHANNEL_CLEAR_ALL << shift);
-            
+            write_volatile(core::ptr::addr_of_mut!((*regs).ifcr), DMA_CHANNEL_CLEAR_ALL << shift);
+
             // 3. Set Peripheral and Memory addresses
-            write_volatile(&mut ch_regs.cpar, peripheral_addr);
-            write_volatile(&mut ch_regs.cmar, memory_addr);
-            
+            write_volatile(core::ptr::addr_of_mut!((*ch_regs).cpar), peripheral_addr);
+            write_volatile(core::ptr::addr_of_mut!((*ch_regs).cmar), memory_addr);
+
             // 4. Set Length
-            write_volatile(&mut ch_regs.cndtr, length);
-            
+            write_volatile(core::ptr::addr_of_mut!((*ch_regs).cndtr), length);
+
             // 5. Configure CCR: DIR=MemToPeriph, sizes, memory increment
-            ccr = DMA_CCR_DIR_MEM2PERIPH;
-            if memory_increment { ccr |= DMA_CCR_MINC; }
-            
-            if src_16bit { ccr |= DMA_CCR_MSIZE_16BIT; }
-            if dst_16bit { ccr |= DMA_CCR_PSIZE_16BIT; }
-            
-            // Enable Transfer Complete Interrupt (TCIE)
-            ccr |= DMA_CCR_TCIE;
-            
+            ccr = DMA_CCR_DIR_MEM2PERIPH | msize | psize | DMA_CCR_TCIE;
+            if memory_increment {
+                ccr |= DMA_CCR_MINC;
+            }
+
             // Enable channel
             ccr |= DMA_CCR_EN;
-            write_volatile(&mut ch_regs.ccr, ccr);
+            write_volatile(core::ptr::addr_of_mut!((*ch_regs).ccr), ccr);
         }
+    }
+
+    pub fn begin_rx_transfer_width(
+        &mut self,
+        peripheral_addr: u32,
+        memory_addr: u32,
+        length: u32,
+        width: hal::TransferWidth,
+    ) {
+        let (psize, msize) = match width {
+            hal::TransferWidth::Byte => (DMA_CCR_PSIZE_8BIT, DMA_CCR_MSIZE_8BIT),
+            hal::TransferWidth::HalfWord => (DMA_CCR_PSIZE_16BIT, DMA_CCR_MSIZE_16BIT),
+            hal::TransferWidth::Word => (DMA_CCR_PSIZE_32BIT, DMA_CCR_MSIZE_32BIT),
+        };
+        self.begin_rx_full(peripheral_addr, memory_addr, length, psize, msize);
     }
 
     /// Begin a peripheral-to-memory transfer (DIR=0).
@@ -231,38 +272,42 @@ impl DmaChannel {
         src_16bit: bool,
         dst_16bit: bool,
     ) {
+        let psize = if src_16bit { DMA_CCR_PSIZE_16BIT } else { DMA_CCR_PSIZE_8BIT };
+        let msize = if dst_16bit { DMA_CCR_MSIZE_16BIT } else { DMA_CCR_MSIZE_8BIT };
+        self.begin_rx_full(peripheral_addr, memory_addr, length, psize, msize);
+    }
+
+    fn begin_rx_full(
+        &mut self,
+        peripheral_addr: u32,
+        memory_addr: u32,
+        length: u32,
+        psize: u32,
+        msize: u32,
+    ) {
         let regs = self.regs();
         unsafe {
-            let ch_regs = &mut (*regs).channels[self.channel_idx];
+            let ch_regs = core::ptr::addr_of_mut!((*regs).channels[self.channel_idx]);
 
             // 1. Disable channel before configuring
-            let mut ccr = read_volatile(&mut ch_regs.ccr);
+            let mut ccr = read_volatile(core::ptr::addr_of!((*ch_regs).ccr));
             ccr &= !DMA_CCR_EN;
-            write_volatile(&mut ch_regs.ccr, ccr);
+            write_volatile(core::ptr::addr_of_mut!((*ch_regs).ccr), ccr);
 
             // 2. Clear interrupt flags for this channel in IFCR
             let shift = (self.channel_idx as u32) * DMA_FLAGS_PER_CHANNEL;
-            write_volatile(&mut (*regs).ifcr, DMA_CHANNEL_CLEAR_ALL << shift);
+            write_volatile(core::ptr::addr_of_mut!((*regs).ifcr), DMA_CHANNEL_CLEAR_ALL << shift);
 
             // 3. Set Peripheral and Memory addresses
-            write_volatile(&mut ch_regs.cpar, peripheral_addr);
-            write_volatile(&mut ch_regs.cmar, memory_addr);
+            write_volatile(core::ptr::addr_of_mut!((*ch_regs).cpar), peripheral_addr);
+            write_volatile(core::ptr::addr_of_mut!((*ch_regs).cmar), memory_addr);
 
             // 4. Set Length
-            write_volatile(&mut ch_regs.cndtr, length);
+            write_volatile(core::ptr::addr_of_mut!((*ch_regs).cndtr), length);
 
             // 5. Configure CCR: Memory increment, DIR=PeriphToMem (0), sizes
-            ccr = DMA_CCR_MINC;
-
-            if src_16bit { ccr |= DMA_CCR_PSIZE_16BIT; }
-            if dst_16bit { ccr |= DMA_CCR_MSIZE_16BIT; }
-
-            // Enable Transfer Complete Interrupt (TCIE)
-            ccr |= DMA_CCR_TCIE;
-
-            // Enable channel
-            ccr |= DMA_CCR_EN;
-            write_volatile(&mut ch_regs.ccr, ccr);
+            let ccr = DMA_CCR_MINC | psize | msize | DMA_CCR_TCIE | DMA_CCR_EN;
+            write_volatile(core::ptr::addr_of_mut!((*ch_regs).ccr), ccr);
         }
     }
 
@@ -516,12 +561,11 @@ impl hal::Dma for Controller {
         dma.attach_completion_semaphore(&done[index]);
         // The GD32 channel is paced by its peripheral (no DREQ selection): the
         // request number of the trait is a no-op here.
-        dma.begin_tx_transfer(
+        dma.begin_tx_transfer_width(
             peripheral_address,
             buffer.as_ptr() as u32,
             count,
-            width == hal::TransferWidth::HalfWord,
-            width == hal::TransferWidth::HalfWord,
+            width,
         );
         Ok(())
     }
@@ -545,12 +589,11 @@ impl hal::Dma for Controller {
         };
         done[index].try_take();
         dma.attach_completion_semaphore(&done[index]);
-        dma.begin_rx_transfer(
+        dma.begin_rx_transfer_width(
             peripheral_address,
             buffer.as_mut_ptr() as u32,
             count,
-            width == hal::TransferWidth::HalfWord,
-            width == hal::TransferWidth::HalfWord,
+            width,
         );
         Ok(())
     }

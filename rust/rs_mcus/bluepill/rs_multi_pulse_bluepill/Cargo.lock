@@ -3,6 +3,12 @@
 version = 4
 
 [[package]]
+name = "critical-section"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
+
+[[package]]
 name = "rs_bluepill"
 version = "0.1.0"
 
@@ -10,6 +16,7 @@ version = "0.1.0"
 name = "rs_gpio_bluepill"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "rs_bluepill",
  "rs_mcu_traits",
 ]

@@ -50,13 +50,11 @@ if(NOT LN_ENABLE_RUST OR "${LN_MCU}" STREQUAL "ESP32")
 endif()
 if(LN_ENABLE_USBD)
   include(${ESPRIT_ROOT}/libraries/tinyUsb/tiny.cmake)
-  # lnUSB_c.cpp is a Rust-facing bridge too, and on a Rust build the USB C ABI is
-  # rs_tinyusb's. lnCDC_c.cpp still has live users, so it stays.
-  set(_esprit_usb_c_bridge ${C}/lnCDC_c.cpp ${C}/lnUSB_c.cpp)
-  if(LN_ENABLE_RUST AND NOT ("${LN_MCU}" STREQUAL "ESP32"))
-    set(_esprit_usb_c_bridge ${C}/lnCDC_c.cpp)
-  endif()
-  target_sources(esprit_c_bindings PRIVATE ${_esprit_usb_c_bridge})
+  # lnUSB_c.cpp is the C ABI the Rust USB stack sits on: `rs_tinyusb` only *calls*
+  # lnusb_create/lnusb_start/lnusb_setEventHandler/... (rs_tinyusb/src/c_usb.rs
+  # declares them `extern`), so the bridge has to be compiled on a Rust build too.
+  # lnCDC_c.cpp still has live C callers, so it stays as well.
+  target_sources(esprit_c_bindings PRIVATE ${C}/lnCDC_c.cpp ${C}/lnUSB_c.cpp)
   target_link_libraries(esprit_c_bindings PRIVATE tinyUsb)
 endif()
 

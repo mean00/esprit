@@ -41,8 +41,19 @@ unsafe extern "C" {
     fn ln_disable_interrupt(irq: *const u32);
 }
 
-// Global dispatch table matching C++ `timerInstances[5]`
-static mut DELAY_TIMER_INSTANCES: [Option<*mut DelayTimer>; TIMER_MAX_INSTANCES] = [None; TIMER_MAX_INSTANCES];
+// Global dispatch table for C callbacks (matching C++ `timerInstances[5]`).
+#[derive(Copy, Clone)]
+struct RawCallbackEntry {
+    handler: DelayTimerCallback,
+    cookie: *mut c_void,
+}
+
+static mut RAW_CALLBACKS: [RawCallbackEntry; TIMER_MAX_INSTANCES] = [const {
+    RawCallbackEntry {
+        handler: None,
+        cookie: core::ptr::null_mut(),
+    }
+}; TIMER_MAX_INSTANCES];
 
 /// Hardware microsecond delay alarm timer with update interrupt callback.
 pub struct DelayTimer {
@@ -60,12 +71,6 @@ impl DelayTimer {
     pub fn new(timer_idx: u32) -> Result<Self, &'static str> {
         if timer_idx == 0 || timer_idx >= (TIMER_MAX_INSTANCES as u32) {
             return Err("Invalid delay timer index: must be 1..=4");
-        }
-
-        unsafe {
-            if DELAY_TIMER_INSTANCES[timer_idx as usize].is_some() {
-                return Err("Delay timer instance already in use");
-            }
         }
 
         let timer = Timer::new(timer_idx)?;
@@ -95,6 +100,9 @@ impl DelayTimer {
     pub fn set_interrupt(&mut self, handler: DelayTimerCallback, cookie: *mut c_void) {
         self.handler = handler;
         self.cookie = cookie;
+        critical_section::with(|_| unsafe {
+            RAW_CALLBACKS[self.timer_idx as usize] = RawCallbackEntry { handler, cookie };
+        });
     }
 
     /// Enable the hardware timer update interrupt in NVIC/PFIC and DIEN.
@@ -102,9 +110,10 @@ impl DelayTimer {
         unsafe {
             ln_enable_interrupt(&self.irq_num);
             let regs = TimerRegisters::ptr(self.timer_idx);
-            let mut dien = read_volatile(&mut (*regs).dien);
+            let dien_ptr = core::ptr::addr_of_mut!((*regs).dien);
+            let mut dien = read_volatile(dien_ptr);
             dien |= TIMER_DMAINTEN_UPIE;
-            write_volatile(&mut (*regs).dien, dien);
+            write_volatile(dien_ptr, dien);
         }
     }
 
@@ -112,9 +121,10 @@ impl DelayTimer {
     pub fn disable_interrupt(&mut self) {
         unsafe {
             let regs = TimerRegisters::ptr(self.timer_idx);
-            let mut dien = read_volatile(&mut (*regs).dien);
+            let dien_ptr = core::ptr::addr_of_mut!((*regs).dien);
+            let mut dien = read_volatile(dien_ptr);
             dien &= !TIMER_DMAINTEN_UPIE;
-            write_volatile(&mut (*regs).dien, dien);
+            write_volatile(dien_ptr, dien);
             ln_disable_interrupt(&self.irq_num);
         }
     }
@@ -123,11 +133,6 @@ impl DelayTimer {
     pub fn arm(&mut self, duration_us: u32) {
         self.disable_interrupt();
         self.timer.disable();
-
-        // Register self in dispatch table
-        unsafe {
-            DELAY_TIMER_INSTANCES[self.timer_idx as usize] = Some(self as *mut Self);
-        }
 
         let periph = match self.timer_idx {
             TIMER_INSTANCE_0 => Peripheral::Timer0,
@@ -148,13 +153,13 @@ impl DelayTimer {
 
         let regs = TimerRegisters::ptr(self.timer_idx);
         unsafe {
-            write_volatile(&mut (*regs).ctl0, TIMER_CTL0_SPM | TIMER_CTL0_UPS);
-            write_volatile(&mut (*regs).ctl1, 0);
-            write_volatile(&mut (*regs).dien, 0);
-            write_volatile(&mut (*regs).intf, 0);
-            write_volatile(&mut (*regs).psc, psc);
-            write_volatile(&mut (*regs).car, car);
-            write_volatile(&mut (*regs).cnt, 0);
+            write_volatile(core::ptr::addr_of_mut!((*regs).ctl0), TIMER_CTL0_SPM | TIMER_CTL0_UPS);
+            write_volatile(core::ptr::addr_of_mut!((*regs).ctl1), 0);
+            write_volatile(core::ptr::addr_of_mut!((*regs).dien), 0);
+            write_volatile(core::ptr::addr_of_mut!((*regs).intf), 0);
+            write_volatile(core::ptr::addr_of_mut!((*regs).psc), psc);
+            write_volatile(core::ptr::addr_of_mut!((*regs).car), car);
+            write_volatile(core::ptr::addr_of_mut!((*regs).cnt), 0);
         }
 
         self.enable_interrupt();
@@ -168,9 +173,10 @@ impl DelayTimer {
 
         let regs = TimerRegisters::ptr(self.timer_idx);
         unsafe {
-            let mut intf = read_volatile(&mut (*regs).intf);
+            let intf_ptr = core::ptr::addr_of_mut!((*regs).intf);
+            let mut intf = read_volatile(intf_ptr);
             intf &= !TIMER_INTF_UPIF;
-            write_volatile(&mut (*regs).intf, intf);
+            write_volatile(intf_ptr, intf);
         }
 
         if let Some(handler) = self.handler {
@@ -214,19 +220,53 @@ impl Drop for DelayTimer {
     fn drop(&mut self) {
         self.timer.disable();
         self.disable_interrupt();
-        unsafe {
-            DELAY_TIMER_INSTANCES[self.timer_idx as usize] = None;
-        }
+        critical_section::with(|_| unsafe {
+            RAW_CALLBACKS[self.timer_idx as usize] = RawCallbackEntry {
+                handler: None,
+                cookie: core::ptr::null_mut(),
+            };
+        });
+        DELAY_HANDLERS.set(self.timer_idx as usize, None);
     }
 }
 
 /// Central interrupt dispatcher invoked by vector ISR handlers.
 pub fn delay_timer_interrupt_handler(timer_id: usize) {
-    if timer_id < TIMER_MAX_INSTANCES {
-        unsafe {
-            if let Some(ptr) = DELAY_TIMER_INSTANCES[timer_id] {
-                (*ptr).on_irq();
-            }
-        }
+    if timer_id >= TIMER_MAX_INSTANCES {
+        return;
+    }
+
+    let regs = TimerRegisters::ptr(timer_id as u32);
+    unsafe {
+        let intf_ptr = core::ptr::addr_of_mut!((*regs).intf);
+        let mut intf = read_volatile(intf_ptr);
+        intf &= !TIMER_INTF_UPIF;
+        write_volatile(intf_ptr, intf);
+
+        let dien_ptr = core::ptr::addr_of_mut!((*regs).dien);
+        let mut dien = read_volatile(dien_ptr);
+        dien &= !TIMER_DMAINTEN_UPIE;
+        write_volatile(dien_ptr, dien);
+
+        let ctl0_ptr = core::ptr::addr_of_mut!((*regs).ctl0);
+        let mut ctl0 = read_volatile(ctl0_ptr);
+        ctl0 &= !TIMER_CTL0_CEN;
+        write_volatile(ctl0_ptr, ctl0);
+    }
+
+    let (cb, cookie) = critical_section::with(|_| unsafe {
+        let entry = &RAW_CALLBACKS[timer_id];
+        (entry.handler, entry.cookie)
+    });
+    if let Some(handler) = cb {
+        unsafe { handler(cookie) };
+    }
+
+    if let Some(handler) = unsafe { DELAY_HANDLERS.isr_get(timer_id) } {
+        handler.on_elapsed();
+    }
+
+    if let Some(handler) = unsafe { crate::timer::TIMER_HANDLERS.isr_get(timer_id) } {
+        handler.on_tick();
     }
 }

@@ -18,16 +18,16 @@ impl MultiPulse {
         Self { pin, tick_fq_hz }
     }
 
-    pub fn fire(&mut self, pulse1_ms: i32, gap_ms: i32, pulse2_ms: i32) {
-        unimplemented!("Port ln_multi_pulse_fire to pure Rust")
+    pub fn fire(&mut self, _pulse1_ms: i32, _gap_ms: i32, _pulse2_ms: i32) -> Result<()> {
+        Err(rs_mcu_traits::Error::Unsupported)
     }
 
-    pub fn wait_done(&mut self) {
-        unimplemented!("Port ln_multi_pulse_wait_done to pure Rust")
+    pub fn wait_done(&mut self) -> Result<()> {
+        Err(rs_mcu_traits::Error::Unsupported)
     }
 
-    pub fn stop(&mut self) {
-        unimplemented!("Port ln_multi_pulse_stop to pure Rust")
+    pub fn stop(&mut self) -> Result<()> {
+        Err(rs_mcu_traits::Error::Unsupported)
     }
 }
 

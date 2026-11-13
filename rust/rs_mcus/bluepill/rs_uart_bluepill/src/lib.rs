@@ -486,7 +486,7 @@ impl Drop for UartRx {
 }
 
 /// One handler slot per USART instance.
-static HANDLERS: HandlerTable<dyn uart::UartHandler, UART_MAX_INSTANCES> = HandlerTable::new();
+pub(crate) static HANDLERS: HandlerTable<dyn uart::UartHandler, UART_MAX_INSTANCES> = HandlerTable::new();
 
 /// Buffered transmitters, one per instance: a [`BufferedTx`] must live in a
 /// `static` because its DMA completion callback uses its address as cookie.

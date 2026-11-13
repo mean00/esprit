@@ -28,8 +28,9 @@ pub struct HandlerCell<T: ?Sized + 'static> {
 
 // SAFETY: the only writer is `set`, which the contract below restricts to task
 // context while the peripheral is idle; readers take a copy of a `&'static`
-// reference and may run in any context.
-unsafe impl<T: ?Sized + 'static> Sync for HandlerCell<T> {}
+// reference and may run in any context. `T` must be `Sync` because readers
+// access `&'static T` across multiple threads/interrupt contexts.
+unsafe impl<T: ?Sized + Sync + 'static> Sync for HandlerCell<T> {}
 
 impl<T: ?Sized + 'static> HandlerCell<T> {
     /// An empty slot, usable in a `static`.

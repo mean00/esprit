@@ -3,6 +3,7 @@
 #![no_std]
 
 mod registers;
+use core::cell::UnsafeCell;
 use core::ptr::{read_volatile, write_volatile};
 use registers::ExtiRegisters;
 use rs_gpio_bluepill::Pin;
@@ -15,12 +16,62 @@ const EXTI_PIN_COUNT: usize = 112;
 
 static EXTI_HANDLERS: HandlerTable<dyn ExtiHandler, EXTI_PIN_COUNT> = HandlerTable::new();
 
+struct ExtiSlot {
+    pin: u32,
+    cb: Callback,
+    cookie: *mut core::ffi::c_void,
+}
+
+struct SlotCell(UnsafeCell<ExtiSlot>);
+unsafe impl Sync for SlotCell {}
+
+impl SlotCell {
+    const fn new() -> Self {
+        Self(UnsafeCell::new(ExtiSlot {
+            pin: 0,
+            cb: None,
+            cookie: core::ptr::null_mut(),
+        }))
+    }
+
+    #[inline(always)]
+    fn get(&self) -> *mut ExtiSlot {
+        self.0.get()
+    }
+}
+
+static EXTI_SLOTS: [SlotCell; 16] = [const { SlotCell::new() }; 16];
+
 /// Adapter from this family's C-style callback to the typed handler of the trait.
 unsafe extern "C" fn exti_trampoline(pin: Pin, _cookie: *mut core::ffi::c_void) {
     // SAFETY: the handler was installed before its line was enabled, and the
     // interrupt is the only reader.
     if let Some(handler) = unsafe { EXTI_HANDLERS.isr_get(pin as usize) } {
         handler.on_exti(pin as u32);
+    }
+}
+
+/// Dispatch pending EXTI line to installed callback and trait handler.
+pub fn exti_irq_handler(line: usize) {
+    if line < 16 {
+        let exti = ExtiRegisters::ptr();
+        unsafe {
+            let pd_addr = core::ptr::addr_of_mut!((*exti).pd);
+            let pd = read_volatile(pd_addr);
+            if (pd & (1 << line)) != 0 {
+                write_volatile(pd_addr, 1 << line);
+                let slot = EXTI_SLOTS[line].get();
+                let (cb, cookie, pin_num) = ((*slot).cb, (*slot).cookie, (*slot).pin);
+                if let Some(cb) = cb {
+                    if let Some(pin) = Pin::from_number(pin_num) {
+                        cb(pin, cookie);
+                    }
+                }
+                if let Some(handler) = EXTI_HANDLERS.isr_get(pin_num as usize) {
+                    handler.on_exti(pin_num);
+                }
+            }
+        }
     }
 }
 
@@ -38,9 +89,18 @@ pub enum Edge {
 pub type Callback =
     ::core::option::Option<unsafe extern "C" fn(pin: Pin, cookie: *mut core::ffi::c_void)>;
 
-pub fn attach_interrupt(pin: Pin, edge: Edge, _cb: Callback, _cookie: *mut core::ffi::c_void) {
+pub fn attach_interrupt(pin: Pin, edge: Edge, cb: Callback, cookie: *mut core::ffi::c_void) {
     let port = (pin as u32) >> 4;
     let source = (pin as u32) & 0xF;
+
+    if (source as usize) < 16 {
+        unsafe {
+            let slot = EXTI_SLOTS[source as usize].get();
+            (*slot).pin = pin as u32;
+            (*slot).cb = cb;
+            (*slot).cookie = cookie;
+        }
+    }
 
     // 1. Select source via AFIO
     rs_afio_bluepill::select_exti_source(port, source);
@@ -51,36 +111,48 @@ pub fn attach_interrupt(pin: Pin, edge: Edge, _cb: Callback, _cookie: *mut core:
 
     let exti = ExtiRegisters::ptr();
     unsafe {
+        let rten_addr = core::ptr::addr_of_mut!((*exti).rten);
         if (edge as u32) & EDGE_RISING_BIT != 0 {
-            let val = read_volatile(&mut (*exti).rten) | (1 << source);
-            write_volatile(&mut (*exti).rten, val);
+            let val = read_volatile(rten_addr) | (1 << source);
+            write_volatile(rten_addr, val);
         } else {
-            let val = read_volatile(&mut (*exti).rten) & !(1 << source);
-            write_volatile(&mut (*exti).rten, val);
+            let val = read_volatile(rten_addr) & !(1 << source);
+            write_volatile(rten_addr, val);
         }
 
+        let ften_addr = core::ptr::addr_of_mut!((*exti).ften);
         if (edge as u32) & EDGE_FALLING_BIT != 0 {
-            let val = read_volatile(&mut (*exti).ften) | (1 << source);
-            write_volatile(&mut (*exti).ften, val);
+            let val = read_volatile(ften_addr) | (1 << source);
+            write_volatile(ften_addr, val);
         } else {
-            let val = read_volatile(&mut (*exti).ften) & !(1 << source);
-            write_volatile(&mut (*exti).ften, val);
+            let val = read_volatile(ften_addr) & !(1 << source);
+            write_volatile(ften_addr, val);
         }
     }
 }
 
 pub fn detach_interrupt(pin: Pin) {
     let source = (pin as u32) & 0xF;
+    if (source as usize) < 16 {
+        unsafe {
+            let slot = EXTI_SLOTS[source as usize].get();
+            (*slot).cb = None;
+            (*slot).cookie = core::ptr::null_mut();
+        }
+    }
     let exti = ExtiRegisters::ptr();
     unsafe {
-        let inten = read_volatile(&mut (*exti).inten) & !(1 << source);
-        write_volatile(&mut (*exti).inten, inten);
+        let inten_addr = core::ptr::addr_of_mut!((*exti).inten);
+        let inten = read_volatile(inten_addr) & !(1 << source);
+        write_volatile(inten_addr, inten);
 
-        let rten = read_volatile(&mut (*exti).rten) & !(1 << source);
-        write_volatile(&mut (*exti).rten, rten);
+        let rten_addr = core::ptr::addr_of_mut!((*exti).rten);
+        let rten = read_volatile(rten_addr) & !(1 << source);
+        write_volatile(rten_addr, rten);
 
-        let ften = read_volatile(&mut (*exti).ften) & !(1 << source);
-        write_volatile(&mut (*exti).ften, ften);
+        let ften_addr = core::ptr::addr_of_mut!((*exti).ften);
+        let ften = read_volatile(ften_addr) & !(1 << source);
+        write_volatile(ften_addr, ften);
     }
 }
 
@@ -88,11 +160,12 @@ pub fn enable_interrupt(pin: Pin) {
     let source = (pin as u32) & 0xF;
     let exti = ExtiRegisters::ptr();
     unsafe {
-        let inten = read_volatile(&mut (*exti).inten) | (1 << source);
-        write_volatile(&mut (*exti).inten, inten);
+        let inten_addr = core::ptr::addr_of_mut!((*exti).inten);
+        let inten = read_volatile(inten_addr) | (1 << source);
+        write_volatile(inten_addr, inten);
 
         core::arch::asm!("nop", "nop", "nop");
-        write_volatile(&mut (*exti).pd, 1 << source);
+        write_volatile(core::ptr::addr_of_mut!((*exti).pd), 1 << source);
     }
 }
 
@@ -100,11 +173,12 @@ pub fn disable_interrupt(pin: Pin) {
     let source = (pin as u32) & 0xF;
     let exti = ExtiRegisters::ptr();
     unsafe {
-        let inten = read_volatile(&mut (*exti).inten) & !(1 << source);
-        write_volatile(&mut (*exti).inten, inten);
+        let inten_addr = core::ptr::addr_of_mut!((*exti).inten);
+        let inten = read_volatile(inten_addr) & !(1 << source);
+        write_volatile(inten_addr, inten);
 
         core::arch::asm!("nop", "nop", "nop");
-        write_volatile(&mut (*exti).pd, 1 << source);
+        write_volatile(core::ptr::addr_of_mut!((*exti).pd), 1 << source);
     }
 }
 

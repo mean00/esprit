@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+critical-section = { version = "1.2", default-features = false }
 rs_bluepill = { path = "../rs_bluepill" }
 rs_mcu_traits = { path = "../../traits" }

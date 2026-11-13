@@ -38,6 +38,7 @@ dependencies = [
 name = "rs_gpio_bluepill"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "rs_bluepill",
  "rs_mcu_traits",
 ]
