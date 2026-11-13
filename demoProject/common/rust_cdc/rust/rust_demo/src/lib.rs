@@ -5,8 +5,8 @@
 #![no_std]
 
 use rust_esprit::{
-    logger, logger_init, Cdc, CdcEvent, CdcEventHandler, EventGroup, GpioMode, GpioPin, OnceLock,
-    Pin, Usb, UsbEvent,
+    Cdc, CdcEvent, CdcEventHandler, EventGroup, Gpio, OnceLock, Pin, PinMode, Usb, UsbEvent, logger,
+    logger_init,
 };
 
 logger_init!();
@@ -52,12 +52,12 @@ fn usb_event_handler(event: UsbEvent) {
 extern "C" fn user_init() {
     logger!("Starting lnTUSB Test (Rust)\n");
 
-    let mut led = GpioPin::new(LED);
-    let mut led2 = GpioPin::new(LED2);
-    let mut led3 = GpioPin::new(LED3);
-    led.set_mode(GpioMode::Output);
-    led2.set_mode(GpioMode::Output);
-    led3.set_mode(GpioMode::Output);
+    let mut led = LED;
+    let mut led2 = LED2;
+    let mut led3 = LED3;
+    let _ = Gpio::set_mode(&mut led, PinMode::Output);
+    let _ = Gpio::set_mode(&mut led2, PinMode::Output);
+    let _ = Gpio::set_mode(&mut led3, PinMode::Output);
 
     let mut eg = EventGroup::new();
     eg.take_ownership();
@@ -75,9 +75,9 @@ extern "C" fn user_init() {
     loop {
         let t = eg.wait_events(0xffffffff, 1000);
         if t == 0 {
-            led.toggle();
-            led2.toggle();
-            led3.toggle();
+            Gpio::toggle(&mut led);
+            Gpio::toggle(&mut led2);
+            Gpio::toggle(&mut led3);
             continue;
         }
         if (t & (1 << (CdcEvent::SessionStart as u32))) != 0 {

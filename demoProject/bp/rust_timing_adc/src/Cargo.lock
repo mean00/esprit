@@ -31,9 +31,9 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "critical-section"
-version = "1.1.2"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7059fff8937831a9ae6f0fe4d658ffabf58f2ca96aa9dec1c889f936f705f216"
+checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 
 [[package]]
 name = "cty"
@@ -108,10 +108,10 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_dma_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
- "rs_timer_bluepill",
+ "rs_rtos",
 ]
 
 [[package]]
@@ -131,15 +131,8 @@ name = "rs_dma_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
- "rs_esprit",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
-]
-
-[[package]]
-name = "rs_esprit"
-version = "0.1.0"
-dependencies = [
- "cty",
  "rs_rtos",
 ]
 
@@ -149,8 +142,8 @@ version = "0.1.0"
 dependencies = [
  "rs_afio_bluepill",
  "rs_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
 ]
 
 [[package]]
@@ -158,7 +151,7 @@ name = "rs_gpio_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
- "rs_esprit",
+ "rs_mcu_traits",
 ]
 
 [[package]]
@@ -166,10 +159,14 @@ name = "rs_i2c_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
 ]
+
+[[package]]
+name = "rs_mcu_traits"
+version = "0.1.0"
 
 [[package]]
 name = "rs_multi_pulse_bluepill"
@@ -177,6 +174,7 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
 ]
 
 [[package]]
@@ -193,6 +191,7 @@ name = "rs_rcu_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+ "rs_mcu_traits",
 ]
 
 [[package]]
@@ -200,6 +199,7 @@ name = "rs_rtos"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
+ "critical-section",
  "cty",
 ]
 
@@ -209,9 +209,10 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_dma_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
+ "rs_rtos",
 ]
 
 [[package]]
@@ -220,8 +221,8 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_dma_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
  "rs_pinout48_bluepill",
  "rs_rcu_bluepill",
 ]
@@ -232,8 +233,8 @@ version = "0.1.0"
 dependencies = [
  "rs_bluepill",
  "rs_dma_bluepill",
- "rs_esprit",
  "rs_gpio_bluepill",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
  "rs_rtos",
 ]
@@ -243,15 +244,15 @@ name = "rust_esprit"
 version = "0.0.0"
 dependencies = [
  "cfg-if",
+ "critical-section",
  "cty",
- "heapless",
  "rs_adc_bluepill",
  "rs_afio_bluepill",
  "rs_dma_bluepill",
- "rs_esprit",
  "rs_exti_bluepill",
  "rs_gpio_bluepill",
  "rs_i2c_bluepill",
+ "rs_mcu_traits",
  "rs_multi_pulse_bluepill",
  "rs_pinout48_bluepill",
  "rs_rcu_bluepill",
