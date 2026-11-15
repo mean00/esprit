@@ -1,5 +1,4 @@
-#![allow(unused_variables, unused_imports, unused_parens)]
-#![allow(non_camel_case_types, non_snake_case, dead_code)]
+#![allow(non_camel_case_types, non_snake_case)]
 
 #![no_std]
 
@@ -22,6 +21,18 @@ use registers::*;
 use registers_chip::*;
 
 rs_mcu_traits::define_mmio_accessors!(RcuRegisters::ptr());
+
+/// C entries for the C++ side that still calls the driver (`drop_C.md` P6).
+pub mod c_api;
+
+#[cfg(feature = "ch32v3x")]
+pub mod sysclk_ch32v3x;
+#[cfg(feature = "ch32v3x")]
+pub mod usb_ch32v3x;
+#[cfg(not(feature = "ch32v3x"))]
+pub mod sysclk_gd32fx;
+#[cfg(not(feature = "ch32v3x"))]
+pub mod usb_stm_gd32;
 
 struct PeripheralInfo {
     bus: u8,
@@ -76,6 +87,11 @@ fn get_periph_info(periph: Peripheral) -> Option<PeripheralInfo> {
 
 #[inline(always)]
 pub fn enable(periph: Peripheral) {
+    if matches!(periph, Peripheral::Adc0 | Peripheral::Adc1) {
+        // Divide APB2 by 8 for the SAR ADC (reset default 00 is /2 = 72 MHz at
+        // 144 MHz sysclk, well above the 14 MHz CH32V307 / 40 MHz GD32F303 limit).
+        unsafe { modify_reg!(cfg0, |v| (v & !LN_RCU_CFG0_ADCPSC_MASK) | LN_RCU_CFG0_ADCPSC_DIV8) };
+    }
     if let Some(info) = get_periph_info(periph) {
         unsafe {
             match info.bus {
@@ -129,15 +145,17 @@ pub fn reset(periph: Peripheral) {
 
 // The clock tree is configured by the RCU system-clock init (lnInitSystemClock), which
 // records the resulting frequencies in these globals. They are the single source of
-unsafe extern "C" {
-    #[link_name = "\u{1}_ZN13lnPeripherals8getClockE11Peripherals"]
-    fn ln_peripherals_get_clock(periph: Peripheral) -> u32;
-}
-
 /// Input clock (Hz) feeding `periph`, as computed by the RCU.
 #[inline(always)]
 pub fn get_clock(periph: Peripheral) -> u32 {
-    unsafe { ln_peripherals_get_clock(periph) }
+    #[cfg(feature = "ch32v3x")]
+    {
+        sysclk_ch32v3x::get_clock_c(periph)
+    }
+    #[cfg(not(feature = "ch32v3x"))]
+    {
+        sysclk_gd32fx::get_clock_c(periph)
+    }
 }
 
 
@@ -246,3 +264,23 @@ impl Rcu {
 
 pub mod shim;
 pub use shim::*;
+
+/// Parse a decimal `u32` from an optional compile-time env string, falling back to `default`.
+pub(crate) const fn parse_u32(s: Option<&str>, default: u32) -> u32 {
+    let Some(s) = s else { return default };
+    let bytes = s.as_bytes();
+    if bytes.is_empty() {
+        return default;
+    }
+    let mut val = 0u32;
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b < b'0' || b > b'9' {
+            return default;
+        }
+        val = val * 10 + (b - b'0') as u32;
+        i += 1;
+    }
+    val
+}

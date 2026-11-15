@@ -3,6 +3,9 @@
 #![no_std]
 
 mod registers;
+
+/// C entries and vector handlers owned by the Rust EXTI driver (see `irq.rs`).
+pub mod irq;
 use core::cell::UnsafeCell;
 use core::ptr::{read_volatile, write_volatile};
 use registers::ExtiRegisters;
@@ -77,6 +80,36 @@ pub fn exti_irq_handler(line: usize) {
                 }
             }
         }
+    }
+}
+
+/// Reset the EXTI block and the handler slots.
+///
+/// This is the `lnExtiSysInit()` of the C++ driver (`mcus/common_bluepill/lnExti.cpp`,
+/// not compiled in a Rust build - see `drop_C.md` P3), with one deliberate difference:
+/// the C++ version ended by enabling the seven EXTI vectors in the interrupt
+/// controller. That is *not* reproduced here, because
+///   * no line is attached anywhere in the firmware, in C++ or in Rust (the C++
+///     attach API has no caller left), so the enables were dead state, and
+///   * on CH32V3x the table maps every EXTI vector to `unsupported`, so enabling one
+///     would only arm a `deadEnd()`.
+/// The EXTI block itself is reset exactly as the C++ did: nothing triggers, nothing is
+/// pending, no line is masked. `enable_interrupt()` below still owns the per-line
+/// enable bit; the vector-level enable belongs to whoever installs a handler.
+pub fn sys_init() {
+    for slot in EXTI_SLOTS.iter() {
+        critical_section::with(|_| unsafe {
+            let s = slot.get();
+            (*s).cb = None;
+            (*s).cookie = core::ptr::null_mut();
+            (*s).pin = 0;
+        });
+    }
+    unsafe {
+        write_reg!(inten, 0);
+        write_reg!(even, 0);
+        write_reg!(rten, 0);
+        write_reg!(ften, 0);
     }
 }
 

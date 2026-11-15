@@ -12,16 +12,16 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-#[cfg(feature = "cdc")]
+#[cfg(all(feature = "cdc", feature = "c_abi"))]
 pub mod rn_cdc_c;
 pub mod rn_debug_c;
 pub mod rn_freertos_c;
-#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+#[cfg(not(any(feature = "rp2xxx", feature = "esp32")))]
 pub mod rn_gpio_bp_c;
 #[cfg(feature = "esp32")]
 pub mod rn_gpio_esp32_c;
-#[cfg(feature = "rp2040")]
+#[cfg(feature = "rp2xxx")]
 pub mod rn_gpio_rp2040_c;
 pub mod rn_timer_c;
-#[cfg(feature = "cdc")]
+#[cfg(all(feature = "cdc", feature = "c_abi"))]
 pub mod rn_usb_c;

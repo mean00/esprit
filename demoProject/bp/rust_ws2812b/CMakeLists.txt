@@ -19,6 +19,9 @@ set(LN_ENABLE_SPI
 set(LN_ENABLE_RUST
     TRUE
     CACHE INTERNAL "")
+set(USE_RUST_LOGGER
+    ON
+    CACHE BOOL "" FORCE)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 set(ESPRIT_ROOT ${CMAKE_SOURCE_DIR}/esprit/)
 include(common_CMakeLists)

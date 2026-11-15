@@ -86,6 +86,12 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 #![allow(unused_imports)]
 use critical_section::{Impl, RawRestoreState, set_impl};
+#[cfg(all(any(feature = "bluepill", feature = "rp2xxx"), not(feature = "external_std")))]
+mod libc_stub;
+#[cfg(all(any(feature = "bluepill", feature = "rp2xxx"), not(feature = "external_std")))]
+mod runtime;
+#[cfg(all(any(feature = "bluepill", feature = "rp2xxx"), not(feature = "external_std")))]
+mod printf;
 // In no_std mode we use the `alloc` crate.
 // In fake_std mode we're also no_std (embedded target), so we need alloc too.
 // In external_std mode, `std` is available.
@@ -159,7 +165,7 @@ pub(crate) use c_api::rn_freertos_c;
 pub(crate) use c_api::rn_timer_c;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "rp2040")] {
+    if #[cfg(feature = "rp2xxx")] {
         pub(crate) use c_api::rn_gpio_rp2040_c;
     } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
         #[cfg(feature = "esp32")]
@@ -183,9 +189,12 @@ mod logger;
 /// The Esprit logger's C ABI (`lnDebug.cpp`) in Rust: CMake `USE_RUST_LOGGER`.
 #[cfg(feature = "rust_logger")]
 mod logger_c;
-#[cfg(all(feature = "rust_logger", not(feature = "bluepill")))]
+#[cfg(all(
+    feature = "rust_logger",
+    not(any(feature = "bluepill", feature = "rp2xxx"))
+))]
 compile_error!(
-    "the `rust_logger` feature drives the debug UART through rs_uart_bluepill: it needs the `bluepill` platform backend"
+    "the `rust_logger` feature needs either the `bluepill` or `rp2040`/`rp2350` platform backend"
 );
 
 // ---------------------------------------------------------------------------
@@ -203,150 +212,30 @@ pub use gpio::set_spi_pins;
 /// pin number and owns the handler (`rs_mcu_traits::exti`). `Exti` is the trait;
 /// the family type that implements it is [`ExtiDriver`].
 pub use rs_mcu_traits::exti::{Edge, Exti, ExtiHandler};
-/// The SPI driver of the current target — the family crate that implements
-/// `rs_mcu_traits::spi::Spi` (`rs_spi_rp2xxx`, `rs_spi_bluepill`, …).
-///
-/// A driver that owns a bus takes this type, muxes its pads with
-/// [`gpio::set_spi_pins`] and programs the port through the trait, so the same
-/// code runs on every family.
-#[cfg(feature = "rp2040")]
-pub use rs_spi_rp2xxx::Spi as SpiDriver;
-#[cfg(all(
-    not(feature = "rp2040"),
-    not(any(feature = "esp32", feature = "wrapped"))
-))]
-pub use rs_spi_bluepill::Spi as SpiDriver;
-#[cfg(any(feature = "esp32", feature = "wrapped"))]
-pub use rs_spi_wrapped::SpiWrapped as SpiDriver;
-/// The single-shot ADC driver of the current target — the family type that
-/// implements [`Adc`] (`rs_adc_rp2xxx::SimpleAdc`, `rs_adc_bluepill::SimpleAdc`,
-/// `rs_adc_wrapped::SimpleAdcWrapped`).
-pub use adc_driver::AdcDriver;
-/// The scan (DMA / multi-sample) ADC driver of the current target — the family
-/// type that implements [`ScanAdc`].
-pub use adc_driver::ScanAdcDriver;
-/// The external-interrupt driver of the current target — the family type that
-/// implements [`Exti`] (`rs_exti_rp2xxx::Exti`, `rs_exti_bluepill::Exti`,
-/// `rs_exti_wrapped::ExtiWrapped`).
-pub use exti_driver::ExtiDriver;
-/// Platform selection of the EXTI driver: the only place a family is named.
-mod exti_driver {
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "rp2040")] {
-            /// IO_BANK0: one nibble per pad, one shared `IO_IRQ_BANK0` line.
-            pub use rs_exti_rp2xxx::Exti as ExtiDriver;
-        } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
-            /// The C-ABI backend.
-            pub use rs_exti_wrapped::ExtiWrapped as ExtiDriver;
-        } else {
-            /// The GD32 / CH32 EXTI block.
-            pub use rs_exti_bluepill::Exti as ExtiDriver;
-        }
+// Platform-specific peripheral driver selections, low-level crate re-exports,
+// and startup / link anchors (`platform/{rp2xxx,bluepill,wrapped}.rs`).
+cfg_if::cfg_if! {
+    if #[cfg(feature = "rp2xxx")] {
+        #[path = "platform/rp2xxx.rs"]
+        mod platform;
+    } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
+        #[path = "platform/wrapped.rs"]
+        mod platform;
+    } else {
+        #[path = "platform/bluepill.rs"]
+        mod platform;
     }
 }
-/// The UART driver of the current target — the family type that implements
-/// [`Uart`] (`rs_uart_rp2xxx::Uart`, `rs_uart_bluepill::Uart`,
-/// `rs_uart_wrapped::Uart`).
-///
-/// `UartDriver::with_dma(instance, &config, rx_buffer_size)` opens the port the
-/// way a pass-through bridge needs it: an interrupt-driven receive ring that
-/// reports [`rs_mcu_traits::uart::UartHandler::on_rx_available`], and a
-/// transmitter that [`Uart::try_write`] can fill partially.
-pub use uart_driver::UartDriver;
-/// Platform selection of the UART driver: the only place a family is named.
-mod uart_driver {
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "rp2040")] {
-            /// PL011, `UART0`/`UART1`, receive ring + interrupts.
-            pub use rs_uart_rp2xxx::Uart as UartDriver;
-        } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
-            /// The C-ABI backend.
-            pub use rs_uart_wrapped::Uart as UartDriver;
-        } else {
-            /// GD32 / CH32 USART, DMA receive ring + buffered DMA transmitter.
-            pub use rs_uart_bluepill::Uart as UartDriver;
-        }
-    }
-}
-/// The I²C driver of the current target — the family type that implements
-/// [`HalI2c`] (`rs_i2c_rp2xxx::I2c`, `rs_i2c_bluepill::I2c`,
-/// `rs_i2c_wrapped::I2cWrapped`).
-pub use i2c_driver::I2cDriver;
-/// Platform selection of the I²C driver: the only place a family is named.
-mod i2c_driver {
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "rp2040")] {
-            /// The RP2xxx I²C block.
-            pub use rs_i2c_rp2xxx::I2c as I2cDriver;
-        } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
-            /// The C-ABI backend.
-            pub use rs_i2c_wrapped::I2cWrapped as I2cDriver;
-        } else {
-            /// The GD32 / CH32 I²C block.
-            pub use rs_i2c_bluepill::I2c as I2cDriver;
-        }
-    }
-}
-/// The timer channel driver of the current target — the family type that
-/// implements [`HalTimer`] (`rs_timer_rp2xxx::Timer`, `rs_timer_bluepill::Timer`,
-/// `rs_timer_wrapped::TimerWrapped`).
-pub use timer_driver::TimerDriver;
-/// The one-shot delay driver of the current target — the family type that
-/// implements [`HalDelayTimer`].
-pub use timer_driver::DelayTimerDriver;
-/// Platform selection of the timer drivers: the only place a family is named.
-mod timer_driver {
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "rp2040")] {
-            /// The RP2xxx timer channels.
-            pub use rs_timer_rp2xxx::{DelayTimer as DelayTimerDriver, Timer as TimerDriver};
-        } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
-            /// The C-ABI backend.
-            pub use rs_timer_wrapped::{
-                DelayTimerWrapped as DelayTimerDriver, TimerWrapped as TimerDriver,
-            };
-        } else {
-            /// The GD32 / CH32 timer channels.
-            pub use rs_timer_bluepill::{DelayTimer as DelayTimerDriver, Timer as TimerDriver};
-        }
-    }
-}
-/// Platform selection of the two ADC drivers: the only place a family is named.
-mod adc_driver {
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "rp2040")] {
-            /// `rs_adc_rp2xxx` (pure Rust, polled SAR).
-            pub use rs_adc_rp2xxx::SimpleAdc as AdcDriver;
-            /// `rs_adc_rp2xxx` (DMA + DREQ, `ScanAdc::start_async`).
-            pub use rs_adc_rp2xxx::TimingAdc as ScanAdcDriver;
-        } else if #[cfg(any(feature = "esp32", feature = "wrapped"))] {
-            /// The C-ABI backend (no Rust driver for that family).
-            pub use rs_adc_wrapped::{SimpleAdcWrapped as AdcDriver, TimingAdcWrapped as ScanAdcDriver};
-        } else {
-            /// `rs_adc_bluepill` (pure Rust, polled SAR).
-            pub use rs_adc_bluepill::SimpleAdc as AdcDriver;
-            /// `rs_adc_bluepill` (timer-triggered scan).
-            pub use rs_adc_bluepill::TimingAdc as ScanAdcDriver;
-        }
-    }
-}
+pub use platform::*;
+
 pub use logger::LoggerWriter;
 pub use queue::Queue;
-/// The RP2040 / RP2350 pins (`rs_gpio_rp2xxx`): [`Pin`] above, on that platform,
-/// *is* that crate's `Pin`, and this module is where the pin type, its mode
-/// mapping and the `Gpio` implementation all live.
-#[cfg(feature = "rp2040")]
-pub use rs_gpio_rp2xxx as gpio_rp2xxx;
-/// The RP2040 / RP2350 UART driver (`rs_uart_rp2xxx`), the `Uart` implementation
-/// of that platform.
-#[cfg(feature = "rp2040")]
-pub use rs_uart_rp2xxx as uart_rp2xxx;
 #[cfg(feature = "cdc")]
 #[allow(deprecated)]
-pub use rs_tinyusb::{
-    Cdc, CdcAcm, CdcEvent, CdcEventHandler, CdcPort, LineState, Usb, UsbBus, UsbError, UsbEvent,
-    UsbEventHandler,
-};
+pub use rs_tinyusb::{Cdc, CdcAcm, CdcEvent, CdcEventHandler, CdcPort, LineState, UsbError};
+/// The retired wrapper over the C++ `lnUsbStack` - only for the transition ABI.
+#[cfg(all(feature = "cdc", feature = "c_abi"))]
+pub use rs_tinyusb::{Usb, UsbBus, UsbEvent, UsbEventHandler};
 pub use sync::{
     Arc, BinarySemaphore, CountingSemaphore, LazyLock, Mutex, MutexGuard, OnceLock, RecursiveMutex,
     RecursiveMutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard, SemaphoreGuard,
@@ -356,52 +245,10 @@ pub use task::{
     spawn_raw, tick_count, time_ms, time_us, time_us64, yield_now,
 };
 
-// ---------------------------------------------------------------------------
-//  Hardware-specific backend re-exports
-// ---------------------------------------------------------------------------
-#[cfg(feature = "bluepill")]
-pub mod bluepill {
-    //! Low-level Bluepill (GD32F3 / CH32V3) peripheral driver crates.
-    pub use rs_adc_bluepill as adc;
-    pub use rs_afio_bluepill as afio;
-    pub use rs_dma_bluepill as dma;
-    pub use rs_exti_bluepill as exti;
-    pub use rs_gpio_bluepill as gpio;
-    pub use rs_i2c_bluepill as i2c;
-    pub use rs_multi_pulse_bluepill as multi_pulse;
-    #[cfg(feature = "bluepill48")]
-    pub use rs_pinout48_bluepill as pinout;
-    pub use rs_rcu_bluepill as rcu;
-    pub use rs_spi_bluepill as spi;
-    pub use rs_timer_bluepill as timer;
-    pub use rs_uart_bluepill as uart;
-}
-
-#[cfg(feature = "bluepill")]
-pub use {
-    rs_adc_bluepill, rs_afio_bluepill, rs_dma_bluepill, rs_exti_bluepill, rs_gpio_bluepill,
-    rs_i2c_bluepill, rs_multi_pulse_bluepill, rs_rcu_bluepill, rs_spi_bluepill, rs_timer_bluepill,
-    rs_uart_bluepill,
-};
-
-#[cfg(feature = "rp2040")]
-pub mod rp2xxx {
-    //! Low-level RP2xxx (RP2040 / RP2350) peripheral driver crates.
-    pub use rs_adc_rp2xxx as adc;
-    pub use rs_dma_rp2xxx as dma;
-    pub use rs_gpio_rp2xxx as gpio;
-    pub use rs_i2c_rp2xxx as i2c;
-    pub use rs_multi_pulse_rp2xxx as multi_pulse;
-    pub use rs_rcu_rp2xxx as rcu;
-    pub use rs_spi_rp2xxx as spi;
-    pub use rs_timer_rp2xxx as timer;
-}
-
-#[cfg(feature = "rp2040")]
-pub use {
-    rs_adc_rp2xxx, rs_dma_rp2xxx, rs_gpio_rp2xxx, rs_i2c_rp2xxx, rs_multi_pulse_rp2xxx,
-    rs_rcu_rp2xxx, rs_spi_rp2xxx, rs_timer_rp2xxx,
-};
+/// The USB device framework above tinyUSB (`usb.md` P4), re-exported so the board does
+/// not have to depend on it directly.
+#[cfg(feature = "usb_stack")]
+pub use rs_usb;
 
 // ---------------------------------------------------------------------------
 //  Deprecated legacy aliases
@@ -420,15 +267,31 @@ pub use task::{get_time_ms, get_time_us};
 // ---------------------------------------------------------------------------
 unsafe extern "C" {
     pub(crate) fn deadEnd(code: cty::c_int);
+    #[cfg(feature = "external_std")]
     fn lnInterrupts();
+    #[cfg(feature = "external_std")]
     fn lnNoInterrupt();
 }
 
 pub fn disable_interrupts() {
-    unsafe { lnNoInterrupt() }
+    #[cfg(not(feature = "external_std"))]
+    unsafe {
+        rs_rtos::c_freertos::vPortEnterCritical()
+    }
+    #[cfg(feature = "external_std")]
+    unsafe {
+        lnNoInterrupt()
+    }
 }
 pub fn enable_interrupts() {
-    unsafe { lnInterrupts() }
+    #[cfg(not(feature = "external_std"))]
+    unsafe {
+        rs_rtos::c_freertos::vPortExitCritical()
+    }
+    #[cfg(feature = "external_std")]
+    unsafe {
+        lnInterrupts()
+    }
 }
 
 // ---------------------------------------------------------------------------

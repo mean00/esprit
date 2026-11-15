@@ -14,4 +14,6 @@ pub use dma_timer::{DmaTimer, DmaTimerError};
 pub use delay_timer::{DelayTimer, DelayTimerCallback, delay_timer_interrupt_handler};
 
 pub mod shim;
+/// Vector entries for the delay-timer drivers (see `irq.rs`).
+pub mod irq;
 pub use shim::*;

@@ -1,0 +1,15 @@
+[package]
+name = "rs_gd32fx"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rs_afio_bluepill = { path = "../rs_afio_bluepill" }
+rs_bluepill = { path = "../rs_bluepill" }
+rs_fmc_bluepill = { path = "../rs_fmc_bluepill" }
+rs_rcu_bluepill = { path = "../rs_rcu_bluepill" }
+rs_gpio_bluepill = { path = "../rs_gpio_bluepill", optional = true }
+
+[features]
+usb_stack = ["dep:rs_gpio_bluepill"]
+cdc3 = []

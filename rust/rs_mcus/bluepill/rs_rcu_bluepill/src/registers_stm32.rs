@@ -6,6 +6,8 @@
 //! asking for one of those peripherals here is a no-op rather than a write to a
 //! bit that means something else.
 
+#![allow(dead_code)]
+
 /// `AHBENR` bit of the high-speed USB controller: absent on this family.
 pub const AHB_USBHS: Option<u32> = None;
 /// `AHBENR` bit of the USB full-speed OTG controller: absent on this family (the

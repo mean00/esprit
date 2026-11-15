@@ -70,6 +70,8 @@ pub const FUNCSEL_SIO: u32 = 5;
 pub const FUNCSEL_SPI0: u32 = 1;
 pub const FUNCSEL_UART0: u32 = 2;
 pub const FUNCSEL_PWM0: u32 = 4;
+pub const FUNCSEL_PIO0: u32 = 6;
+pub const FUNCSEL_PIO1: u32 = 7;
 
 // --- PADS_BANK0 (per pin) -------------------------------------------------
 

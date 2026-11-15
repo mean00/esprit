@@ -12,7 +12,7 @@ bluepill48 = ["rust_esprit/bluepill48"]
 
 [dependencies]
 cty = "0.2.2"
-rust_esprit = { path = "../esprit/rust/rust_esprit" }
+rust_esprit = { path = "../esprit/rust/rust_esprit", features = ["rust_logger"] }
 ufmt = "*"
 heapless = { version = "*", features = ["ufmt-impl"] }
 

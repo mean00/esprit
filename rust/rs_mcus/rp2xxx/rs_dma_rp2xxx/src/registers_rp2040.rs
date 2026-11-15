@@ -53,6 +53,10 @@ pub const DREQ_SPI0_TX: u32 = 16;
 pub const DREQ_SPI0_RX: u32 = 17;
 pub const DREQ_SPI1_TX: u32 = 18;
 pub const DREQ_SPI1_RX: u32 = 19;
+pub const DREQ_UART0_TX: u32 = 20;
+pub const DREQ_UART0_RX: u32 = 21;
+pub const DREQ_UART1_TX: u32 = 22;
+pub const DREQ_UART1_RX: u32 = 23;
 /// Permanently asserted request: an unpaced transfer (memory-to-memory, or the
 /// control channel of a gather/scatter pair).
 pub const DREQ_PERMANENT: u32 = 0x3F;

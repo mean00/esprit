@@ -25,6 +25,24 @@ pub const GPIOG_BASE: u32 = 0x4001_2000;
 
 pub const RCU_BASE: u32 = 0x4002_1000;
 
+// --- Flash memory controller (FMC) ---------------------------------------------
+
+/// `LN_FMC_ADR`: same address on GD32F30x and CH32V3 (`lnPeripheral_priv_stm32.h:38`,
+/// `lnPeripheral_priv_ch32v3x.h:56`).
+pub const FMC_BASE: u32 = 0x4002_2000;
+
+// --- USB -----------------------------------------------------------------------
+
+/// Endpoint numbers of the USB device controller, EP0 included.
+///
+/// Measured from the documentation in this repo: `gd32f3.txt` - "Support up to 8
+/// configurable bidirectional endpoints" (`LN_USBD_MAX_ENDPOINT` in the C++ tree);
+/// `ch32v3.txt` - "up to 16 unidirectional or 8 bidirectional endpoints". A CDC-ACM
+/// interface takes two of them (one IN-only notification, one shared by the data
+/// pair), so this budget is what `rs_usb` checks against the configured CDC count -
+/// see `usb.md`.
+pub const USB_MAX_ENDPOINT: usize = 8;
+
 // --- Alternate function I/O and EXTI ------------------------------------------
 
 pub const AFIO_BASE: u32 = 0x4001_0000;
@@ -40,7 +58,7 @@ pub const ADC2_BASE: u32 = 0x4001_2800;
 /// A lookup rather than a bare constant because the two families do not have the
 /// same number of ADCs: the chip file decides how many. `None` means the instance
 /// does not exist on this part.
-pub use super::peripherals_chip::adc_base;
+pub use super::peripherals_chip::{HAS_ADC_BUFFER, adc_base};
 
 // --- Timers (TIMER0..TIMER6 on both; the numbering above that differs) --------
 

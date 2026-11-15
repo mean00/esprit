@@ -10,7 +10,7 @@ rp2040 = ["rust_esprit/rp2040", "rust_esprit/cdc"]
 
 [dependencies]
 cty = "0.2.2"
-rust_esprit = { path = "../../esprit/rust/rust_esprit", features = ["cdc"] }
+rust_esprit = { path = "../../esprit/rust/rust_esprit", features = ["cdc", "c_abi"] }
 ufmt = "*"
 
 [lib]

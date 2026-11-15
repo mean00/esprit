@@ -16,6 +16,9 @@ pub const TIMER7_BASE: u32 = 0x4001_3400;
 pub const TIMER8_BASE: u32 = 0x4001_4C00;
 pub const TIMER9_BASE: u32 = 0x4001_5000;
 
+/// CH32V30x ADC1/2 has an input buffer (`ADC_CTLR1.BUFEN`, bit 26) for high-impedance sources.
+pub const HAS_ADC_BUFFER: bool = true;
+
 /// Register block of ADC `instance` (`0` = ADC1, `1` = ADC2).
 ///
 /// This family has two ADCs: instance 2 (the ARM side's third ADC) does not exist
@@ -35,3 +38,9 @@ pub const STK_BASE: u32 = 0xE000_F000;
 
 /// The system timer register, at the same address as on the ARM side.
 pub const SYS_TIMER_BASE: u32 = 0xD100_0000;
+
+/// CH32V3x extended configuration register (`EXTEN_CTR`, USB pull-up, internal 10M ETH).
+pub const EXTEN_CTR_BASE: u32 = 0x4002_3800;
+
+/// CH32V3x device electronic signature / chip ID register.
+pub const CH32_CHIPID_BASE: u32 = 0x1FFF_F704;

@@ -14,7 +14,13 @@ pub struct RcuRegisters {
     pub ahbrst: u32,   // 28 AHBRSTR
     pub cfg1: u32,     // 2c CFGR2
     pub dsv: u32,      // 30 N/A
+    _reserved_34_bc: [u32; 35],
+    pub addctl: u32,   // c0 Additional clock control (GD32)
 }
+
+const _: () = assert!(core::mem::offset_of!(RcuRegisters, cfg0) == 0x04);
+const _: () = assert!(core::mem::offset_of!(RcuRegisters, dsv) == 0x30);
+const _: () = assert!(core::mem::offset_of!(RcuRegisters, addctl) == 0xC0);
 
 impl RcuRegisters {
     #[inline(always)]
@@ -76,3 +82,42 @@ pub const RCU_AHB_DMA1: u32 = 1 << 1;
 pub const RCU_AHB_USBFS: u32 = 1 << 12;
 pub const RCU_AHB_ETHMAC: u32 = 7 << 14;
 pub const RCU_AHBRST_ETHMAC: u32 = 1 << 14;
+
+// --- CFG0 ADC Prescaler (bits [15:14]) ---
+pub const LN_RCU_CFG0_ADCPSC_MASK: u32 = 0x3 << 14;
+pub const LN_RCU_CFG0_ADCPSC_DIV8: u32 = 0x3 << 14;
+
+// --- CFG0 USB Prescaler ---
+pub const LN_RCU_CFG0_USBPSC_SHIFT: u32 = 22;
+pub const LN_RCU_CFG0_USBPSC_BITS: u32 = 3;
+pub const LN_RCU_CFG0_USBPSC_MASK: u32 = !(LN_RCU_CFG0_USBPSC_BITS << LN_RCU_CFG0_USBPSC_SHIFT);
+
+// --- ADDCTL (GD32F303, offset 0xC0) ---
+pub const LN_GD_RCU_ADDCTL_IRC48M_SEL: u32 = 1 << 0;
+pub const LN_GD_RCU_ADDCTL_IRC48M_EN: u32 = 1 << 16;
+pub const LN_GD_RCU_ADDCTL_IRC48M_STB: u32 = 1 << 17;
+
+// --- CTL / CFG0 System Clock Bits (GD32F3x / STM32F1) ---
+pub const LN_CLOCK_IRC8: u32 = 0;
+pub const LN_CLOCK_XTAL: u32 = 16;
+pub const LN_CLOCK_PLL: u32 = 24;
+
+pub const LN_RCU_CTL_HXTALEN: u32 = 1 << 16;
+pub const LN_RCU_CTL_HXTASTB: u32 = 1 << 17;
+pub const LN_RCU_CTL_PLLEN: u32 = 1 << 24;
+pub const LN_RCU_CTL_PLLSTB: u32 = 1 << 25;
+
+pub const LN_RCU_CFG0_SYSCLOCK_MASK: u32 = 3;
+pub const LN_RCU_CFG0_SYSCLOCK_PLL: u32 = 1 << 1;
+pub const LN_RCU_CFG0_PLLSEL: u32 = 1 << 16;
+pub const LN_RCU_CFG0_PLLMF_SHIFT: u32 = 18;
+pub const LN_RCU_CFG0_PLLMF_MASK: u32 = 0xF << 18;
+pub const LN_RCU_CFG0_PLLMF_MSB: u32 = 1 << 27;
+pub const LN_RCU_CFG0_AHBPSC_MASK: u32 = 0xF << 4;
+pub const LN_RCU_CFG0_APB1PSC_MASK: u32 = 7 << 8;
+pub const LN_RCU_CFG0_APB1PSC_DIV2: u32 = 4 << 8;
+pub const LN_RCU_CFG0_APB2PSC_MASK: u32 = 3 << 11;
+
+pub const FMC_WS_PREFETCH_BASE: u32 = 0x30;
+pub const DBG_CTL0_HALT_TIMERS_I2C: u32 = (0xF << 10) + (1 << 15) + (0x1F << 16) + (0x3F << 25);
+pub const LN_RCU_RSTCLK_RSTFC: u32 = 1 << 24;

@@ -11,7 +11,7 @@ add_subdirectory(${ESPRIT_ROOT})
 
 include(${ESPRIT_ROOT}/setup.cmake)
 
-set(Rotary ${ESPRIT_ROOT}/libraries/RotaryEncoder)
+set(Rotary ${ESPRIT_CPP_ROOT}/libraries/RotaryEncoder)
 include_directories(${Rotary})
 add_subdirectory(${Rotary})
 

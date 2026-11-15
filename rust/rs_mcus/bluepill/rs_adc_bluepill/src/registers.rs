@@ -53,7 +53,8 @@ pub const ADC_STAT_STIC: u32 = 1 << 3; // Start inserted conversion flag
 pub const ADC_STAT_STRC: u32 = 1 << 4; // Start regular conversion flag
 
 // --- CTL0 register bits ---
-pub const ADC_CTL0_SM: u32 = 1 << 8;   // Scan mode enable
+pub const ADC_CTL0_SM: u32 = 1 << 8;     // Scan mode enable
+pub const ADC_CTL0_BUFEN: u32 = 1 << 26; // Input buffer enable (CH32V3x only)
 
 // --- CTL1 register bits ---
 pub const ADC_CTL1_ADCON: u32 = 1 << 0;   // ADC converter enable / power-on
@@ -83,7 +84,7 @@ pub const ADC_RSQ0_LEN_MASK: u32 = 0x0F << ADC_RSQ0_LEN_POS;
 
 // --- Sampling time constants ---
 pub const ADC_SAMPT_239_5: u32 = 7;
-/// Channels 0..=9 take their sampling time from SAMPT0, 10..=17 from SAMPT1.
+/// Channels 0..=9 take their sampling time from SAMPT1 (0x10), 10..=17 from SAMPT0 (0x0C).
 pub const ADC_SAMPT0_CHANNELS: u32 = 10;
 /// Bits per channel in SAMPT0 / SAMPT1.
 pub const ADC_SAMPT_BITS: u32 = 3;

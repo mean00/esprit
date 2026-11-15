@@ -37,6 +37,6 @@ add_subdirectory(${ESPRIT_ROOT})
 include(${ESPRIT_ROOT}/setup.cmake)
 use_library(tinyUsb)
 
-include(${ESPRIT_ROOT}/libraries/tinyUsb/tiny.cmake)
+include(${ESPRIT_CPP_ROOT}/libraries/tinyUsb/tiny.cmake)
 
 generate_gd32_firmware(hello hello.cpp)

@@ -38,7 +38,10 @@
 use core::cell::UnsafeCell;
 use core::ffi::{CStr, VaList, c_char, c_int};
 use rs_rtos::Mutex;
+#[cfg(feature = "bluepill")]
 use rs_uart_bluepill::BufferedTx;
+#[cfg(feature = "rp2xxx")]
+use rs_uart_rp2xxx::BufferedTx;
 
 /// The C++ logger's `static char buffer[128]` (`Logger` and `Logger_C` each have
 /// their own, so keep two).

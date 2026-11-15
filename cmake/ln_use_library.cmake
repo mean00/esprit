@@ -1,5 +1,5 @@
 macro(USE_LIBRARY lib)
-  add_subdirectory(${ESPRIT_ROOT}/libraries/${lib})
-  include_directories(${ESPRIT_ROOT}/libraries/${lib})
+  add_subdirectory(${ESPRIT_CPP_ROOT}/libraries/${lib})
+  include_directories(${ESPRIT_CPP_ROOT}/libraries/${lib})
   list(APPEND USED_LIBS ${lib})
 endmacro(USE_LIBRARY lib)

@@ -17,9 +17,11 @@
 
 #![no_std]
 
+pub mod buffered_tx;
 pub mod registers;
 pub mod ring;
 
+pub use buffered_tx::BufferedTx;
 pub use registers::{UART_INSTANCES, base};
 
 use portable_atomic::{AtomicBool, Ordering};
@@ -152,7 +154,7 @@ impl Uart {
 
 /// Register access by instance, for the code that has no `Uart` value (the
 /// interrupt handlers).
-fn reg_read(instance: u32, offset: u32) -> u32 {
+pub(crate) fn reg_read(instance: u32, offset: u32) -> u32 {
     // SAFETY: `offset` comes from `reg!`, so it is a register of the PL011 block
     // at this instance's base (`base(instance)` was checked when the port was
     // opened).
@@ -160,7 +162,7 @@ fn reg_read(instance: u32, offset: u32) -> u32 {
 }
 
 /// Write side of [`reg_read`].
-fn reg_write(instance: u32, offset: u32, value: u32) {
+pub(crate) fn reg_write(instance: u32, offset: u32, value: u32) {
     // SAFETY: same as `reg_read`.
     unsafe {
         core::ptr::write_volatile(
@@ -254,7 +256,7 @@ fn enable_tx_interrupt(instance: u32) {
 }
 
 /// The RCU entry of an instance.
-fn peripheral(instance: u32) -> Peripheral {
+pub(crate) fn peripheral(instance: u32) -> Peripheral {
     if instance == 0 {
         Peripheral::Uart0
     } else {
@@ -336,7 +338,7 @@ impl Uart {
 ///
 /// PL011: `baud = 4 * fclk / (IBRD * 64 + FBRD)`, so the 4×-scaled divisor is
 /// `4 * fclk / baud`, rounded to the nearest integer.
-fn divisors(fclk_hz: u32, baud: u32) -> Option<(u16, u8)> {
+pub(crate) fn divisors(fclk_hz: u32, baud: u32) -> Option<(u16, u8)> {
     if baud == 0 {
         return None;
     }

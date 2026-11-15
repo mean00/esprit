@@ -1,6 +1,0 @@
-include_directories(${ESPRIT_ROOT}/libraries/tinyUsb)
-include_directories(${ESPRIT_ROOT}/libraries/tinyUsb/src)
-include_directories(${ESPRIT_ROOT}/libraries/tinyUsb/src/src)
-include_directories(${ESPRIT_ROOT}/libraries/tinyUsb/src/src/common)
-include_directories(${ESPRIT_ROOT}/libraries/tinyUsb/src/src/device)
-include_directories(${ESPRIT_ROOT}/libraries/tinyUsb/src/src/class)

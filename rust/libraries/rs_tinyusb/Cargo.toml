@@ -1,0 +1,21 @@
+[package]
+name = "rs_tinyusb"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+# The `lncdc_*` / `lnusb_*` C ABI (bindgen, `src/c_cdc.rs` + `src/c_usb.rs`): the C++
+# stack that used to be *below* this crate. Enabled by `rust_esprit`'s `cdc` feature
+# while `usb.md` P2/P3 land; the native Rust stack (`src/stack.rs`, `src/cdc.rs`)
+# does not need it.
+c_abi = []
+# The device stack (`src/stack.rs`: task, descriptors, tud_* callbacks). Only for the
+# builds where the C++ `lnUsbStack` is out of the link, i.e. LN_RUST_USB (usb.md P2).
+# RP2040/RP2350 keep the C++ stack until P7 and must not get a second set of `tud_*`.
+usb_stack = []
+# Enable heap-allocated `Box<dyn ...>` handler constructors (`Cdc::new`, `Usb::new`).
+alloc = []
+
+[dependencies]
+cty = "0.2.2"
+rs_rtos = { path = "../../rs_rtos" }

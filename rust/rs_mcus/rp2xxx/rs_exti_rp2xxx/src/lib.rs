@@ -220,6 +220,13 @@ impl ExtiTrait for Exti {
     }
 }
 
+/// C++ `void lnExtiSysInit()` called from `rp.cpp`.
+///
+/// `rs_exti_rp2xxx` installs `IO_IRQ_BANK0` lazily on the first `attach()`, so
+/// no eager boot-time setup is needed.
+#[unsafe(export_name = "_Z13lnExtiSysInitv")]
+pub extern "C" fn ln_exti_sys_init() {}
+
 #[cfg(test)]
 mod tests {
     use super::*;

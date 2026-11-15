@@ -8,7 +8,7 @@ default = ["bluepill48"]
 bluepill48 = ["rust_esprit/bluepill48", "ws2812b/bluepill48"]
 
 [dependencies]
-rust_esprit = { path = "../../../../../rust/rust_esprit" }
+rust_esprit = { path = "../../../../../rust/rust_esprit", features = ["rust_logger"] }
 ws2812b = { path = "../../../../../rust/libraries/ws2812b" }
 ufmt = "*"
 

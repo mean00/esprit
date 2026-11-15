@@ -6,6 +6,9 @@ pub mod registers;
 pub mod shim;
 pub use shim::*;
 
+/// USART vector entries for the (empty) platform interrupt table.
+pub mod irq;
+
 /// Ring + DMA transmit buffer (Rust port of the C++
 /// `lnSerialBpTxOnlyBufferedDma`), used by the Rust logger.
 mod buffered_tx;

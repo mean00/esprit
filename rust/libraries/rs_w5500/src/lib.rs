@@ -12,6 +12,7 @@ pub mod registers;
 pub mod socket;
 
 pub use bus::W5500Bus;
+pub use c_api::{NetCallback, begin};
 pub use coordinator::{Coordinator, CoordinatorState, w5500_coordinator_task};
 pub use device::{W5500Device, W5500Pins};
 pub use dhcp::{DhcpClient, DhcpInfo, DhcpState};

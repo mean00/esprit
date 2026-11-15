@@ -1,0 +1,15 @@
+[package]
+name = "rs_usb"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+# How many CDC-ACM interfaces the board asks for (CMake LN_USB_NB_CDC). They only feed
+# the compile-time endpoint check; the interfaces themselves are claimed at run time.
+cdc2 = []
+cdc3 = []
+# The device task and its `tud_*` callbacks (usb.md P2).
+usb_stack = ["rs_tinyusb/usb_stack"]
+
+[dependencies]
+rs_tinyusb = { path = "../rs_tinyusb" }

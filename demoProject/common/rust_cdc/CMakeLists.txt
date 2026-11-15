@@ -37,7 +37,7 @@ include(${ESPRIT_ROOT}/setup.cmake)
 use_library(tinyUsb)
 use_library(ln-rtt)
 
-include(${ESPRIT_ROOT}/libraries/tinyUsb/tiny.cmake)
+include(${ESPRIT_CPP_ROOT}/libraries/tinyUsb/tiny.cmake)
 
 generate_gd32_firmware(rust_cdc src/demo.cpp)
 target_link_libraries(rust_cdc PRIVATE rust_demo)

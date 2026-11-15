@@ -20,6 +20,27 @@ static COORDINATOR_STORAGE: TaskStorage<COORDINATOR_STACK_WORDS> = TaskStorage::
 
 /// Initialise the W5500 and start the coordinator task that drives the PHY,
 /// the DHCP client and the socket interrupts.
+pub fn begin(
+    spi_instance: u32,
+    pins: W5500Pins,
+    mac: [u8; 6],
+    cb: Option<NetCallback>,
+    arg: *mut c_void,
+) {
+    let device = W5500Device::new(spi_instance, pins);
+    NET.lock().device = Some(device);
+
+    COORDINATOR.lock().configure(mac, cb, arg);
+
+    COORDINATOR_STORAGE.spawn(
+        "w5500",
+        COORDINATOR_PRIORITY,
+        w5500_coordinator_task,
+        core::ptr::null_mut(),
+    );
+}
+
+/// C ABI entry point: initialise the W5500 and start the coordinator task.
 ///
 /// `pins` is a C++ `lnW5500SPI`, `mac` six bytes. Returns `false` if a pointer is
 /// null; a task that cannot be created is fatal (it aborts, like any other
@@ -44,18 +65,7 @@ pub unsafe extern "C" fn w5500_begin_c(
     unsafe { core::ptr::copy_nonoverlapping(mac, mac_bytes.as_mut_ptr(), mac_bytes.len()) };
 
     // SAFETY: `pins` points to an `lnW5500SPI`, which has the layout of `W5500Pins`.
-    let device = W5500Device::new(spi_instance, unsafe { *pins });
-    NET.lock().device = Some(device);
-
-    COORDINATOR.lock().configure(mac_bytes, cb, arg);
-
-    COORDINATOR_STORAGE.spawn(
-        "w5500",
-        COORDINATOR_PRIORITY,
-        w5500_coordinator_task,
-        core::ptr::null_mut(),
-    );
-
+    begin(spi_instance, unsafe { *pins }, mac_bytes, cb, arg);
     true
 }
 

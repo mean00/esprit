@@ -1,0 +1,30 @@
+[package]
+name = "rust_demo"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["rp2040"]
+rp2040 = ["rust_esprit/rp2040"]
+rp2350 = ["rust_esprit/rp2350"]
+
+[dependencies]
+rs_socketrunner = { path = "../../../../../rust/libraries/rs_socketrunner" }
+rs_w5500 = { path = "../../../../../rust/libraries/rs_w5500" }
+rust_esprit = { path = "../../../../../rust/rust_esprit", default-features = false }
+ufmt = { version = "0.2.0", default-features = false }
+
+[lib]
+name = "rust_demo"
+path = "src/lib.rs"
+crate-type = ["staticlib"]
+
+[profile.dev]
+debug = true
+lto = false
+opt-level = 0
+
+[profile.release]
+debug = true
+lto = true
+opt-level = "s"

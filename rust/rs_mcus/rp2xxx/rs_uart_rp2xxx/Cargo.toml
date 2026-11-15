@@ -15,12 +15,14 @@ edition = "2024"
 # `rs_rp2xxx`'s root re-export, so exactly one of these must be set; `rp2350`
 # wins when both are (rust_esprit's `rp2350` implies its `rp2040`).
 default = ["rp2040"]
-rp2040 = ["rs_rp2xxx/rp2040"]
-rp2350 = ["rs_rp2xxx/rp2350"]
+rp2040 = ["rs_rp2xxx/rp2040", "rs_dma_rp2xxx/rp2040"]
+rp2350 = ["rs_rp2xxx/rp2350", "rs_dma_rp2xxx/rp2350"]
 
 [dependencies]
 portable-atomic = { version = "1.15.0", features = ["critical-section"] }
+rs_dma_rp2xxx = { path = "../rs_dma_rp2xxx" }
 rs_gpio_rp2xxx = { path = "../rs_gpio_rp2xxx" }
 rs_mcu_traits = { path = "../../traits" }
 rs_rcu_rp2xxx = { path = "../rs_rcu_rp2xxx" }
 rs_rp2xxx = { path = "../rs_rp2xxx" }
+rs_rtos = { path = "../../../rs_rtos" }

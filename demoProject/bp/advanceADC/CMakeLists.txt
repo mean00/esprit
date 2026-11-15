@@ -10,7 +10,7 @@ add_subdirectory(${ESPRIT_ROOT})
 
 include(${ESPRIT_ROOT}/setup.cmake)
 
-set(NVM ${ESPRIT_ROOT}/libraries/NeVerMind)
+set(NVM ${ESPRIT_CPP_ROOT}/libraries/NeVerMind)
 include_directories(${NVM})
 include_directories(${NVM}/gd32)
 

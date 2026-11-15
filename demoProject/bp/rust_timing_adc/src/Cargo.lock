@@ -118,7 +118,9 @@ dependencies = [
 name = "rs_afio_bluepill"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "rs_bluepill",
+ "rs_mcu_traits",
  "rs_rcu_bluepill",
 ]
 
@@ -140,6 +142,7 @@ dependencies = [
 name = "rs_exti_bluepill"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "rs_afio_bluepill",
  "rs_bluepill",
  "rs_gpio_bluepill",
@@ -147,9 +150,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rs_fmc_bluepill"
+version = "0.1.0"
+dependencies = [
+ "rs_bluepill",
+]
+
+[[package]]
 name = "rs_gpio_bluepill"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "rs_bluepill",
  "rs_mcu_traits",
 ]
@@ -219,6 +230,7 @@ dependencies = [
 name = "rs_timer_bluepill"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "rs_bluepill",
  "rs_dma_bluepill",
  "rs_gpio_bluepill",
@@ -248,8 +260,10 @@ dependencies = [
  "cty",
  "rs_adc_bluepill",
  "rs_afio_bluepill",
+ "rs_bluepill",
  "rs_dma_bluepill",
  "rs_exti_bluepill",
+ "rs_fmc_bluepill",
  "rs_gpio_bluepill",
  "rs_i2c_bluepill",
  "rs_mcu_traits",

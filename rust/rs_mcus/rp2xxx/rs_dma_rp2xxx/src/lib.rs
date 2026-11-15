@@ -32,6 +32,11 @@ unsafe extern "C" {
 /// RP2040 IRQ index for DMA IRQ 1 (DMA_IRQ_0 is 11, DMA_IRQ_1 is 12).
 const NVIC_DMA_IRQ_1: u32 = 12;
 
+/// C++ `void lnRpDmaSysInit()` stub when `ln_rp_dma.cpp` is not compiled.
+/// `rs_dma_rp2xxx` installs `DMA_IRQ_1` lazily on first DMA use.
+#[unsafe(export_name = "_Z14lnRpDmaSysInitv")]
+pub extern "C" fn ln_rp_dma_sys_init() {}
+
 /// Atomic bitmask tracking claimed channels (bits 0..11).
 static DMA_CHANNELS_IN_USE: AtomicU16 = AtomicU16::new(0);
 

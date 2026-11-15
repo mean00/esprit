@@ -11,7 +11,7 @@ add_subdirectory(${ESPRIT_ROOT})
 include(${ESPRIT_ROOT}/setup.cmake)
 
 # generic MCP part
-set(MCP23017 ${ESPRIT_ROOT}/libraries/mcp23017)
+set(MCP23017 ${ESPRIT_CPP_ROOT}/libraries/mcp23017)
 add_subdirectory(${MCP23017})
 include_directories(${MCP23017} ${MCP23017}/)
 

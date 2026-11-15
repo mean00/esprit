@@ -56,6 +56,10 @@ pub const DREQ_SPI0_TX: u32 = 24;
 pub const DREQ_SPI0_RX: u32 = 25;
 pub const DREQ_SPI1_TX: u32 = 26;
 pub const DREQ_SPI1_RX: u32 = 27;
+pub const DREQ_UART0_TX: u32 = 28;
+pub const DREQ_UART0_RX: u32 = 29;
+pub const DREQ_UART1_TX: u32 = 30;
+pub const DREQ_UART1_RX: u32 = 31;
 /// `TREQ_SEL = 0x3f` is a permanent request on this chip too (§12.6.4).
 pub const DREQ_PERMANENT: u32 = 0x3F;
 

@@ -76,7 +76,7 @@ pub use rs_mcu_traits::gpio::PinMode;
 /// The pads then reach the instance `rs_spi_*::Spi::new(instance, …)` talks to
 /// (`GPIO0`…`GPIO3` are SPI0 on an RP2xxx, `GPIO8`…`GPIO11` SPI1, and so on).
 pub fn set_spi_pins(pins: &[Pin]) {
-    #[cfg(feature = "rp2040")]
+    #[cfg(feature = "rp2xxx")]
     {
         for pin in pins {
             let mut pad = *pin;
@@ -85,7 +85,7 @@ pub fn set_spi_pins(pins: &[Pin]) {
         }
     }
 
-    #[cfg(all(not(feature = "rp2040"), not(any(feature = "esp32", feature = "wrapped"))))]
+    #[cfg(all(not(feature = "rp2xxx"), not(any(feature = "esp32", feature = "wrapped"))))]
     {
         for pin in pins {
             // The GD32 alternate function, with the same 50 MHz drive the C++ uses.

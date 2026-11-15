@@ -94,6 +94,11 @@ pub const UART_INT_OE: u32 = 1 << 10;
 /// IO_BANK0 FUNCSEL that muxes a pad to the UART (the pad decides which instance).
 pub const FUNCSEL_UART: u32 = 2;
 
+// --- DMACR (0x48) ------------------------------------------------------------
+
+/// Enable DMA on the transmit FIFO.
+pub const UART_DMACR_TXDMAE: u32 = 1 << 1;
+
 #[cfg(test)]
 mod tests {
     use super::*;

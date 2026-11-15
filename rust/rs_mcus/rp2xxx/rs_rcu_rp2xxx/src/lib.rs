@@ -48,6 +48,7 @@ pub fn enable(periph: Peripheral) {
     }
 
     if let Some(mask) = get_reset_bit(periph) {
+        // SAFETY: `RESETS_BASE` + atomic CLR/RESET_DONE offsets are documented RP2xxx reset registers.
         unsafe {
             // Atomic clear on RESET register: write mask to CLR alias
             let reset_clr = (RESETS_BASE + ATOMIC_CLR_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
@@ -63,6 +64,7 @@ pub fn enable(periph: Peripheral) {
 /// Assert reset on the peripheral (placing it into reset/disabled state).
 pub fn disable(periph: Peripheral) {
     if let Some(mask) = get_reset_bit(periph) {
+        // SAFETY: `RESETS_BASE` + atomic SET offset is the documented RP2xxx reset-set register.
         unsafe {
             // Atomic set on RESET register: write mask to SET alias
             let reset_set = (RESETS_BASE + ATOMIC_SET_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
@@ -74,6 +76,7 @@ pub fn disable(periph: Peripheral) {
 /// Reset the peripheral: assert reset, then deassert and wait for RESET_DONE.
 pub fn reset(periph: Peripheral) {
     if let Some(mask) = get_reset_bit(periph) {
+        // SAFETY: `RESETS_BASE` + atomic SET/CLR/RESET_DONE offsets are documented RP2xxx reset registers.
         unsafe {
             let reset_set = (RESETS_BASE + ATOMIC_SET_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
             let reset_clr = (RESETS_BASE + ATOMIC_CLR_OFFSET + RESETS_RESET_OFFSET) as *mut u32;
@@ -87,16 +90,22 @@ pub fn reset(periph: Peripheral) {
     }
 }
 
+#[inline(always)]
+fn clock_or(clk_index: u32, default_hz: u32) -> u32 {
+    // SAFETY: `clock_get_hz` is provided by pico-sdk `hardware_clocks`.
+    let hz = unsafe { clock_get_hz(clk_index) };
+    if hz == 0 {
+        default_hz
+    } else {
+        hz
+    }
+}
+
 /// Query the peripheral clock frequency in Hz.
 pub fn get_clock(periph: Peripheral) -> u32 {
     match periph {
         Peripheral::Spi0 | Peripheral::Spi1 | Peripheral::Uart0 | Peripheral::Uart1 => {
-            let hz = unsafe { clock_get_hz(CLK_PERI_INDEX) };
-            if hz == 0 {
-                DEFAULT_PERI_CLOCK_HZ
-            } else {
-                hz
-            }
+            clock_or(CLK_PERI_INDEX, DEFAULT_PERI_CLOCK_HZ)
         }
         Peripheral::SysClock
         | Peripheral::Apb1
@@ -104,39 +113,11 @@ pub fn get_clock(periph: Peripheral) -> u32 {
         | Peripheral::Dma0
         | Peripheral::Dma1
         | Peripheral::I2c0
-        | Peripheral::I2c1 => {
-            let hz = unsafe { clock_get_hz(CLK_SYS_INDEX) };
-            if hz == 0 {
-                DEFAULT_SYS_CLOCK_HZ
-            } else {
-                hz
-            }
-        }
-        Peripheral::Usb => {
-            let hz = unsafe { clock_get_hz(CLK_USB_INDEX) };
-            if hz == 0 {
-                DEFAULT_USB_CLOCK_HZ
-            } else {
-                hz
-            }
-        }
-        Peripheral::Adc0 | Peripheral::Adc1 => {
-            let hz = unsafe { clock_get_hz(CLK_ADC_INDEX) };
-            if hz == 0 {
-                DEFAULT_ADC_CLOCK_HZ
-            } else {
-                hz
-            }
-        }
+        | Peripheral::I2c1 => clock_or(CLK_SYS_INDEX, DEFAULT_SYS_CLOCK_HZ),
+        Peripheral::Usb => clock_or(CLK_USB_INDEX, DEFAULT_USB_CLOCK_HZ),
+        Peripheral::Adc0 | Peripheral::Adc1 => clock_or(CLK_ADC_INDEX, DEFAULT_ADC_CLOCK_HZ),
         Peripheral::Timer0 | Peripheral::Timer1 => DEFAULT_TIMER_CLOCK_HZ,
-        _ => {
-            let hz = unsafe { clock_get_hz(CLK_SYS_INDEX) };
-            if hz == 0 {
-                DEFAULT_SYS_CLOCK_HZ
-            } else {
-                hz
-            }
-        }
+        _ => clock_or(CLK_SYS_INDEX, DEFAULT_SYS_CLOCK_HZ),
     }
 }
 

@@ -10,8 +10,8 @@ pub use shim::*;
 use registers::*;
 use rs_rcu_bluepill::{Peripheral, enable};
 use rs_rtos::BinarySemaphore;
-use core::ptr::{read_volatile, write_volatile};
-use core::sync::atomic::{AtomicU8, Ordering};
+use core::ptr::{null_mut, read_volatile, write_volatile};
+use core::sync::atomic::{AtomicPtr, AtomicU8, Ordering};
 use rs_mcu_traits::dma as hal;
 
 /// In-use channel bitmasks for DMA engines:
@@ -49,14 +49,82 @@ pub enum DmaEngine {
     Dma1 = 1, // DMA2 in STM32 terminology
 }
 
+type DmaRawCallback = unsafe extern "C" fn(bool, *mut core::ffi::c_void);
+
+static DMA_RAW_CALLBACKS: [[AtomicPtr<core::ffi::c_void>; 7]; 2] = [
+    [const { AtomicPtr::new(null_mut()) }; 7],
+    [const { AtomicPtr::new(null_mut()) }; 7],
+];
+static DMA_RAW_COOKIES: [[AtomicPtr<core::ffi::c_void>; 7]; 2] = [
+    [const { AtomicPtr::new(null_mut()) }; 7],
+    [const { AtomicPtr::new(null_mut()) }; 7],
+];
+
+#[cfg(not(test))]
 unsafe extern "C" {
-    fn lnDmaAttachRawCallback(
-        dma: i32,
-        channel: i32,
-        cb: unsafe extern "C" fn(bool, *mut core::ffi::c_void),
-        cookie: *mut core::ffi::c_void,
-    );
-    fn lnDmaDetachRawCallback(dma: i32, channel: i32);
+    fn lnDmaSetIrqEnabled(dma: i32, channel: i32, enable: bool);
+}
+
+#[cfg(test)]
+unsafe fn lnDmaSetIrqEnabled(_dma: i32, _channel: i32, _enable: bool) {}
+
+fn attach_raw_callback(dma: i32, channel: i32, cb: DmaRawCallback, cookie: *mut core::ffi::c_void) {
+    let d = dma as usize;
+    let c = channel as usize;
+    if d >= 2 || c >= 7 {
+        return;
+    }
+    DMA_RAW_COOKIES[d][c].store(cookie, Ordering::Release);
+    DMA_RAW_CALLBACKS[d][c].store(cb as *mut core::ffi::c_void, Ordering::Release);
+    unsafe { lnDmaSetIrqEnabled(dma, channel, true) };
+}
+
+fn detach_raw_callback(dma: i32, channel: i32) {
+    let d = dma as usize;
+    let c = channel as usize;
+    if d >= 2 || c >= 7 {
+        return;
+    }
+    unsafe { lnDmaSetIrqEnabled(dma, channel, false) };
+    DMA_RAW_CALLBACKS[d][c].store(null_mut(), Ordering::Release);
+    DMA_RAW_COOKIES[d][c].store(null_mut(), Ordering::Release);
+}
+
+#[cfg(not(test))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dmaIrqHandler(dma: i32, channel: i32) {
+    let d = dma as usize;
+    let c = channel as usize;
+    if d >= 2 || c >= 7 {
+        return;
+    }
+    let regs = if d == 0 {
+        DmaRegisters::dma0_ptr()
+    } else {
+        DmaRegisters::dma1_ptr()
+    };
+    unsafe {
+        let chan = &mut (*regs).channels[c];
+        let ccr = read_volatile(&chan.ccr);
+        let shift = 4 * c;
+        let mut status = (read_volatile(&(*regs).isr) >> shift) & 0x0F;
+        if (ccr & DMA_CCR_CIRC) == 0 {
+            write_volatile(&mut chan.ccr, ccr & !DMA_CCR_EN);
+            lnDmaSetIrqEnabled(dma, channel, false);
+        }
+        status &= ccr;
+        status >>= 1;
+        status &= (DMA_FLAG_TCIF | DMA_FLAG_HTIF) >> 1;
+        write_volatile(&mut (*regs).ifcr, (status << 1) << shift);
+
+        let cb_ptr = DMA_RAW_CALLBACKS[d][c].load(Ordering::Acquire);
+        if !cb_ptr.is_null() {
+            let cb: DmaRawCallback = core::mem::transmute(cb_ptr);
+            let cookie = DMA_RAW_COOKIES[d][c].load(Ordering::Acquire);
+            let is_half = (status & (DMA_FLAG_HTIF >> 1)) != 0;
+            cb(is_half, cookie);
+        }
+    }
 }
 
 pub struct DmaChannel {
@@ -116,26 +184,22 @@ impl DmaChannel {
 
     /// Attach a binary semaphore to be awakened from the DMA interrupt when transfer completes.
     pub fn attach_completion_semaphore(&mut self, sem: &BinarySemaphore) {
-        unsafe {
-            lnDmaAttachRawCallback(
-                self.engine as i32,
-                self.channel_idx as i32,
-                dma_sem_trampoline,
-                sem as *const BinarySemaphore as *mut core::ffi::c_void,
-            );
-        }
+        attach_raw_callback(
+            self.engine as i32,
+            self.channel_idx as i32,
+            dma_sem_trampoline,
+            sem as *const BinarySemaphore as *mut core::ffi::c_void,
+        );
     }
 
     /// Attach a typed handler trait implementing `DmaTransferHandler`.
     pub fn attach_handler<H: DmaTransferHandler + 'static>(&mut self, handler: &'static H) {
-        unsafe {
-            lnDmaAttachRawCallback(
-                self.engine as i32,
-                self.channel_idx as i32,
-                dma_handler_trampoline::<H>,
-                handler as *const H as *mut core::ffi::c_void,
-            );
-        }
+        attach_raw_callback(
+            self.engine as i32,
+            self.channel_idx as i32,
+            dma_handler_trampoline::<H>,
+            handler as *const H as *mut core::ffi::c_void,
+        );
     }
 
     /// Attach a raw C-style callback function with cookie.
@@ -144,15 +208,11 @@ impl DmaChannel {
         cb: unsafe extern "C" fn(bool, *mut core::ffi::c_void),
         cookie: *mut core::ffi::c_void,
     ) {
-        unsafe {
-            lnDmaAttachRawCallback(self.engine as i32, self.channel_idx as i32, cb, cookie);
-        }
+        attach_raw_callback(self.engine as i32, self.channel_idx as i32, cb, cookie);
     }
 
     pub fn detach_callback(&mut self) {
-        unsafe {
-            lnDmaDetachRawCallback(self.engine as i32, self.channel_idx as i32);
-        }
+        detach_raw_callback(self.engine as i32, self.channel_idx as i32);
     }
 
     pub fn begin_tx_transfer(&mut self, peripheral_addr: u32, memory_addr: u32, length: u32, src_16bit: bool, dst_16bit: bool) {

@@ -17,8 +17,12 @@
 //! drivers' `registers.rs`) resolves the pair the same way.
 
 pub mod common;
+pub mod cpuid;
+pub mod irq;
 pub mod rp2040;
 pub mod rp2350;
+pub mod runtime;
+pub mod sys;
 
 #[cfg(feature = "rp2350")]
 pub use rp2350::*;

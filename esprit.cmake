@@ -13,34 +13,38 @@ if(NOT DEFINED LN_ARCH)
       CACHE INTERNAL "")
 endif()
 
+set(ESPRIT_CPP_ROOT
+    ${CMAKE_CURRENT_LIST_DIR}/cpp
+    CACHE INTERNAL "")
+
 string(TOUPPER ${LN_ARCH} LN_ARCH)
 set(LN_MCU_TOOLCHAIN_PREFIX "UNKNOWN")
 if(LN_ARCH STREQUAL "RISCV")
   if("${LN_MCU}" STREQUAL "CH32V3x")
     set(LN_MCU_TOOLCHAIN_PREFIX
-        ${CMAKE_CURRENT_LIST_DIR}/mcus/riscv_ch32v3x/
+        ${ESPRIT_CPP_ROOT}/mcus/riscv_ch32v3x/
         CACHE INTERNAL "")
   elseif("${LN_MCU}" STREQUAL "RP2350_RISCV")
     set(LN_MCU_TOOLCHAIN_PREFIX
-        ${CMAKE_CURRENT_LIST_DIR}/mcus/arm_rp2350/riscv/
+        ${ESPRIT_CPP_ROOT}/mcus/arm_rp2350/riscv/
         CACHE INTERNAL "")
   elseif("${LN_MCU}" STREQUAL "ESP32")
     set(LN_MCU_TOOLCHAIN_PREFIX
-        ${CMAKE_CURRENT_LIST_DIR}/mcus/riscv_esp32/
+        ${ESPRIT_CPP_ROOT}/mcus/riscv_esp32/
         CACHE INTERNAL "")
   endif()
 elseif(LN_ARCH STREQUAL "ARM")
   if("${LN_MCU}" STREQUAL "RP2040")
     set(LN_MCU_TOOLCHAIN_PREFIX
-        ${CMAKE_CURRENT_LIST_DIR}/mcus/arm_rp2040/
+        ${ESPRIT_CPP_ROOT}/mcus/arm_rp2040/
         CACHE INTERNAL "")
   elseif("${LN_MCU}" STREQUAL "RP2350")
     set(LN_MCU_TOOLCHAIN_PREFIX
-        ${CMAKE_CURRENT_LIST_DIR}/mcus/arm_rp2350/
+        ${ESPRIT_CPP_ROOT}/mcus/arm_rp2350/
         CACHE INTERNAL "")
   else()
     set(LN_MCU_TOOLCHAIN_PREFIX
-        ${CMAKE_CURRENT_LIST_DIR}/mcus/arm_gd32fx/
+        ${ESPRIT_CPP_ROOT}/mcus/arm_gd32fx/
         CACHE INTERNAL "")
   endif()
 else()

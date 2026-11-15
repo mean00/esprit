@@ -185,10 +185,49 @@ pub struct SimpleAdc {
 
 impl SimpleAdc {
     pub fn new(instance: u32, pin: u32) -> Self {
+        if let Some(p) = Pin::from_number(pin) {
+            rs_gpio_bluepill::set_mode(p, rs_gpio_bluepill::Mode::AdcMode, 0);
+        }
         if instance == 0 {
             enable(Peripheral::Adc0);
         } else {
             enable(Peripheral::Adc1);
+        }
+        let regs = AdcRegisters::ptr(instance);
+        unsafe {
+            // Reset CTL0/CTL1 and power on the SAR once, then calibrate once
+            // (re-writing ADCON=1 while ADCON is already 1 starts a spurious
+            // conversion on STM32F1/CH32V3x).
+            rs_mcu_traits::reg_write!(regs, ctl0, 0);
+            rs_mcu_traits::reg_write!(
+                regs,
+                ctl1,
+                ADC_CTL1_ETSRC_SWSTART | ADC_CTL1_ETERC | ADC_CTL1_ADCON
+            );
+
+            let mut nop_ctr = 0;
+            while nop_ctr < 1500 {
+                core::arch::asm!("nop");
+                nop_ctr += 1;
+            }
+
+            let mut ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
+            ctl1 |= ADC_CTL1_RSTCLB;
+            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
+            while (rs_mcu_traits::reg_read!(regs, ctl1) & ADC_CTL1_RSTCLB) != 0 {
+                core::arch::asm!("nop");
+            }
+
+            ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
+            ctl1 |= ADC_CTL1_CLB;
+            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
+            while (rs_mcu_traits::reg_read!(regs, ctl1) & ADC_CTL1_CLB) != 0 {
+                core::arch::asm!("nop");
+            }
+
+            if rs_bluepill::HAS_ADC_BUFFER {
+                rs_mcu_traits::reg_write!(regs, ctl0, ADC_CTL0_BUFEN);
+            }
         }
         Self {
             instance,
@@ -218,14 +257,14 @@ impl SimpleAdc {
         unsafe {
             if ch < ADC_SAMPT0_CHANNELS {
                 let shift = ch * ADC_SAMPT_BITS;
-                let mut v = rs_mcu_traits::reg_read!(regs, sampt0);
-                v &= !(ADC_SAMPT_MASK << shift);
-                rs_mcu_traits::reg_write!(regs, sampt0, v | (smpt << shift));
-            } else {
-                let shift = (ch - ADC_SAMPT0_CHANNELS) * ADC_SAMPT_BITS;
                 let mut v = rs_mcu_traits::reg_read!(regs, sampt1);
                 v &= !(ADC_SAMPT_MASK << shift);
                 rs_mcu_traits::reg_write!(regs, sampt1, v | (smpt << shift));
+            } else {
+                let shift = (ch - ADC_SAMPT0_CHANNELS) * ADC_SAMPT_BITS;
+                let mut v = rs_mcu_traits::reg_read!(regs, sampt0);
+                v &= !(ADC_SAMPT_MASK << shift);
+                rs_mcu_traits::reg_write!(regs, sampt0, v | (smpt << shift));
             }
         }
     }
@@ -240,37 +279,11 @@ impl SimpleAdc {
         unsafe {
             let ch = pin_to_adc_channel(self.pin);
 
-            let mut ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
-            ctl1 &= !ADC_CTL1_ETSRC_MASK;
-            ctl1 |= ADC_CTL1_ETSRC_SWSTART;
-            ctl1 |= ADC_CTL1_ETERC;
-            ctl1 |= ADC_CTL1_ADCON;
-            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
-
-            let mut nop_ctr = 0;
-            while nop_ctr < 1000 {
-                core::arch::asm!("nop");
-                nop_ctr += 1;
-            }
-
-            ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
-            ctl1 |= ADC_CTL1_RSTCLB;
-            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
-            while (rs_mcu_traits::reg_read!(regs, ctl1) & ADC_CTL1_RSTCLB) != 0 {
-                core::arch::asm!("nop");
-            }
-
-            ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
-            ctl1 |= ADC_CTL1_CLB;
-            rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
-            while (rs_mcu_traits::reg_read!(regs, ctl1) & ADC_CTL1_CLB) != 0 {
-                core::arch::asm!("nop");
-            }
-
             rs_mcu_traits::reg_write!(regs, rsq0, 0);
             rs_mcu_traits::reg_write!(regs, rsq2, ch);
+            rs_mcu_traits::reg_write!(regs, stat, 0);
 
-            ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
+            let mut ctl1 = rs_mcu_traits::reg_read!(regs, ctl1);
             ctl1 |= ADC_CTL1_SWRCST;
             rs_mcu_traits::reg_write!(regs, ctl1, ctl1);
 

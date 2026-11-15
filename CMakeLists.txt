@@ -20,6 +20,9 @@ if(True) # NOT ESPRIT_ROOT)
   endif()
 
   message(STATUS "ESPRIT_ROOT is ${ESPRIT_ROOT}")
+  set(ESPRIT_CPP_ROOT
+      ${ESPRIT_ROOT}/cpp
+      CACHE INTERNAL "")
 
   list(APPEND CMAKE_MODULE_PATH ${ESPRIT_ROOT} ${ESPRIT_ROOT}/cmake)
   include(colorFormatting)
@@ -42,13 +45,19 @@ if(True) # NOT ESPRIT_ROOT)
   # lnDebug.cpp is dropped from ln_utils and the Rust one is linked instead.
   # It needs the Rust tree (LN_ENABLE_RUST) and the bluepill MCU family, because
   # it drives the debug UART through rs_uart_bluepill's DMA ring.
-  option(USE_RUST_LOGGER "Build the Esprit logger (lnDebug) in Rust" OFF)
+  if(LN_ENABLE_RUST AND (LN_EXT STREQUAL "arm_gd32fx" OR LN_EXT STREQUAL "riscv_ch32v3x" OR LN_EXT STREQUAL "arm_rp2040" OR LN_EXT STREQUAL "arm_rp2350"))
+    set(USE_RUST_LOGGER
+        ON
+        CACHE BOOL "Build the Esprit logger (lnDebug) in Rust" FORCE)
+  else()
+    option(USE_RUST_LOGGER "Build the Esprit logger (lnDebug) in Rust" OFF)
+  endif()
   if(USE_RUST_LOGGER)
     if(NOT LN_ENABLE_RUST)
       message(FATAL_ERROR "USE_RUST_LOGGER needs LN_ENABLE_RUST (the logger is Rust code)")
     endif()
-    if(NOT (LN_EXT STREQUAL "arm_gd32fx" OR LN_EXT STREQUAL "riscv_ch32v3x"))
-      message(FATAL_ERROR "USE_RUST_LOGGER only supports the bluepill MCU families (LN_EXT ${LN_EXT})")
+    if(NOT (LN_EXT STREQUAL "arm_gd32fx" OR LN_EXT STREQUAL "riscv_ch32v3x" OR LN_EXT STREQUAL "arm_rp2040" OR LN_EXT STREQUAL "arm_rp2350"))
+      message(FATAL_ERROR "USE_RUST_LOGGER does not support MCU family (LN_EXT ${LN_EXT})")
     endif()
     message(STATUS "Esprit logger: Rust (rust_esprit/src/logger_c.rs)")
   endif()
@@ -65,20 +74,20 @@ if(True) # NOT ESPRIT_ROOT)
   option(USE_CH32v3x_PURE_RAM "Load and run from RAM (CH32vxx only)" FALSE)
 
   set(LN_MCU_FOLDER
-      ${ESPRIT_ROOT}/mcus/${LN_EXT}/
+      ${ESPRIT_CPP_ROOT}/mcus/${LN_EXT}/
       CACHE INTERNAL "")
   #
   add_library(esprit_dev INTERFACE)
 
   if(LN_ENABLE_ETH)
-    add_subdirectory(libraries/lwip_esprit)
+    add_subdirectory(${ESPRIT_CPP_ROOT}/libraries/lwip_esprit)
   endif()
 
   target_include_directories(esprit_dev INTERFACE ${LN_MCU_FOLDER}/boards/${LN_BOARD_NAME}/) # needed to get the
                                                                                              # freertos_tuning.h
   target_include_directories(esprit_dev INTERFACE ${LN_MCU_FOLDER}/include/) # needed to get the freertos_tuning.h
-  target_include_directories(esprit_dev INTERFACE ${ESPRIT_ROOT}/)
-  target_include_directories(esprit_dev INTERFACE ${ESPRIT_ROOT}/include)
+  target_include_directories(esprit_dev INTERFACE ${ESPRIT_CPP_ROOT}/)
+  target_include_directories(esprit_dev INTERFACE ${ESPRIT_CPP_ROOT}/include)
   target_include_directories(esprit_dev INTERFACE ${CMAKE_BINARY_DIR}) # To catch generated files
   target_include_directories(esprit_dev INTERFACE ${LN_MCU_FOLDER})
   target_include_directories(esprit_dev INTERFACE ${LN_MCU_FOLDER}/include)
@@ -108,17 +117,17 @@ if(True) # NOT ESPRIT_ROOT)
   include(lnEmbeddedPrint)
 
   add_subdirectory(${LN_MCU_FOLDER}/src)
-  add_subdirectory(${ESPRIT_ROOT}/src)
+  add_subdirectory(${ESPRIT_CPP_ROOT}/src)
 
   if(LN_ENABLE_RUST)
     add_subdirectory(${ESPRIT_ROOT}/rust) # Generate C++->C for easy Rust binding
   endif(LN_ENABLE_RUST)
 
   # a firmmware should link against that one
-  target_include_directories(esprit_dev INTERFACE ${ESPRIT_ROOT})
-  target_include_directories(esprit_dev INTERFACE ${ESPRIT_ROOT}/include)
+  target_include_directories(esprit_dev INTERFACE ${ESPRIT_CPP_ROOT})
+  target_include_directories(esprit_dev INTERFACE ${ESPRIT_CPP_ROOT}/include)
   target_include_directories(esprit_dev INTERFACE ${LN_MCU_FOLDER})
-  target_include_directories(esprit_dev INTERFACE ${ESPRIT_ROOT}/embedded_printf)
+  target_include_directories(esprit_dev INTERFACE ${ESPRIT_CPP_ROOT}/embedded_printf)
 
   # ____________________________________________ Merge things into a single lib and single interface
   # ____________________________________________

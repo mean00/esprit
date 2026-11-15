@@ -35,3 +35,6 @@ rust/rs_rtos/target/
 rust/wrapped/*/target/
 rust/rs_mcus/*/target/
 rust/rs_mcus/*/*/target/
+CMakeFiles
+cmake_install.cmake
+Makefile

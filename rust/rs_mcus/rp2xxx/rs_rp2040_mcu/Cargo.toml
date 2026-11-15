@@ -1,0 +1,8 @@
+[package]
+name = "rs_rp2040_mcu"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rs_gpio_rp2xxx = { path = "../rs_gpio_rp2xxx", features = ["rp2040"] }
+rs_rp2xxx = { path = "../rs_rp2xxx", features = ["rp2040"] }

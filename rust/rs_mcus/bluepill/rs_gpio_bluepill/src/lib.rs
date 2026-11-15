@@ -311,3 +311,6 @@ impl gpio::Gpio for Pin {
 
 pub mod shim;
 pub use shim::*;
+
+/// The C entries of the driver, for the C++ side that still calls them (`drop_C.md` P5).
+pub mod c_api;

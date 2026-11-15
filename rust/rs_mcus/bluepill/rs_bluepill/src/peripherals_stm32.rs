@@ -5,6 +5,9 @@
 //! (see the note on `TIM8_BASE`). Everything both families share is in
 //! `peripherals_common.rs`.
 
+/// STM32F1 / GD32F30x ADCs have no input buffer bit (`ADC_CTL0[31:24]` is reserved).
+pub const HAS_ADC_BUFFER: bool = false;
+
 /// Third ADC. GD32F30x and STM32F1 high-density parts have it; CH32V3 does not.
 pub const ADC3_BASE: u32 = 0x4001_3C00;
 
@@ -27,6 +30,21 @@ pub const SYS_TIMER_BASE: u32 = 0xD100_0000;
 
 /// ARM System Control Block (VTOR, NVIC, …). CH32V3 has `PFIC`/`STK` instead.
 pub const ARM_SCB_BASE: u32 = 0xE000_ED00;
+
+/// ARM Cortex-M SysTick timer (`CSR`, `RVR`, `CVR`, `CALIB`).
+pub const ARM_SYSTICK_BASE: u32 = 0xE000_E010;
+
+/// ARM Cortex-M NVIC (`ISER`, `ICER`, `ISPR`, `ICPR`, `IPR`).
+pub const ARM_NVIC_BASE: u32 = 0xE000_E100;
+
+/// MCU Debug unit (`DBG_ID`, `DBG_CTL0`).
+pub const DBG_BASE: u32 = 0xE004_2000;
+
+/// ARM Cortex-M4 FPU Media and VFP Feature Registers (`MVFR0`, `MVFR1`).
+pub const ARM_FPU_MVFR_BASE: u32 = 0xE000_EF40;
+
+/// GD32F3x / STM32F1 Flash/RAM density information register.
+pub const MCU_DENSITY_ADDR: u32 = 0x1FFF_F7E0;
 
 /// Fifth USART (UART4 in GD32 naming). CH32V3 puts UART5 at `0x4000_1800`
 /// (`peripherals_ch32v3x::USART5_BASE`).

@@ -1,8 +1,12 @@
 set(C ${CMAKE_CURRENT_SOURCE_DIR}/rust_esprit/c_interface)
 
-add_library(esprit_c_bindings OBJECT)
-target_include_directories(esprit_c_bindings PRIVATE ${C})
-target_link_libraries(esprit_c_bindings PRIVATE esprit_dev)
+if(LN_ENABLE_RUST AND (LN_EXT STREQUAL "arm_gd32fx" OR LN_EXT STREQUAL "riscv_ch32v3x" OR LN_EXT STREQUAL "arm_rp2040" OR LN_EXT STREQUAL "arm_rp2350"))
+  add_library(esprit_c_bindings INTERFACE)
+else()
+  add_library(esprit_c_bindings OBJECT)
+  target_include_directories(esprit_c_bindings PRIVATE ${C})
+  target_link_libraries(esprit_c_bindings PRIVATE esprit_dev)
+endif()
 
 # `make rust_bindings_check` re-runs bindgen into a temporary directory and diffs
 # the result against the checked-in files (rs_rtos: src/c_freertos.rs,
@@ -33,14 +37,16 @@ endif()
 # calls `lnExti*_c` any more. C++ still uses `lnExtiAttachInterrupt` directly.
 set(_esprit_rust_c_bridges ${C}/lnGPIO_c.cpp ${C}/lnCpuID_c.cpp)
 if(LN_ENABLE_RUST)
-  if(USE_RP2040 OR USE_RP2350)
-    set(_esprit_rust_c_bridges ${C}/lnGPIO_c.cpp)
-  elseif(NOT ("${LN_MCU}" STREQUAL "ESP32"))
+  if(NOT ("${LN_MCU}" STREQUAL "ESP32"))
     message(STATUS "Rust GPIO/CPU-id bridges: not built (the Rust backends own them)")
     set(_esprit_rust_c_bridges "")
   endif()
 endif()
-target_sources(esprit_c_bindings PRIVATE ${EXTRA} ${C}/lnFast_EventGroup_c.cpp ${_esprit_rust_c_bridges})
+if(LN_ENABLE_RUST AND (LN_EXT STREQUAL "arm_gd32fx" OR LN_EXT STREQUAL "riscv_ch32v3x" OR LN_EXT STREQUAL "arm_rp2040" OR LN_EXT STREQUAL "arm_rp2350"))
+  # Pure Rust runtime: no C bindings needed in esprit_c_bindings.
+else()
+  target_sources(esprit_c_bindings PRIVATE ${EXTRA} ${C}/lnFast_EventGroup_c.cpp ${_esprit_rust_c_bridges})
+endif()
 # lnSerial_c.cpp is only for the backends that reach the UART through it: the
 # ESP32 `rs_uart_wrapped` crate and every non-Rust build. On a Rust build of the
 # bluepill / RP2xxx the UART is `rs_uart_bluepill` / `rs_uart_rp2xxx`, i.e. the
@@ -49,13 +55,22 @@ if(NOT LN_ENABLE_RUST OR "${LN_MCU}" STREQUAL "ESP32")
   target_sources(esprit_c_bindings PRIVATE ${C}/lnSerial_c.cpp)
 endif()
 if(LN_ENABLE_USBD)
-  include(${ESPRIT_ROOT}/libraries/tinyUsb/tiny.cmake)
+  include(${ESPRIT_CPP_ROOT}/libraries/tinyUsb/tiny.cmake)
   # lnUSB_c.cpp is the C ABI the Rust USB stack sits on: `rs_tinyusb` only *calls*
   # lnusb_create/lnusb_start/lnusb_setEventHandler/... (rs_tinyusb/src/c_usb.rs
   # declares them `extern`), so the bridge has to be compiled on a Rust build too.
   # lnCDC_c.cpp still has live C callers, so it stays as well.
-  target_sources(esprit_c_bindings PRIVATE ${C}/lnCDC_c.cpp ${C}/lnUSB_c.cpp)
-  target_link_libraries(esprit_c_bindings PRIVATE tinyUsb)
+  # lnCDC_c.cpp wrapped the C++ lnUsbCDC and lnUSB_c.cpp the C++ lnUsbStack: with
+  # LN_RUST_USB both live in Rust (rs_tinyusb::cdc / ::stack, usb.md P3/P6) and the
+  # `c_cdc`/`c_usb` bindings are not used any more. Every other build keeps both.
+  if(NOT LN_RUST_USB)
+    target_sources(esprit_c_bindings PRIVATE ${C}/lnCDC_c.cpp ${C}/lnUSB_c.cpp)
+  endif()
+  if(LN_ENABLE_RUST AND (LN_EXT STREQUAL "arm_gd32fx" OR LN_EXT STREQUAL "riscv_ch32v3x" OR LN_EXT STREQUAL "arm_rp2040" OR LN_EXT STREQUAL "arm_rp2350"))
+    target_link_libraries(esprit_c_bindings INTERFACE tinyUsb)
+  else()
+    target_link_libraries(esprit_c_bindings PRIVATE tinyUsb)
+  endif()
 endif()
 
 macro(cond_build FLAG SRC)
@@ -86,4 +101,8 @@ endif()
 # No ADC bridge on RP2xxx any more: `rs_adc_rp2xxx` is a pure-Rust driver on the
 # ADC block, so neither the C++ `lnSimpleADC` (mcus/arm_rp2xxx/src/ln_rp_adc.cpp)
 # nor the `ln_rp_simple_adc_c.cpp` shim that exposed it is part of a Rust build.
-target_link_libraries(esprit_c_bindings PRIVATE esprit_dev)
+if(LN_ENABLE_RUST AND (LN_EXT STREQUAL "arm_gd32fx" OR LN_EXT STREQUAL "riscv_ch32v3x" OR LN_EXT STREQUAL "arm_rp2040" OR LN_EXT STREQUAL "arm_rp2350"))
+  target_link_libraries(esprit_c_bindings INTERFACE esprit_dev)
+else()
+  target_link_libraries(esprit_c_bindings PRIVATE esprit_dev)
+endif()

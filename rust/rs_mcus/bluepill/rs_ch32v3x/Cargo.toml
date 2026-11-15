@@ -1,0 +1,12 @@
+[package]
+name = "rs_ch32v3x"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rs_bluepill = { path = "../rs_bluepill", features = ["ch32v3x"] }
+rs_fmc_bluepill = { path = "../rs_fmc_bluepill" }
+rs_rcu_bluepill = { path = "../rs_rcu_bluepill", features = ["ch32v3x"] }
+
+[features]
+usb_stack = []

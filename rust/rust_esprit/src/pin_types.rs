@@ -12,11 +12,11 @@
 //! (`rn_gpio_rp2040_c` re-exports it), so a pin has exactly one type in the whole
 //! stack.
 
-#[cfg(not(any(feature = "rp2040", feature = "esp32")))]
+#[cfg(not(any(feature = "rp2xxx", feature = "esp32")))]
 pub use rs_gpio_bluepill::lnPin;
 
 #[cfg(feature = "esp32")]
 pub use crate::rn_gpio_esp32_c::lnPin;
 
-#[cfg(feature = "rp2040")]
+#[cfg(feature = "rp2xxx")]
 pub use crate::rn_gpio_rp2040_c::lnPin;

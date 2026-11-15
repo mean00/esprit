@@ -12,14 +12,11 @@
 //! `lnPin`, so a pin has one single type from the probe board table down to the
 //! register write.
 //!
-//! No C ABI is exported on purpose: on RP2xxx esprit's C++ GPIO
-//! (`esprit/mcus/rp_common/src/ln_rp_gpio.cpp`) is still linked and owns the
-//! `lnDigitalWrite` / `lnPinMode` / `lnOpenDrainClose` symbols, so aliasing them
-//! here would be a duplicate definition. The mode mapping and the open-drain
-//! sequence below mirror that C++ file bit for bit, so a mixed firmware (C++ SWD
-//! pins, Rust reset line) stays consistent.
+//! C++ ABI shims (`lnDigitalWrite` / `lnPinMode` / `lnOpenDrainClose`) live in
+//! [`shim`] so pure-Rust callers stay decoupled from the C++ mangled symbols.
 
 pub mod registers;
+pub mod shim;
 
 use registers::*;
 use rs_mcu_traits::gpio::{self, PinMode};

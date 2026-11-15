@@ -44,6 +44,7 @@ pub mod prelude {
 }
 
 pub mod c_freertos;
+#[cfg(any(feature = "esp32", feature = "external_std", not(target_os = "none")))]
 pub mod c_fast_event;
 
 /// Numbers that describe the kernel we link, one file per kernel.

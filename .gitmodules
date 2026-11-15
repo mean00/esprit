@@ -2,5 +2,5 @@
 	path = FreeRTOS
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
 [submodule "embedded_printf"]
-	path = embedded_printf
+	path = cpp/embedded_printf
     url = https://github.com/mean00/embedded_printf.git
