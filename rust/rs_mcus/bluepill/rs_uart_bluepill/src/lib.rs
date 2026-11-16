@@ -26,6 +26,7 @@ use rs_rtos::BinarySemaphore;
 // The RX poll timer and the critical sections come from `rs_rtos` directly:
 // `rs_timer_bluepill` is the *hardware* timer API, a
 // different thing from a FreeRTOS software timer (`PeriodicTimer`).
+use rs_rtos::timer::TimerSlot;
 use rs_rtos::{PeriodicTimer, with_critical};
 
 pub(crate) fn uart_set_baudrate(instance: u32, speed: u32) -> bool {
@@ -236,15 +237,22 @@ impl UartRx {
             None
         };
 
-        // The RX poll timer.  `PeriodicTimer` keeps the kernel control block in
-        // an inline `.bss` slot that is filled on first use, so the timer
-        // survives the move into `(*RX_INSTANCES.as_ptr())[]` and the driver needs no timer
-        // storage of its own (malloc_used.md §8.1 S3b).
+        // The RX poll timer.  Its kernel object lives in RX_TIMER_SLOTS, a `'static` array:
+        // `xTimerCreateStatic()` writes the control block in place and the kernel keeps that
+        // address (plus `pvTimerID`) for good, so the storage must not travel with this
+        // `UartRx`, which is built here and then moved into `(*RX_INSTANCES.as_ptr())[]` or
+        // into a `Uart`.  `PeriodicTimer::new()` takes the slot as `&'static`, which is what
+        // makes that a compile-time contract instead of a comment (a slot in a local would
+        // not compile).
         assert!(
             (instance as usize) < UART_MAX_INSTANCES,
             "uart_rx: instance out of range"
         );
-        let timer = PeriodicTimer::new(c"uart rx", RX_POLL_PERIOD_MS, instance, uart_rx_timer_cb);
+        let timer = PeriodicTimer::new(
+            c"uart rx",
+            RX_POLL_PERIOD_MS,
+            &RX_TIMER_SLOTS[instance as usize],
+        );
 
         Self {
             instance,
@@ -488,6 +496,18 @@ impl Drop for UartRx {
     }
 }
 
+/// Kernel slots of the RX poll timers, one per instance (`UartRx::new()` picks its own).
+///
+/// A `static` for the reason [`TimerSlot`] documents: the kernel points into these for the
+/// life of the firmware, so they must never move.
+static RX_TIMER_SLOTS: [TimerSlot<u32>; UART_MAX_INSTANCES] = [
+    TimerSlot::new(0, uart_rx_timer_cb),
+    TimerSlot::new(1, uart_rx_timer_cb),
+    TimerSlot::new(2, uart_rx_timer_cb),
+];
+// The array above spells the instances out; keep it in step with the instance count.
+const _: () = assert!(UART_MAX_INSTANCES == 3, "add the missing RX_TIMER_SLOTS entry");
+
 /// One handler slot per USART instance.
 pub(crate) static HANDLERS: HandlerTable<dyn uart::UartHandler, UART_MAX_INSTANCES> = HandlerTable::new();
 
@@ -552,7 +572,9 @@ impl Uart {
             buffered: None,
         };
         uart::Uart::configure(&mut uart, config)?;
-        uart::Uart::enable_rx(&mut uart, true)?;
+        // The receiver is left disabled on purpose: `enable_rx(true)` starts the RX poll
+        // timer, so the caller opens the receiver once `Uart` has reached its final
+        // storage and any handler is installed (see [`Uart::with_dma`]).
         Ok(uart)
     }
 
@@ -589,7 +611,8 @@ impl Uart {
             buffered: Some(buffered),
         };
         uart::Uart::configure(&mut uart, config)?;
-        uart::Uart::enable_rx(&mut uart, true)?;
+        // Same rule as [`Uart::new`]: `enable_rx(true)` starts the RX poll timer, so the
+        // receiver is opened by the caller once `Uart` is in its final storage.
         Ok(uart)
     }
 

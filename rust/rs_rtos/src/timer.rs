@@ -7,7 +7,8 @@
 //!     // runs in the timer daemon task, once per period
 //! }
 //!
-//! static RX_POLL: PeriodicTimer<u32> = PeriodicTimer::new(c"rx poll", 20, 0, poll);
+//! static RX_POLL_SLOT: TimerSlot<u32> = TimerSlot::new(0, poll);
+//! static RX_POLL: PeriodicTimer<u32> = PeriodicTimer::new(c"rx poll", 20, &RX_POLL_SLOT);
 //! RX_POLL.start();
 //! ```
 //!
@@ -19,13 +20,15 @@
 //!
 //! # Which kernel objects are involved
 //!
-//! * `xTimerCreateStatic()` -- the control block lives in the [`TimerStorage`]
-//!   inside the timer, sized from `crate::kernel::STATIC_TIMER_BYTES`, so a
-//!   timer costs no heap.  It is created on **first use** (like the wrappers in
-//!   `sync.rs`), which is what lets `new()` be a `const fn` and lets the timer
-//!   move once, into a `static` or into the object that owns it, before that.
-//!   After the first use the `Timer_t` and the callback cookie point into the
-//!   timer: do not move it, do not `memcpy` it, do not put it in a `Vec`.
+//! * `xTimerCreateStatic()` -- the control block lives in a [`TimerSlot`], sized
+//!   from `crate::kernel::STATIC_TIMER_BYTES`, so a timer costs no heap.  The
+//!   kernel keeps **two pointers into that slot** (the `Timer_t` it writes in
+//!   place and the `pvTimerID` it hands back to the callback), which is why the
+//!   slot is passed as `&'static`: the address the kernel captured can then never
+//!   outlive the memory it points at, and moving the [`PeriodicTimer`] (or the
+//!   object that owns it) is harmless.  Passing a slot that is not `'static` is a
+//!   compile error, so the "timer moved after it was created" corruption cannot
+//!   be written by accident.
 //! * `xTimerStart()` / `Stop()` / `Reset()` / `Delete()` are **macros** in
 //!   `timers.h`, so the calls go through `xTimerGenericCommandFromTask()`, the
 //!   function they expand to, with the `tmrCOMMAND_*` ids below.
@@ -57,7 +60,7 @@
 use crate::c_freertos as rn_freertos_c;
 use crate::critical::CriticalSection;
 use crate::prelude::*;
-use core::ffi::CStr;
+use core::ffi::{CStr, c_void};
 
 // ===========================================================================
 //  Storage for one statically created timer
@@ -79,20 +82,47 @@ const _: () = assert!(
     "STATIC_TIMER_BYTES is not a whole number of u32 words"
 );
 
-/// Storage for one statically created timer (`.bss` when the timer is a
-/// `static`, part of the timer object otherwise).
+/// Everything the kernel keeps a pointer to, for one timer: the control block it writes *in
+/// place* and the `pvTimerID` it hands back to the callback.
+///
+/// Declare one per timer, in a `static` (that is the whole point: see the module docs).
+///
+/// ```ignore
+/// static RX_POLL_SLOT: TimerSlot<u32> = TimerSlot::new(0, poll);
+/// ```
 #[repr(C)]
-struct TimerStorage {
-    words: [u32; STATIC_TIMER_WORDS],
+pub struct TimerSlot<C> {
+    /// Storage the kernel writes the `Timer_t` into.
+    control: UnsafeCell<[u32; STATIC_TIMER_WORDS]>,
+    /// What `pvTimerID` points at.
+    identity: TimerCookie<C>,
 }
 
-impl TimerStorage {
-    /// Zeroed storage: `xTimerCreateStatic()` expects uninitialised memory and
-    /// sets up everything it needs.
-    const fn new() -> Self {
+// SAFETY: `control` is only ever written by the kernel (it is registered once, and the timer
+// daemon owns the object from then on); Rust never creates a reference into it, it only hands
+// the pointer over.  `identity` is read-only after creation, and `C: Sync` covers the cookie.
+unsafe impl<C: Sync> Sync for TimerSlot<C> {}
+
+impl<C> TimerSlot<C> {
+    /// An empty slot that will call `callback(&cookie)`.  `const`, so it fits a `static`.
+    pub const fn new(cookie: C, callback: fn(&C)) -> Self {
         Self {
-            words: [0; STATIC_TIMER_WORDS],
+            control: UnsafeCell::new([0; STATIC_TIMER_WORDS]),
+            identity: TimerCookie { callback, cookie },
         }
+    }
+
+    /// The `Timer_t` storage, as the `void*` `xTimerCreateStatic()` writes through.
+    fn control_ptr(&self) -> *mut rn_freertos_c::xSTATIC_TIMER {
+        self.control.get().cast()
+    }
+
+    /// The `pvTimerID` the trampoline gets back from the kernel.
+    ///
+    /// The kernel only stores and returns this pointer, never writes through it, so handing
+    /// out a `*mut` to a field behind `&self` is sound.
+    fn identity_ptr(&self) -> *mut c_void {
+        (&self.identity as *const TimerCookie<C> as *mut TimerCookie<C>).cast()
     }
 }
 
@@ -158,41 +188,43 @@ unsafe extern "C" fn call_timer_callback<C>(x_timer: rn_freertos_c::TimerHandle_
 /// A periodic software timer: calls `callback(&cookie)` in the timer daemon
 /// task every `period_ms`, while started.
 ///
-/// See the module documentation for the lifetime rule (created on first use,
-/// do not move it afterwards) and for teardown.
-pub struct PeriodicTimer<C> {
+/// See the module documentation for the [`TimerSlot`] contract and for teardown.
+pub struct PeriodicTimer<C: 'static> {
     /// Kernel handle, null until the timer is created on first use.
     handle: UnsafeCell<rn_freertos_c::TimerHandle_t>,
-    /// Storage the kernel control block lives in (sized from
-    /// `crate::kernel::STATIC_TIMER_BYTES`, `.bss` when the timer is a
-    /// `static` -- no heap either way).
-    storage: UnsafeCell<TimerStorage>,
-    /// The `pvTimerID` the kernel keeps: user callback + user cookie.
-    identity: UnsafeCell<TimerCookie<C>>,
+    /// Where the kernel's control block and `pvTimerID` live.  `'static` is the contract:
+    /// the kernel keeps these addresses for the life of the firmware, so they must not
+    /// belong to a value that can move or go away.
+    slot: &'static TimerSlot<C>,
     /// Timer name, only for `xTimerGetTimerName()` / tracing.
     name: &'static CStr,
     /// Period in milliseconds, converted to ticks at creation.
     period_ms: u32,
 }
 
-impl<C> PeriodicTimer<C> {
-    /// Create a periodic timer that calls `callback(&cookie)` every `period_ms`.
+// SAFETY: `handle` is initialised once under `CriticalSection::enter()` in `kernel_handle()`,
+// `slot` is `Sync` when `C: Sync`, and FreeRTOS timer commands are thread-safe.
+unsafe impl<C: Sync> Sync for PeriodicTimer<C> {}
+
+impl<C: 'static> PeriodicTimer<C> {
+    /// Create a periodic timer that calls the `callback(&cookie)` captured in `slot`, every
+    /// `period_ms`.
     ///
-    /// No kernel call and no allocation: the kernel object is created in the
-    /// timer's own storage the first time the timer is used (see the module
-    /// documentation for the move rule that makes that necessary).
+    /// No kernel call and no allocation: the kernel object is created in `slot` the first
+    /// time the timer is used.  `slot` is `&'static` on purpose -- the kernel keeps pointers
+    /// into it forever, so a slot that could move (or be dropped) is a compile error rather
+    /// than a timer list corrupted minutes later.
     ///
     /// `name` is only used for tracing (`xTimerGetTimerName()`), so a C string
     /// literal (`c"uart rx"`) is the expected argument.
-    pub const fn new(name: &'static CStr, period_ms: u32, cookie: C, callback: fn(&C)) -> Self {
+    pub const fn new(name: &'static CStr, period_ms: u32, slot: &'static TimerSlot<C>) -> Self {
         assert!(
             period_ms > 0,
             "PeriodicTimer: the period must be at least 1 ms"
         );
         Self {
             handle: UnsafeCell::new(ptr::null_mut()),
-            storage: UnsafeCell::new(TimerStorage::new()),
-            identity: UnsafeCell::new(TimerCookie { callback, cookie }),
+            slot,
             name,
             period_ms,
         }
@@ -222,9 +254,9 @@ impl<C> PeriodicTimer<C> {
                     self.name.as_ptr(),
                     ticks,
                     PD_TRUE, // auto-reload: this is a *periodic* timer
-                    self.identity.get().cast(),
+                    self.slot.identity_ptr(),
                     Some(call_timer_callback::<C>),
-                    self.storage.get().cast(),
+                    self.slot.control_ptr(),
                 )
             };
             assert!(
@@ -280,14 +312,25 @@ impl<C> PeriodicTimer<C> {
 
     /// Stop the timer.  It keeps its period and can be started again.
     ///
+    /// A timer that was never started has no kernel object yet: creating one just to stop
+    /// it would write the control block *in place* into whatever frame this happens to be,
+    /// and the kernel would keep that address for good (see the move rule above), so this
+    /// is a no-op in that case.
+    ///
     /// Must not be called from inside a critical section: see
     /// [`start()`](Self::start).
     pub fn stop(&self) -> bool {
+        if unsafe { *self.handle.get() }.is_null() {
+            return true;
+        }
         self.command(TMR_COMMAND_STOP, 0, COMMAND_WAIT_TICKS)
     }
 
     /// [`stop()`](Self::stop) without waiting for room in the daemon's queue.
     pub fn try_stop(&self) -> bool {
+        if unsafe { *self.handle.get() }.is_null() {
+            return true;
+        }
         self.command(TMR_COMMAND_STOP, 0, 0)
     }
 
@@ -329,6 +372,9 @@ impl<C> PeriodicTimer<C> {
     /// The answer is the daemon's view, so it lags `start()` / `stop()` by one
     /// daemon iteration.
     pub fn is_active(&self) -> bool {
+        if unsafe { *self.handle.get() }.is_null() {
+            return false;
+        }
         unsafe { rn_freertos_c::xTimerIsTimerActive(self.kernel_handle()) != 0 }
     }
 
@@ -339,9 +385,9 @@ impl<C> PeriodicTimer<C> {
 
     /// The cookie the callback is called with.
     pub fn cookie(&self) -> &C {
-        // SAFETY: the cookie is written once by `new()` and only read after
-        // that, so a shared reference to it is all anyone may take.
-        unsafe { &(*self.identity.get()).cookie }
+        // The slot is `'static` and the cookie is written by `TimerSlot::new()`, i.e. before
+        // the kernel is given the pointer, so only shared reads happen afterwards.
+        &self.slot.identity.cookie
     }
 }
 

@@ -57,6 +57,9 @@ pub extern "C" fn main() -> ! {
 
     // The handler is per instance: `Uart::new(1, …)` would get its own slot.
     UartTrait::set_handler(&mut uart, Some(&BRIDGE));
+    // `Uart::new()` leaves the receiver closed (its poll timer must be created in the
+    // `Uart`'s final storage, and `uart` is where it stays now).
+    let _ = UartTrait::enable_rx(&mut uart, true);
 
     let greeting = b"Hello from the esprit super trait!\r\n";
     let _ = UartTrait::write(&mut uart, greeting);
