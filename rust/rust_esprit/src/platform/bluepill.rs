@@ -1,13 +1,27 @@
 //! Bluepill (GD32F3 / CH32V3) platform driver selections and re-exports.
 
-#[cfg(feature = "ch32v3x")]
+#[cfg(all(
+    feature = "bluepill",
+    any(feature = "ch32v3x", target_arch = "riscv32")
+))]
 pub use rs_ch32v3x;
-#[cfg(feature = "gd32fx")]
+#[cfg(all(
+    feature = "bluepill",
+    not(feature = "ch32v3x"),
+    any(feature = "gd32fx", target_arch = "arm")
+))]
 pub use rs_gd32fx;
 
-#[cfg(feature = "ch32v3x")]
+#[cfg(all(
+    feature = "bluepill",
+    any(feature = "ch32v3x", target_arch = "riscv32")
+))]
 pub(crate) use rs_ch32v3x as mcu;
-#[cfg(feature = "gd32fx")]
+#[cfg(all(
+    feature = "bluepill",
+    not(feature = "ch32v3x"),
+    any(feature = "gd32fx", target_arch = "arm")
+))]
 pub(crate) use rs_gd32fx as mcu;
 
 #[cfg(not(feature = "external_std"))]

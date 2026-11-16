@@ -86,6 +86,15 @@ name = "rs_bluepill"
 version = "0.1.0"
 
 [[package]]
+name = "rs_ch32v3x"
+version = "0.1.0"
+dependencies = [
+ "rs_bluepill",
+ "rs_fmc_bluepill",
+ "rs_rcu_bluepill",
+]
+
+[[package]]
 name = "rs_dma_bluepill"
 version = "0.1.0"
 dependencies = [
@@ -130,6 +139,16 @@ name = "rs_fmc_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+]
+
+[[package]]
+name = "rs_gd32fx"
+version = "0.1.0"
+dependencies = [
+ "rs_afio_bluepill",
+ "rs_bluepill",
+ "rs_fmc_bluepill",
+ "rs_rcu_bluepill",
 ]
 
 [[package]]
@@ -208,6 +227,14 @@ name = "rs_rcu_rp2xxx"
 version = "0.1.0"
 dependencies = [
  "rs_mcu_traits",
+ "rs_rp2xxx",
+]
+
+[[package]]
+name = "rs_rp2040_mcu"
+version = "0.1.0"
+dependencies = [
+ "rs_gpio_rp2xxx",
  "rs_rp2xxx",
 ]
 
@@ -314,11 +341,13 @@ dependencies = [
  "rs_adc_rp2xxx",
  "rs_afio_bluepill",
  "rs_bluepill",
+ "rs_ch32v3x",
  "rs_dma_bluepill",
  "rs_dma_rp2xxx",
  "rs_exti_bluepill",
  "rs_exti_rp2xxx",
  "rs_fmc_bluepill",
+ "rs_gd32fx",
  "rs_gpio_bluepill",
  "rs_gpio_rp2xxx",
  "rs_i2c_bluepill",
@@ -329,6 +358,7 @@ dependencies = [
  "rs_pinout48_bluepill",
  "rs_rcu_bluepill",
  "rs_rcu_rp2xxx",
+ "rs_rp2040_mcu",
  "rs_rtos",
  "rs_spi_bluepill",
  "rs_spi_rp2xxx",

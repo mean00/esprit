@@ -113,6 +113,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "rs_rp2040_mcu"
+version = "0.1.0"
+dependencies = [
+ "rs_gpio_rp2xxx",
+ "rs_rp2xxx",
+]
+
+[[package]]
+name = "rs_rp2350_mcu"
+version = "0.1.0"
+dependencies = [
+ "rs_gpio_rp2xxx",
+ "rs_rp2xxx",
+]
+
+[[package]]
 name = "rs_rp2xxx"
 version = "0.1.0"
 
@@ -201,6 +217,8 @@ dependencies = [
  "rs_mcu_traits",
  "rs_multi_pulse_rp2xxx",
  "rs_rcu_rp2xxx",
+ "rs_rp2040_mcu",
+ "rs_rp2350_mcu",
  "rs_rtos",
  "rs_spi_rp2xxx",
  "rs_timer_rp2xxx",

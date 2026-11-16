@@ -62,6 +62,18 @@ pub extern "C" fn USBHS_IRQHandler() {
     deadEnd(13);
 }
 
+#[cfg(not(feature = "usb_stack"))]
+#[unsafe(no_mangle)]
+extern "C" fn _default_otg_fs_irq() {
+    deadEnd(13);
+}
+
+#[cfg(not(feature = "usb_stack"))]
+core::arch::global_asm!(
+    ".weak OTG_FS_IRQHandler",
+    ".equ OTG_FS_IRQHandler, _default_otg_fs_irq",
+);
+
 macro_rules! relay_func {
     ($relay:ident, $target:ident) => {
         /// # Safety

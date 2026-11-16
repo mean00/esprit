@@ -31,10 +31,4 @@ void loop()
         onoff = !onoff;
     }
 }
-#ifndef __clang__
-extern "C" void _exit()
-{
-    xAssert(0);
-}
-#endif
 // EOF

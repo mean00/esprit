@@ -4,7 +4,7 @@
 //! `LN_ENABLE_RUST` builds, leaving only minimal C/pico-sdk boot glue in
 //! `rp_rust_boot.c`.
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_void;
 
 use rs_rtos::c_freertos as freertos;
 
@@ -39,26 +39,4 @@ pub extern "C" fn rp_rust_main() -> ! {
         freertos::vTaskStartScheduler();
     }
     mcu::deadEnd(25)
-}
-
-/// C++ `lnUsbStack.cpp` on RP2xxx still calls `lnCreateTaskStatic`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn lnCreateTaskStatic(
-    task: freertos::TaskFunction_t,
-    name: *const c_char,
-    stack_size_in_bytes: u32,
-    param: *mut c_void,
-    priority: freertos::UBaseType_t,
-    stack: *mut freertos::StackType_t,
-    tcb: *mut freertos::StaticTask_t,
-) -> bool {
-    let stack_depth = if mcu::runtime::HAS_FPU {
-        (stack_size_in_bytes / 4) + 32
-    } else {
-        stack_size_in_bytes / 4
-    };
-    let handle = unsafe {
-        freertos::xTaskCreateStatic(task, name, stack_depth, param, priority, stack, tcb)
-    };
-    !handle.is_null()
 }

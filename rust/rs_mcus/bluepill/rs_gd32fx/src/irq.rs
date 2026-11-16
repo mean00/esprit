@@ -117,6 +117,22 @@ extern "C" fn unsupported_interrupt() {
     deadEnd(DEADEND_UNSUPPORTED_IRQ);
 }
 
+#[cfg(not(feature = "usb_stack"))]
+#[unsafe(no_mangle)]
+extern "C" fn _default_usb_irq() {
+    unsupported_interrupt();
+}
+
+#[cfg(not(feature = "usb_stack"))]
+core::arch::global_asm!(
+    ".weak _Z17USB_TX_IRQHandlerv",
+    ".weak _Z17USB_RX_IRQHandlerv",
+    ".weak _Z21USB_WAKEUP_IRQHandlerv",
+    ".thumb_set _Z17USB_TX_IRQHandlerv, _default_usb_irq",
+    ".thumb_set _Z17USB_RX_IRQHandlerv, _default_usb_irq",
+    ".thumb_set _Z21USB_WAKEUP_IRQHandlerv, _default_usb_irq",
+);
+
 #[unsafe(no_mangle)]
 extern "C" fn crash_handler2(sp: *mut RegisterStack) -> ! {
     CRASH_STRUCTURE.store(sp, Ordering::Relaxed);

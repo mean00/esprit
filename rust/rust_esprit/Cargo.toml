@@ -28,8 +28,6 @@ rs_uart_bluepill = { path = "../rs_mcus/bluepill/rs_uart_bluepill", optional = t
 rs_dma_bluepill = { path = "../rs_mcus/bluepill/rs_dma_bluepill", optional = true }
 rs_afio_bluepill = { path = "../rs_mcus/bluepill/rs_afio_bluepill", optional = true }
 rs_fmc_bluepill = { path = "../rs_mcus/bluepill/rs_fmc_bluepill", optional = true }
-rs_ch32v3x = { path = "../rs_mcus/bluepill/rs_ch32v3x", optional = true }
-rs_gd32fx = { path = "../rs_mcus/bluepill/rs_gd32fx", optional = true }
 rs_bluepill = { path = "../rs_mcus/bluepill/rs_bluepill", optional = true }
 rs_pinout48_bluepill = { path = "../rs_mcus/bluepill/rs_pinout48_bluepill", optional = true }
 rs_spi_wrapped = { path = "../wrapped/rs_spi_wrapped", optional = true }
@@ -95,6 +93,8 @@ bluepill = [
     "dep:rs_afio_bluepill",
     "dep:rs_fmc_bluepill",
     "dep:rs_bluepill",
+    "dep:rs_gd32fx",
+    "dep:rs_ch32v3x",
     "rust_logger",
 ]
 # Package of the bluepill compatible chip (CMake: USE_48PIN_PACKAGE / USE_64PIN_PACKAGE).
@@ -195,6 +195,13 @@ fake_std = []
 # esprit is used inside an existing std-enabled framework.
 # The framework provides the real `std`; esprit just removes #![no_std].
 external_std = ["rs_rtos/external_std"]
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+rs_gd32fx = { path = "../rs_mcus/bluepill/rs_gd32fx", optional = true }
+
+[target.'cfg(target_arch = "riscv32")'.dependencies]
+rs_ch32v3x = { path = "../rs_mcus/bluepill/rs_ch32v3x", optional = true }
+rs_rcu_bluepill = { path = "../rs_mcus/bluepill/rs_rcu_bluepill", features = ["ch32v3x"], optional = true }
 
 [lib]
 name = "rust_esprit"

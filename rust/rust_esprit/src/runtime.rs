@@ -292,3 +292,25 @@ pub(crate) fn create_task_static(
         mcu::deadEnd(0xA000);
     }
 }
+
+/// C++ `lnUsbStack.cpp` (when `LN_RUST_USB=OFF`) calls `lnCreateTaskStatic`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn lnCreateTaskStatic(
+    task: freertos::TaskFunction_t,
+    name: *const core::ffi::c_char,
+    stack_size_in_bytes: u32,
+    param: *mut c_void,
+    priority: freertos::UBaseType_t,
+    stack: *mut freertos::StackType_t,
+    tcb: *mut freertos::StaticTask_t,
+) -> bool {
+    let stack_depth = if mcu::runtime::HAS_FPU {
+        (stack_size_in_bytes / 4) + 32
+    } else {
+        stack_size_in_bytes / 4
+    };
+    let handle = unsafe {
+        freertos::xTaskCreateStatic(task, name, stack_depth, param, priority, stack, tcb)
+    };
+    !handle.is_null()
+}

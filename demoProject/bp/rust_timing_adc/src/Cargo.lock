@@ -129,6 +129,15 @@ name = "rs_bluepill"
 version = "0.1.0"
 
 [[package]]
+name = "rs_ch32v3x"
+version = "0.1.0"
+dependencies = [
+ "rs_bluepill",
+ "rs_fmc_bluepill",
+ "rs_rcu_bluepill",
+]
+
+[[package]]
 name = "rs_dma_bluepill"
 version = "0.1.0"
 dependencies = [
@@ -154,6 +163,16 @@ name = "rs_fmc_bluepill"
 version = "0.1.0"
 dependencies = [
  "rs_bluepill",
+]
+
+[[package]]
+name = "rs_gd32fx"
+version = "0.1.0"
+dependencies = [
+ "rs_afio_bluepill",
+ "rs_bluepill",
+ "rs_fmc_bluepill",
+ "rs_rcu_bluepill",
 ]
 
 [[package]]
@@ -261,9 +280,11 @@ dependencies = [
  "rs_adc_bluepill",
  "rs_afio_bluepill",
  "rs_bluepill",
+ "rs_ch32v3x",
  "rs_dma_bluepill",
  "rs_exti_bluepill",
  "rs_fmc_bluepill",
+ "rs_gd32fx",
  "rs_gpio_bluepill",
  "rs_i2c_bluepill",
  "rs_mcu_traits",

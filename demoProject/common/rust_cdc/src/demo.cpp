@@ -22,13 +22,3 @@ void loop()
         lnDelayMs(1000);
     }
 }
-
-#ifndef __clang__
-extern "C" void _exit(int code)
-{
-    deadEnd(code);
-    while (1)
-    {
-    }
-}
-#endif
