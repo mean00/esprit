@@ -166,7 +166,7 @@ volatile uint32_t *lnGetGpioOffRegister(int port) // Bop register for port "port
      //----------------- This is bluepill common specific !-------------
 */
 
-volatile uint32_t *lnGetGpioDirectionRegister(int port)
+volatile uint32_t *lnGetGpioDirectionRegister(uint32_t port)
 {
     xAssert(0);
     return NULL;
@@ -176,7 +176,7 @@ volatile uint32_t *lnGetGpioDirectionRegister(int port)
     //----------------- This is bluepill common specific !-------------
 */
 
-volatile uint32_t *lnGetGpioValueRegister(int port) // Bit value for LOW bits of port "port"
+volatile uint32_t *lnGetGpioValueRegister(uint32_t port) // Bit value for LOW bits of port "port"
 {
     xAssert(0);
     return NULL;
@@ -186,7 +186,7 @@ volatile uint32_t *lnGetGpioValueRegister(int port) // Bit value for LOW bits of
     //----------------- This is bluepill common specific !-------------
 */
 
-uint32_t lnReadPort(int port)
+uint32_t lnReadPort(uint32_t port)
 {
     xAssert(0);
     return 0;

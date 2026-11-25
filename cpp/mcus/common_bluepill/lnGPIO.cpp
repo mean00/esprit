@@ -188,7 +188,7 @@ void lnDigitalToggle(const lnPin pin)
  * @param port
  * @return
  */
-volatile uint32_t *lnGetGpioToggleRegister(int port)
+volatile uint32_t *lnGetGpioToggleRegister(uint32_t port)
 {
     return &(gpios[port]->BOP);
 }
@@ -197,7 +197,7 @@ volatile uint32_t *lnGetGpioToggleRegister(int port)
  * @param port
  * @return
  */
-volatile uint32_t *lnGetGpioDirectionRegister(int port)
+volatile uint32_t *lnGetGpioDirectionRegister(uint32_t port)
 {
     return &(gpios[port]->CTL0);
 }
@@ -206,7 +206,7 @@ volatile uint32_t *lnGetGpioDirectionRegister(int port)
  * @param port
  * @return
  */
-volatile uint32_t *lnGetGpioValueRegister(int port)
+volatile uint32_t *lnGetGpioValueRegister(uint32_t port)
 {
     return &(gpios[port]->OCTL);
 }
@@ -229,7 +229,7 @@ bool lnDigitalRead(const lnPin pin)
  * @param port
  * @return
  */
-uint32_t lnReadPort(int port)
+uint32_t lnReadPort(uint32_t port)
 {
     return (gpios[port]->ISTAT);
 }
