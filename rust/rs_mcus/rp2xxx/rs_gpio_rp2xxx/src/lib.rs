@@ -169,7 +169,7 @@ fn apply_mode(pin: u32, mode: PinMode) {
             write_pad(pin, PAD_OD | PAD_SLEWFAST | PAD_SCHMITT);
             write_ctrl(pin, FUNCSEL_NULL, GPIO_CTRL_OE_DISABLE);
         }
-        PinMode::AlternatePushPull | PinMode::AlternateOpenDrain => {
+        PinMode::AlternatePushPull | PinMode::AlternateOpenDrain | PinMode::Pwm => {
             write_ctrl(pin, FUNCSEL_NULL, GPIO_CTRL_OE_NORMAL)
         }
     }

@@ -240,6 +240,9 @@ pub use sync::{
     Arc, BinarySemaphore, CountingSemaphore, LazyLock, Mutex, MutexGuard, OnceLock, RecursiveMutex,
     RecursiveMutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard, SemaphoreGuard,
 };
+
+#[cfg(feature = "bluepill")]
+pub use rs_timer_bluepill::PwmTimer;
 pub use task::{
     Duration, Instant, TaskEntry, TaskHandle, current, delay_ms, delay_us, sleep, sleep_ms, spawn,
     spawn_raw, tick_count, time_ms, time_us, time_us64, yield_now,

@@ -29,6 +29,8 @@ pub enum PinMode {
     OutputOpenDrain,
     /// Peripheral function, push-pull (UART/SPI/PWM…).
     AlternatePushPull,
+    /// PWM output (peripheral push-pull).
+    Pwm,
     /// Peripheral function, open-drain.
     AlternateOpenDrain,
     /// Analog, driven by the ADC/DAC: digital functions off, output disabled.

@@ -266,6 +266,7 @@ impl Pin {
             PinMode::Output => Mode::Output,
             PinMode::OutputOpenDrain => Mode::OutputOpenDrain,
             PinMode::AlternatePushPull => Mode::AlternatePushPull,
+            PinMode::Pwm => Mode::Pwm,
             PinMode::AlternateOpenDrain => Mode::AlternateOpenDrain,
             PinMode::Analog => Mode::AdcMode,
         }

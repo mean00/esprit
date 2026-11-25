@@ -9,7 +9,7 @@ pub mod timer;
 pub mod dma_timer;
 pub mod delay_timer;
 
-pub use timer::{Timer, ChannelMode};
+pub use timer::{Timer, ChannelMode, PwmTimer};
 pub use dma_timer::{DmaTimer, DmaTimerError};
 pub use delay_timer::{DelayTimer, DelayTimerCallback, delay_timer_interrupt_handler};
 

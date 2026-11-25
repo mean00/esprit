@@ -312,3 +312,63 @@ impl timer::Timer for Timer {
     }
 }
 
+const PWM_RANGE: u32 = 1000;
+
+/// Pin-bound PWM timer convenience wrapper.
+pub struct PwmTimer {
+    timer: Timer,
+    channel: u32,
+}
+
+impl PwmTimer {
+    /// Look up the timer and channel for `pin` from `rs_pinout48_bluepill` and open it.
+    pub fn from_pin(pin: rs_gpio_bluepill::Pin) -> Result<Self, &'static str> {
+        let tc = rs_pinout48_bluepill::pin_info(pin)
+            .timer
+            .ok_or("Pin has no timer channel")?;
+        let timer = Timer::new(tc.timer as u32)?;
+        Ok(Self {
+            timer,
+            channel: tc.channel as u32,
+        })
+    }
+
+    /// Configure PWM mode with duty cycle in percent (`0..=100`).
+    pub fn set_pwm_mode(&mut self, ratio100: u32) {
+        let compare = ratio100.min(100) * (PWM_RANGE / 100);
+        self.timer.set_channel_mode(self.channel, ChannelMode::Pwm0);
+        self.timer.set_channel_compare(self.channel, compare);
+        self.timer.set_channel_output(self.channel, true);
+    }
+
+    /// Set PWM frequency in Hz (disables, updates prescaler/CAR, re-enables).
+    pub fn set_pwm_frequency(&mut self, fq_hz: u32) {
+        if fq_hz == 0 {
+            return;
+        }
+        let periph = match self.timer.timer_idx {
+            TIMER_INSTANCE_0 => Peripheral::Timer0,
+            TIMER_INSTANCE_1 => Peripheral::Timer1,
+            TIMER_INSTANCE_2 => Peripheral::Timer2,
+            TIMER_INSTANCE_3 => Peripheral::Timer3,
+            TIMER_INSTANCE_4 => Peripheral::Timer4,
+            _ => Peripheral::Timer1,
+        };
+        let clk = rs_rcu_bluepill::get_clock(periph);
+        self.timer.disable();
+        let denom = fq_hz.saturating_mul(PWM_RANGE).max(1);
+        let divider = ((clk + denom / 2) / denom).max(1);
+        self.timer.set_prescaler((divider - 1) as u16);
+        self.timer.set_auto_reload(PWM_RANGE - 1);
+        self.timer.enable();
+    }
+
+    pub fn enable(&mut self) {
+        self.timer.enable();
+    }
+
+    pub fn disable(&mut self) {
+        self.timer.disable();
+    }
+}
+

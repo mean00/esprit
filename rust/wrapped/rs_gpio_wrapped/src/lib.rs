@@ -28,7 +28,7 @@ impl GpioPinWrapped {
             PinMode::InputPullDown => lnGpioMode::lnINPUT_PULLDOWN,
             PinMode::Output => lnGpioMode::lnOUTPUT,
             PinMode::OutputOpenDrain => lnGpioMode::lnOUTPUT_OPEN_DRAIN,
-            PinMode::AlternatePushPull => lnGpioMode::lnALTERNATE_PP,
+            PinMode::AlternatePushPull | PinMode::Pwm => lnGpioMode::lnALTERNATE_PP,
             PinMode::AlternateOpenDrain => lnGpioMode::lnALTERNATE_OD,
             PinMode::Analog => lnGpioMode::lnADC_MODE,
         }
