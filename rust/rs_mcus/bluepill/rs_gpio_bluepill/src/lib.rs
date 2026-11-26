@@ -191,6 +191,16 @@ pub fn open_drain_close(pin: Pin, close: bool) {
 }
 
 #[inline]
+pub fn port_direction_register(port: u32) -> *mut u32 {
+    get_port_ptr(port) as *mut u32
+}
+
+#[inline]
+pub fn port_out_register(port: u32) -> *mut u32 {
+    (get_port_ptr(port) as usize + 0x0C) as *mut u32
+}
+
+#[inline]
 pub fn read_port(port: u32) -> u32 {
     let port_ptr = get_port_ptr(port);
     // SAFETY: reading istat register.

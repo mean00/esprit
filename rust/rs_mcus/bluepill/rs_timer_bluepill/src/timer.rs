@@ -324,7 +324,7 @@ impl PwmTimer {
     /// Look up the timer and channel for `pin` from `rs_pinout48_bluepill` and open it.
     pub fn from_pin(pin: rs_gpio_bluepill::Pin) -> Result<Self, &'static str> {
         let tc = rs_pinout48_bluepill::pin_info(pin)
-            .timer
+            .and_then(|p| p.timer)
             .ok_or("Pin has no timer channel")?;
         let timer = Timer::new(tc.timer as u32)?;
         Ok(Self {
