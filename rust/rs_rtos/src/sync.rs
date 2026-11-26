@@ -894,6 +894,17 @@ trait SemaphoreOps {
 ///
 /// Unlike a mutex, a semaphore has no concept of "owner"; any task can give
 /// and any task can take.
+/// Caller-provided static storage for [`BinarySemaphore::new_static`].
+pub struct BinarySemaphoreStorage(UnsafeCell<QueueStorage>);
+
+unsafe impl Sync for BinarySemaphoreStorage {}
+
+impl BinarySemaphoreStorage {
+    pub const fn new() -> Self {
+        Self(UnsafeCell::new(QueueStorage::new()))
+    }
+}
+
 pub struct BinarySemaphore {
     /// Kernel handle, null until the object is created on first use.
     handle: UnsafeCell<rn_freertos_c::SemaphoreHandle_t>,
@@ -901,6 +912,8 @@ pub struct BinarySemaphore {
     /// `crate::kernel::STATIC_QUEUE_BYTES`, `.bss` when the wrapper is a
     /// `static` -- no heap either way).
     storage: UnsafeCell<QueueStorage>,
+    /// Optional caller-provided `'static` storage (used by `new_static`).
+    external_storage: Option<&'static BinarySemaphoreStorage>,
     /// State to start in, applied when the object is created.
     given: bool,
 }
@@ -922,21 +935,36 @@ impl BinarySemaphore {
         Self::with_state(true)
     }
 
+    /// Create a new binary semaphore using caller-provided `'static` storage.
+    pub const fn new_static(storage: &'static BinarySemaphoreStorage, given: bool) -> Self {
+        Self {
+            handle: UnsafeCell::new(core::ptr::null_mut()),
+            storage: UnsafeCell::new(QueueStorage::new()),
+            external_storage: Some(storage),
+            given,
+        }
+    }
+
     /// Common constructor: `given` is applied by the kernel when the object is
     /// created on first use.
     const fn with_state(given: bool) -> Self {
         Self {
             handle: UnsafeCell::new(core::ptr::null_mut()),
             storage: UnsafeCell::new(QueueStorage::new()),
+            external_storage: None,
             given,
         }
     }
 
     /// Handle of the underlying counting semaphore, created on first use.
     fn kernel_handle(&self) -> rn_freertos_c::SemaphoreHandle_t {
+        let storage = match self.external_storage {
+            Some(s) => &s.0,
+            None => &self.storage,
+        };
         handle_or_create(
             &self.handle,
-            &self.storage,
+            storage,
             KernelObject::BinarySemaphore { given: self.given },
         )
     }
