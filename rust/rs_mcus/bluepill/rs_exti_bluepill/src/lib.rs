@@ -178,13 +178,40 @@ pub fn detach_interrupt(pin: Pin) {
     }
 }
 
+unsafe extern "C" {
+    #[link_name = "\u{1}_Z17lnEnableInterruptRK5LnIRQ"]
+    fn ln_enable_interrupt(irq: *const i32);
+}
+
+fn exti_line_to_irq(line: u32) -> Option<i32> {
+    #[cfg(target_arch = "riscv32")]
+    const BASE_OFFSET: i32 = 1;
+    #[cfg(not(target_arch = "riscv32"))]
+    const BASE_OFFSET: i32 = 0;
+
+    let arm_irq = match line {
+        0 => 6,
+        1 => 7,
+        2 => 8,
+        3 => 9,
+        4 => 10,
+        5..=9 => 23,
+        10..=15 => 40,
+        _ => return None,
+    };
+    Some(arm_irq + BASE_OFFSET)
+}
+
 pub fn enable_interrupt(pin: Pin) {
     let source = (pin as u32) & 0xF;
     unsafe {
+        write_reg!(pd, 1 << source);
         modify_reg!(inten, |v| v | (1 << source));
-
         core::arch::asm!("nop", "nop", "nop");
         write_reg!(pd, 1 << source);
+        if let Some(irq) = exti_line_to_irq(source) {
+            ln_enable_interrupt(&raw const irq);
+        }
     }
 }
 
